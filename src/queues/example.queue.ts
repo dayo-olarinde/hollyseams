@@ -12,7 +12,7 @@ export const exampleQueue = new Queue<ExampleJob>(queueName, {
   connection: bullMQConnection,
   defaultJobOptions: {
     attempts: 3,
-    backoff: { type: "exponential", delay: 5000 },
+    backoff: { type: "exponential", delay: 5000 }, // 5s, 10s, 20s between tries
     removeOnComplete: 100,
     removeOnFail: 500,
   },

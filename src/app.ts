@@ -9,7 +9,7 @@ import { logger } from "./config/logger";
 import { globalError, notFound } from "./middleware/errorMiddleware";
 import { apiLimiter } from "./middleware/rateLimiter.middleware";
 import healthRouter from "./routes/health.routes";
-import usersRouter from "./routes/users.routes";
+import usersRouter from "./routes/auth.routes";
 
 export const app = express();
 

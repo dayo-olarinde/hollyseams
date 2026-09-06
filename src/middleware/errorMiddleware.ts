@@ -41,6 +41,7 @@ export const globalError = (
     success: false,
     message: error.message,
     ...(error.errors && { errors: error.errors }),
-    ...(env.NODE_ENV === "development" && err instanceof Error && { stack: err.stack }),
+    ...(env.NODE_ENV === "development" &&
+      err instanceof Error && { stack: err.stack }),
   });
 };

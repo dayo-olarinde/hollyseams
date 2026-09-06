@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "seed": "tsx src/db/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
@@ -21,22 +22,23 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.0",
+    "bullmq": "^5.80.9",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.0",
     "helmet": "^8.3.0",
+    "ioredis": "^5.11.1",
     "node-cron": "^4.6.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "postgres": "^3.4.9",
-    "zod": "^4.4.3",
-    "ioredis": "^5.11.1",
-    "bullmq": "^5.80.9",
-    "express-rate-limit": "^8.6.0",
-    "rate-limit-redis": "^6.0.0"
+    "rate-limit-redis": "^6.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",

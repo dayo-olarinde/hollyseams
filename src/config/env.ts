@@ -3,10 +3,15 @@ import { z } from "zod";
 import { logger } from "./logger";
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   PORT: z.coerce.number().int().positive().default(7000),
   BASE_URL: z.string().url(),
   FRONTEND_URL: z.string().url(),
+
+  SEED_PIN: z.string(),
+  PEPPER: z.string(),
 
   // PostgreSQL
   DATABASE_URL: z.string().min(1),

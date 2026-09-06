@@ -6,7 +6,7 @@ import * as schema from "../db/index";
 
 const queryClient = postgres(env.DATABASE_URL, {
   max: env.DATABASE_MAX_CONNECTIONS,
-  prepare: false,
+  prepare: true,
   onnotice: () => {},
 });
 
@@ -15,7 +15,6 @@ export const db = drizzle(queryClient, {
   logger: env.NODE_ENV === "development",
 });
 
-// Raw SQL escape hatch (postgres-js tagged template).
 export const pg = queryClient;
 
 export const pingDb = async () => {
