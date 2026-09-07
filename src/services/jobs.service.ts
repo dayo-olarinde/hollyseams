@@ -16,23 +16,12 @@ import type {
 import type { CreatePaymentInput } from "../validations/payments.validation";
 
 export const listJobs = async () => {
-  return db.select().from(jobsTable).orderBy(desc(jobsTable.createdAt));
-};
-
-export const getJob = async (id: string) => {
-  const [job] = await db
+  return db
     .select({
       id: jobsTable.id,
-      customerId: customersTable.id,
-      customerPhone: customersTable.phoneNumber,
-      subjectId: subjectsTable.id,
-      subjectName: sql<string>`
-        case when ${subjectsTable.relationship} = 'self'
-          then ${customersTable.name}
-          else ${subjectsTable.name}
-        end`,
-      measurementsId: measurementsTable.id,
-      measurements: measurementsTable.measurements,
+      subjectId: jobsTable.subjectId,
+      subjectName: subjectsTable.name,
+      measurementId: jobsTable.measurementId,
       styleRef: jobsTable.styleRef,
       finishedJob: jobsTable.finishedJob,
       agreedPrice: jobsTable.agreedPrice,
@@ -42,17 +31,77 @@ export const getJob = async (id: string) => {
       createdAt: jobsTable.createdAt,
     })
     .from(jobsTable)
-    .innerJoin(customersTable, eq(jobsTable.customerId, customersTable.id))
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
-    .innerJoin(
-      measurementsTable,
-      eq(jobsTable.measurementId, measurementsTable.id),
-    )
-    .where(eq(jobsTable.id, id));
+    .orderBy(desc(jobsTable.createdAt));
+};
+
+export const listCustomerJobs = async (customerId: string) => {
+  return db
+    .select({
+      id: jobsTable.id,
+      subjectId: jobsTable.subjectId,
+      subjectName: subjectsTable.name,
+      measurementId: jobsTable.measurementId,
+      styleRef: jobsTable.styleRef,
+      finishedJob: jobsTable.finishedJob,
+      agreedPrice: jobsTable.agreedPrice,
+      status: jobsTable.status,
+      dueDate: jobsTable.dueDate,
+      deliveredAt: jobsTable.deliveredAt,
+      createdAt: jobsTable.createdAt,
+    })
+    .from(jobsTable)
+    .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
+    .where(eq(jobsTable.customerId, customerId))
+    .orderBy(desc(jobsTable.createdAt));
+};
+
+export const getJob = async (id: string) => {
+  const [job, payments] = await Promise.all([
+    db
+      .select({
+        id: jobsTable.id,
+        customerId: customersTable.id,
+        customerPhone: customersTable.phoneNumber,
+        subjectId: subjectsTable.id,
+        subjectName: sql<string>`
+        case when ${subjectsTable.relationship} = 'self'
+          then ${customersTable.name}
+          else ${subjectsTable.name}
+        end`,
+        measurementsId: measurementsTable.id,
+        measurements: measurementsTable.measurements,
+        styleRef: jobsTable.styleRef,
+        finishedJob: jobsTable.finishedJob,
+        agreedPrice: jobsTable.agreedPrice,
+        status: jobsTable.status,
+        dueDate: jobsTable.dueDate,
+        deliveredAt: jobsTable.deliveredAt,
+        createdAt: jobsTable.createdAt,
+      })
+      .from(jobsTable)
+      .innerJoin(customersTable, eq(jobsTable.customerId, customersTable.id))
+      .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
+      .innerJoin(
+        measurementsTable,
+        eq(jobsTable.measurementId, measurementsTable.id),
+      )
+      .where(eq(jobsTable.id, id)),
+
+    db
+      .select({
+        id: paymentsTable.id,
+        amount: paymentsTable.amount,
+        paidAt: paymentsTable.paidAt,
+      })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.jobId, id))
+      .orderBy(desc(paymentsTable.paidAt)),
+  ]);
 
   if (!job) throw new ApiError(404, "Job not found");
 
-  return job;
+  return { ...job, payments };
 };
 
 export const createJobNewCustomer = async (data: CreateJobNewCustomerInput) => {

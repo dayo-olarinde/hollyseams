@@ -16,7 +16,6 @@ const imageSchema = z.strictObject({
     .max(200, "Image alt text must be at most 200 characters"),
 });
 
-/** numeric(12, 2) in Postgres caps values at 9999999999.99 — shared by create and update. */
 const jobPriceSchema = z.coerce
   .number()
   .finite("Agreed price must be a finite number")

@@ -38,7 +38,6 @@ export const monthlyRevenue = async () => {
   });
 };
 
-/** Raw row shape — numeric and count aggregates arrive as strings. */
 interface TopCustomerRow {
   id: string;
   name: string;

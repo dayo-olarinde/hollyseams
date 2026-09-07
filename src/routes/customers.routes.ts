@@ -9,6 +9,7 @@ import {
   addSubjectsHandler,
   listSubjectsHandler,
 } from "../controllers/subjects.controller";
+import { listCustomerJobsHandler } from "../controllers/jobs.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import {
   validateInput,
@@ -60,6 +61,13 @@ router.post(
   validateParams(idParamsSchema),
   validateInput(createSubjectSchema),
   addSubjectsHandler,
+);
+
+router.get(
+  "/:id/jobs",
+  requireAuth,
+  validateParams(idParamsSchema),
+  listCustomerJobsHandler,
 );
 
 export default router;

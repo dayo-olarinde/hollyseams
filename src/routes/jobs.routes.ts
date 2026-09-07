@@ -38,7 +38,7 @@ router.post(
 );
 
 router.post(
-  "/:id/jobs",
+  "/:id",
   requireAuth,
   validateParams(idParamsSchema),
   validateInput(createJobForSubjectSchema),

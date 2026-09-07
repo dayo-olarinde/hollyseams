@@ -14,14 +14,12 @@ const envSchema = z.object({
   PEPPER: z.string(),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 
-  // PostgreSQL
   DATABASE_URL: z.string().min(1),
   POSTGRES_USER: z.string().min(1),
   POSTGRES_PASSWORD: z.string().min(1),
   POSTGRES_DB: z.string().min(1),
   DATABASE_MAX_CONNECTIONS: z.coerce.number().int().positive().default(5),
 
-  // Redis
   REDIS_URL: z.string().default("redis://localhost:6379"),
   REDIS_HOST: z.string().default("localhost"),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),

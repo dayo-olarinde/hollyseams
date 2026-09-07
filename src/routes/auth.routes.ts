@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { loginUserHandler, logoutUserHandler } from "../controllers/auth.controller";
+import {
+  loginUserHandler,
+  logoutUserHandler,
+} from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import { loginLimiter } from "../middleware/rateLimiter.middleware";
 import { validateInput } from "../middleware/validation.middleware";

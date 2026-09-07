@@ -5,6 +5,7 @@ import {
   createPayment,
   deleteJob,
   getJob,
+  listCustomerJobs,
   listJobs,
   updateJob,
 } from "../services/jobs.service";
@@ -19,6 +20,13 @@ import type { CreatePaymentInput } from "../validations/payments.validation";
 
 export const listJobsHandler = async (_req: Request, res: Response) => {
   const jobs = await listJobs();
+
+  res.status(200).json(new ApiResponse(200, "Jobs fetched successfully", jobs));
+};
+
+export const listCustomerJobsHandler = async (req: Request, res: Response) => {
+  const { id: customerId } = req.params as IdParams;
+  const jobs = await listCustomerJobs(customerId);
 
   res.status(200).json(new ApiResponse(200, "Jobs fetched successfully", jobs));
 };
