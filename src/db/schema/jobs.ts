@@ -44,7 +44,7 @@ export const jobsTable = pgTable(
       .$type<{ url: string; alt: string }[]>()
       .notNull(),
     agreedPrice: numeric("agreed_price", {
-      precision: 6,
+      precision: 12,
       scale: 2,
       mode: "number",
     }).notNull(),

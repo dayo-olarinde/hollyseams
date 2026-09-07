@@ -18,7 +18,7 @@ export const paymentsTable = pgTable(
       })
       .notNull(),
     amount: numeric("amount", {
-      precision: 6,
+      precision: 12,
       scale: 2,
       mode: "number",
     }).notNull(),

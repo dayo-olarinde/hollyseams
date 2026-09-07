@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ALTER COLUMN "agreed_price" SET DATA TYPE numeric(12, 2);
