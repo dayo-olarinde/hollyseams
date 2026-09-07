@@ -12,6 +12,7 @@ const envSchema = z.object({
 
   SEED_PIN: z.string(),
   PEPPER: z.string(),
+  SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 
   // PostgreSQL
   DATABASE_URL: z.string().min(1),

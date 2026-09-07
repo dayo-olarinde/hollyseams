@@ -6,10 +6,10 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
-import { globalError, notFound } from "./middleware/errorMiddleware";
+import { globalError, notFound } from "./middleware/error.middleware";
 import { apiLimiter } from "./middleware/rateLimiter.middleware";
 import healthRouter from "./routes/health.routes";
-import usersRouter from "./routes/auth.routes";
+import authRouter from "./routes/auth.routes";
 
 export const app = express();
 
@@ -37,7 +37,8 @@ app.use(cookieParser());
 app.use("/api", apiLimiter);
 
 app.use("/", healthRouter);
-app.use("/api/v1/users", usersRouter);
+
+app.use("/api/v1/auth", authRouter);
 
 app.use(notFound);
 app.use(globalError);

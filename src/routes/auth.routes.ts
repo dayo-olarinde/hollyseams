@@ -1,14 +1,16 @@
-// import { Router } from "express";
-// import {
-//   createUserHandler,
-//   listUsersHandler,
-// } from "../controllers/users.controller";
-// import { validateInput } from "../middleware/validationMiddleware";
-// import { createUserSchema } from "../validations/user.validation";
+import { Router } from "express";
+import { loginUserHandler } from "../controllers/login.controller";
+import { loginLimiter } from "../middleware/rateLimiter.middleware";
+import { validateInput } from "../middleware/validation.middleware";
+import { loginSchema } from "../validations/login.validation";
 
-// const router = Router();
+const router = Router();
 
-// router.post("/", validateInput(createUserSchema), createUserHandler);
-// router.get("/", listUsersHandler);
+router.post(
+  "/login",
+  loginLimiter,
+  validateInput(loginSchema),
+  loginUserHandler,
+);
 
-// export default router;
+export default router;

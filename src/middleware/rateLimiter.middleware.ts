@@ -38,28 +38,41 @@ export interface CreateLimiterOptions {
   message?: string;
 }
 
+export interface RateLimiter {
+  middleware: RequestHandler;
+  resetKey: (key: string) => Promise<void>;
+}
+
 export const createLimiter = ({
   keyGenerator,
   limit,
   windowMinutes,
   message,
-}: CreateLimiterOptions): RequestHandler =>
-  rateLimit({
-    windowMs: windowMinutes * 60 * 1000,
-    limit,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-    store: new RedisStore({ sendCommand }),
-    keyGenerator: (req) => {
-      const key = keyGenerator(req);
-      return key ?? ipKeyGenerator(req.ip ?? "127.0.0.1");
-    },
-    handler: limitExceededHandler(message ?? TOO_MANY_REQUESTS_MESSAGE),
+}: CreateLimiterOptions): RateLimiter => {
+  const store = new RedisStore({ sendCommand });
+
+  return {
+    middleware: rateLimit({
+      windowMs: windowMinutes * 60 * 1000,
+      limit,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      store,
+      keyGenerator: (req) =>
+        keyGenerator(req) ?? ipKeyGenerator(req.ip ?? "127.0.0.1"),
+      handler: limitExceededHandler(message ?? TOO_MANY_REQUESTS_MESSAGE),
+    }),
+
+    resetKey: (key: string) => store.resetKey(key),
+  };
+};
+
+const { middleware: loginLimiter, resetKey: resetLoginLimiterKey } =
+  createLimiter({
+    keyGenerator: () => "login",
+    limit: 5,
+    windowMinutes: 15,
+    message: "Too many login attempts. Wait 15 minutes.",
   });
 
-export const loginLimiter = createLimiter({
-  keyGenerator: () => "login",
-  limit: 5,
-  windowMinutes: 15,
-  message: "Too many login attempts. Wait 15 minutes.",
-});
+export { loginLimiter, resetLoginLimiterKey };
