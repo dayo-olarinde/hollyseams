@@ -12,6 +12,7 @@ import authRouter from "./routes/auth.routes";
 import customersRouter from "./routes/customers.routes";
 import healthRouter from "./routes/health.routes";
 import jobsRouter from "./routes/jobs.routes";
+import reportsRouter from "./routes/reports.routes";
 import subjectsRouter from "./routes/subjects.routes";
 
 export const app = express();
@@ -45,6 +46,7 @@ app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/customers", customersRouter);
 app.use("/api/v1/subjects", subjectsRouter);
 app.use("/api/v1/jobs", jobsRouter);
+app.use("/api/v1/reports", reportsRouter);
 
 app.use(notFound);
 app.use(globalError);

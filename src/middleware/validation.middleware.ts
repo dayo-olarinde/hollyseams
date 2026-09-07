@@ -36,3 +36,32 @@ export const validateParams = <T extends ZodTypeAny>(schema: T) =>
     req.params = result.data as Record<string, string>;
     next();
   });
+
+/**
+ * Validates and parses req.query against a schema. Unlike req.params,
+ * Express 5 defines req.query as a lazy getter (it only parses the query
+ * string on first access), so we can't assign to it directly — instead we
+ * redefine the own property with the parsed, type-safe value.
+ */
+export const validateQuery = <T extends ZodTypeAny>(schema: T) =>
+  asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      throw new ApiError(
+        400,
+        "Invalid query parameters",
+        result.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+        })),
+      );
+    }
+
+    Object.defineProperty(req, "query", {
+      value: result.data,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+    next();
+  });

@@ -32,9 +32,9 @@
 
 ## Reports (computed views, not raw CRUD)
 
-- `GET /reports/monthly-revenue`
-- `GET /reports/top-customers`
-- `GET /reports/outstanding-payments`
+- `GET /reports/monthly-revenue`✅
+- `GET /reports/top-customers`✅
+- `GET /reports/outstanding-payments`✅
 
 ## Notes
 
