@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { loginUserHandler } from "../controllers/login.controller";
+import { loginUserHandler, logoutUserHandler } from "../controllers/auth.controller";
+import { requireAuth } from "../middleware/requireAuth";
 import { loginLimiter } from "../middleware/rateLimiter.middleware";
 import { validateInput } from "../middleware/validation.middleware";
 import { loginSchema } from "../validations/login.validation";
@@ -12,5 +13,7 @@ router.post(
   validateInput(loginSchema),
   loginUserHandler,
 );
+
+router.post("/logout", requireAuth, logoutUserHandler);
 
 export default router;

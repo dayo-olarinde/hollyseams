@@ -33,3 +33,7 @@ export const loginUser = async (pin: string): Promise<string> => {
 
   return sessionId;
 };
+
+export const logoutUser = async (sessionId: string): Promise<void> => {
+  await redis.del(sessionKey(sessionId));
+};

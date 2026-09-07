@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env";
-import { loginUser } from "../services/login.service";
+import { loginUser, logoutUser } from "../services/auth.service";
 import { resetLoginLimiterKey } from "../middleware/rateLimiter.middleware";
 import { ApiResponse } from "../utils/apiResponse";
 
@@ -18,4 +18,18 @@ export const loginUserHandler = async (req: Request, res: Response) => {
   });
 
   res.status(200).json(new ApiResponse(200, "Login successful"));
+};
+
+export const logoutUserHandler = async (req: Request, res: Response) => {
+  const sessionId = req.cookies?.sessionId as string | undefined;
+
+  if (sessionId) await logoutUser(sessionId);
+
+  res.clearCookie("sessionId", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+  });
+
+  res.status(200).json(new ApiResponse(200, "Logout successful"));
 };
