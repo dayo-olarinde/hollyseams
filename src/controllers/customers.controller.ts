@@ -8,16 +8,20 @@ import {
 import { ApiResponse } from "../utils/apiResponse";
 import type {
   CreateCustomerInput,
+  ListItemsQuery,
   UpdateCustomerInput,
 } from "../validations/customers.validation";
 import type { IdParams } from "../validations/params.validation";
 
-export const listCustomersHandler = async (_req: Request, res: Response) => {
-  const customers = await listCustomers();
+export const listCustomersHandler = async (req: Request, res: Response) => {
+  const query = req.query as unknown as ListItemsQuery;
+  const { items, nextCursor } = await listCustomers(query);
 
-  res
-    .status(200)
-    .json(new ApiResponse(200, "Customers fetched successfully", customers));
+  res.status(200).json(
+    new ApiResponse(200, "Customers fetched successfully", items, {
+      nextCursor,
+    }),
+  );
 };
 
 export const createCustomerHandler = async (req: Request, res: Response) => {

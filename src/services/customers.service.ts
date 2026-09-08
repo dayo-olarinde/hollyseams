@@ -2,20 +2,45 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "../config/db";
 import { customersTable } from "../db";
 import { ApiError } from "../utils/apiResponse";
+import { keysetCondition } from "../utils/cursor";
 import type {
   CreateCustomerInput,
+  ListItemsQuery,
   UpdateCustomerInput,
 } from "../validations/customers.validation";
 
-export const listCustomers = async () => {
-  return db
+export const listCustomers = async (
+  { cursor, limit }: ListItemsQuery = { limit: 20 },
+) => {
+  const rows = await db
     .select({
       id: customersTable.id,
       name: customersTable.name,
       phoneNumber: customersTable.phoneNumber,
     })
     .from(customersTable)
-    .orderBy(asc(customersTable.name));
+    .where(
+      cursor
+        ? keysetCondition(
+            customersTable.name,
+            customersTable.id,
+            cursor,
+            "text",
+            ">",
+          )
+        : undefined,
+    )
+    .orderBy(asc(customersTable.name), asc(customersTable.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+
+  return {
+    items,
+    nextCursor: hasMore && last ? `${last.name}|${last.id}` : null,
+  };
 };
 
 export const createCustomer = async (customerData: CreateCustomerInput) => {

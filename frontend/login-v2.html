@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wunmi's Workspace — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #F5EFE2;
+    --cream-card: #FBF8F1;
+    --ink: #2A2620;
+    --stone: #8A8272;
+    --indigo: #1E2A5E;
+    --indigo-deep: #141B42;
+    --indigo-tint: #E4E7F0;
+    --rust: #B5503D;
+    --rust-bg: #F6E4E0;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--cream);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+
+  .mark {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mark svg { display: block; }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 27px;
+    color: var(--ink);
+    margin: 0 0 6px;
+    letter-spacing: 0.1px;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--stone);
+    margin: 0 0 36px;
+  }
+
+  .pin-dots {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid #C9C0AC;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .dot.filled {
+    background: var(--indigo);
+    border-color: var(--indigo);
+    transform: scale(1.05);
+  }
+
+  .dot.shake-error {
+    border-color: var(--rust);
+  }
+
+  .error-msg {
+    height: 18px;
+    font-size: 13px;
+    color: var(--rust);
+    margin-bottom: 18px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .error-msg.visible { opacity: 1; }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .key {
+    aspect-ratio: 1;
+    border-radius: 14px;
+    border: 1px solid #E2DACA;
+    background: var(--cream-card);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.1s ease, border-color 0.1s ease, transform 0.08s ease;
+  }
+
+  .key:hover { border-color: var(--indigo); }
+  .key:active { transform: scale(0.94); background: var(--indigo-tint); }
+
+  .key.action {
+    background: transparent;
+    border-color: transparent;
+    color: var(--stone);
+    font-size: 15px;
+  }
+
+  .key.action:hover { color: var(--indigo); background: transparent; border-color: transparent; }
+  .key.action:active { transform: scale(0.94); }
+
+  .key:focus-visible {
+    outline: 2px solid var(--indigo);
+    outline-offset: 2px;
+  }
+
+  .shake { animation: shake 0.35s ease; }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(3px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shake, .dot { animation: none; transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="mark" aria-hidden="true">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+      <circle cx="22" cy="22" r="20" stroke="#1E2A5E" stroke-width="1.3" opacity="0.55"/>
+      <path d="M14 22 Q22 13 30 22 Q22 31 14 22 Z" stroke="#1E2A5E" stroke-width="1.4" fill="none"/>
+      <circle cx="22" cy="22" r="2.2" fill="#1E2A5E"/>
+    </svg>
+  </div>
+
+  <h1>Welcome back, Wunmi</h1>
+  <p class="subtitle">Enter your PIN to continue</p>
+
+  <div class="pin-dots" id="pinDots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+
+  <p class="error-msg" id="errorMsg">That PIN isn't right. Try again.</p>
+
+  <div class="keypad" id="keypad">
+    <button class="key" data-digit="1">1</button>
+    <button class="key" data-digit="2">2</button>
+    <button class="key" data-digit="3">3</button>
+    <button class="key" data-digit="4">4</button>
+    <button class="key" data-digit="5">5</button>
+    <button class="key" data-digit="6">6</button>
+    <button class="key" data-digit="7">7</button>
+    <button class="key" data-digit="8">8</button>
+    <button class="key" data-digit="9">9</button>
+    <button class="key action" id="clearBtn">Clear</button>
+    <button class="key" data-digit="0">0</button>
+    <button class="key action" id="backBtn" aria-label="Delete">&#9003;</button>
+  </div>
+</div>
+
+<script>
+  const PIN_LENGTH = 4;
+  let pin = "";
+
+  const dotsEl = document.getElementById('pinDots');
+  const dots = Array.from(dotsEl.children);
+  const errorMsg = document.getElementById('errorMsg');
+  const keypad = document.getElementById('keypad');
+
+  function renderDots() {
+    dots.forEach((dot, i) => dot.classList.toggle('filled', i < pin.length));
+  }
+
+  function clearError() {
+    errorMsg.classList.remove('visible');
+    dots.forEach(d => d.classList.remove('shake-error'));
+  }
+
+  function showError() {
+    errorMsg.classList.add('visible');
+    dots.forEach(d => d.classList.add('shake-error'));
+    dotsEl.classList.add('shake');
+    setTimeout(() => dotsEl.classList.remove('shake'), 350);
+    pin = "";
+    setTimeout(renderDots, 350);
+  }
+
+  async function submitPin() {
+    // Wire this up to POST /login. Placeholder simulates a failed attempt
+    // so the error state is visible in this template.
+    try {
+      const res = await fakeLoginRequest(pin);
+      if (!res.ok) { showError(); return; }
+      // navigate to dashboard on success
+    } catch (e) {
+      showError();
+    }
+  }
+
+  function fakeLoginRequest(pin) {
+    return new Promise(resolve => {
+      setTimeout(() => resolve({ ok: pin === "0000" }), 300);
+    });
+  }
+
+  keypad.addEventListener('click', (e) => {
+    const btn = e.target.closest('.key');
+    if (!btn) return;
+    clearError();
+
+    if (btn.id === 'clearBtn') { pin = ""; renderDots(); return; }
+    if (btn.id === 'backBtn') { pin = pin.slice(0, -1); renderDots(); return; }
+
+    const digit = btn.dataset.digit;
+    if (digit === undefined || pin.length >= PIN_LENGTH) return;
+
+    pin += digit;
+    renderDots();
+
+    if (pin.length === PIN_LENGTH) setTimeout(submitPin, 120);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key >= '0' && e.key <= '9') {
+      keypad.querySelector(`[data-digit="${e.key}"]`)?.click();
+    } else if (e.key === 'Backspace') {
+      document.getElementById('backBtn').click();
+    }
+  });
+</script>
+
+</body>
+</html>

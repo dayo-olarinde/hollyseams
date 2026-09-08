@@ -14,9 +14,11 @@ import { requireAuth } from "../middleware/requireAuth";
 import {
   validateInput,
   validateParams,
+  validateQuery,
 } from "../middleware/validation.middleware";
 import {
   createCustomerSchema,
+  listItemsQuerySchema,
   updateCustomerSchema,
 } from "../validations/customers.validation";
 import { idParamsSchema } from "../validations/params.validation";
@@ -24,7 +26,12 @@ import { createSubjectSchema } from "../validations/subjects.validation";
 
 const router = Router();
 
-router.get("/", requireAuth, listCustomersHandler);
+router.get(
+  "/",
+  requireAuth,
+  validateQuery(listItemsQuerySchema),
+  listCustomersHandler,
+);
 
 router.post(
   "/",
@@ -66,6 +73,7 @@ router.post(
 router.get(
   "/:id/jobs",
   requireAuth,
+  validateQuery(listItemsQuerySchema),
   validateParams(idParamsSchema),
   listCustomerJobsHandler,
 );

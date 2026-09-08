@@ -63,5 +63,6 @@ export const jobsTable = pgTable(
     index("jobs_customer_id_idx").on(t.customerId),
     index("jobs_status_idx").on(t.status),
     index("jobs_due_date_idx").on(t.dueDate),
+    index("jobs_created_at_id_idx").on(t.createdAt.desc(), t.id.desc()),
   ],
 );

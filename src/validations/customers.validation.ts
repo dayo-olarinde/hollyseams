@@ -28,5 +28,16 @@ export const updateCustomerSchema = z.strictObject({
   phoneNumber: phoneNumberSchema.optional(),
 });
 
+export const listItemsQuerySchema = z.strictObject({
+  limit: z.coerce
+    .number()
+    .int("Limit must be a whole number")
+    .positive("Limit must be at least 1")
+    .max(100, "Limit must be at most 100")
+    .default(10),
+  cursor: z.string().trim().min(1).max(200).optional(),
+});
+
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
+export type ListItemsQuery = z.infer<typeof listItemsQuerySchema>;

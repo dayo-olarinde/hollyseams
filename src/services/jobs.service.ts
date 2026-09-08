@@ -8,6 +8,8 @@ import {
   subjectsTable,
 } from "../db";
 import { ApiError } from "../utils/apiResponse";
+import { keysetCondition } from "../utils/cursor";
+import type { ListItemsQuery } from "../validations/customers.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
@@ -15,8 +17,10 @@ import type {
 } from "../validations/jobs.validation";
 import type { CreatePaymentInput } from "../validations/payments.validation";
 
-export const listJobs = async () => {
-  return db
+export const listJobs = async (
+  { cursor, limit }: ListItemsQuery = { limit: 10 },
+) => {
+  const rows = await db
     .select({
       id: jobsTable.id,
       subjectId: jobsTable.subjectId,
@@ -32,11 +36,32 @@ export const listJobs = async () => {
     })
     .from(jobsTable)
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
-    .orderBy(desc(jobsTable.createdAt));
+    .where(
+      cursor
+        ? keysetCondition(jobsTable.createdAt, jobsTable.id, cursor)
+        : undefined,
+    )
+    .orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+
+  return {
+    items,
+    nextCursor:
+      hasMore && last ? `${last.createdAt.toISOString()}|${last.id}` : null,
+  };
 };
 
-export const listCustomerJobs = async (customerId: string) => {
-  return db
+export const listCustomerJobs = async (
+  customerId: string,
+  query: ListItemsQuery,
+) => {
+  const { cursor, limit } = query;
+
+  const rows = await db
     .select({
       id: jobsTable.id,
       subjectId: jobsTable.subjectId,
@@ -52,8 +77,28 @@ export const listCustomerJobs = async (customerId: string) => {
     })
     .from(jobsTable)
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
-    .where(eq(jobsTable.customerId, customerId))
-    .orderBy(desc(jobsTable.createdAt));
+    .where(
+      and(
+        eq(jobsTable.customerId, customerId),
+        cursor
+          ? keysetCondition(jobsTable.createdAt, jobsTable.id, cursor)
+          : undefined,
+      ),
+    )
+    .orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+
+  console.log(rows);
+
+  return {
+    items,
+    nextCursor:
+      hasMore && last ? `${last.createdAt.toISOString()}|${last.id}` : null,
+  };
 };
 
 export const getJob = async (id: string) => {

@@ -24,7 +24,7 @@ export const monthlyRevenue = async () => {
   `) as MonthlyRevenueRow[];
 
   return rows.map((row) => {
-    const date = row.month;
+    const date = new Date(row.month);
 
     return {
       monthKey: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,

@@ -5,6 +5,7 @@ export class ApiResponse<T = unknown> {
     public readonly statusCode = 200,
     public readonly message = "success",
     public readonly data?: T,
+    public readonly meta?: Record<string, unknown>,
   ) {
     this.success = statusCode < 400;
   }

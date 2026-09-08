@@ -10,6 +10,7 @@ import {
   updateJob,
 } from "../services/jobs.service";
 import { ApiResponse } from "../utils/apiResponse";
+import type { ListItemsQuery } from "../validations/customers.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
@@ -18,17 +19,27 @@ import type {
 import type { IdParams, JobIdParams } from "../validations/params.validation";
 import type { CreatePaymentInput } from "../validations/payments.validation";
 
-export const listJobsHandler = async (_req: Request, res: Response) => {
-  const jobs = await listJobs();
+export const listJobsHandler = async (req: Request, res: Response) => {
+  const query = req.query as unknown as ListItemsQuery;
+  const { items, nextCursor } = await listJobs(query);
 
-  res.status(200).json(new ApiResponse(200, "Jobs fetched successfully", jobs));
+  res.status(200).json(
+    new ApiResponse(200, "Jobs fetched successfully", items, {
+      nextCursor,
+    }),
+  );
 };
 
 export const listCustomerJobsHandler = async (req: Request, res: Response) => {
   const { id: customerId } = req.params as IdParams;
-  const jobs = await listCustomerJobs(customerId);
+  const query = req.query as unknown as ListItemsQuery;
+  const { items, nextCursor } = await listCustomerJobs(customerId, query);
 
-  res.status(200).json(new ApiResponse(200, "Jobs fetched successfully", jobs));
+  res.status(200).json(
+    new ApiResponse(200, "Jobs fetched successfully", items, {
+      nextCursor,
+    }),
+  );
 };
 
 export const getJobHandler = async (req: Request, res: Response) => {

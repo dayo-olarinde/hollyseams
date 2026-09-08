@@ -1,649 +1,735 @@
-# 06 — Backend Codebase Patterns & Decisions
+# Backend patterns, decisions, and how to read this codebase
 
-This document explains **how the backend is written and why** — the patterns,
-the decisions behind them, and the mistakes they prevent. It follows the
-actual code, so you can read it with the repo open.
+This guide explains the Hollyseams backend as it exists in this repository. It is not a generic Express or Drizzle tutorial. The examples use the real routes, validation schemas, controllers, services, database schema, reports, pagination code, and stress-test scripts.
 
-Contents:
+The goal is to help you answer four questions whenever you open a file:
 
-1. [The request lifecycle](#1-the-request-lifecycle)
-2. [What each layer is allowed to do](#2-what-each-layer-is-allowed-to-do)
-3. [Validation patterns (zod)](#3-validation-patterns-zod)
-4. [Controller patterns](#4-controller-patterns)
-5. [Service patterns](#5-service-patterns)
-6. [When we drop to raw SQL (reports)](#6-when-we-drop-to-raw-sql-reports)
-7. [Errors and responses](#7-errors-and-responses)
-8. [Database conventions](#8-database-conventions)
-9. [Express 5 notes](#9-express-5-notes)
-10. [Real bugs these patterns would have caught](#10-real-bugs-these-patterns-would-have-caught)
-11. [Checklist: adding a new resource](#11-checklist-adding-a-new-resource)
+1. Where does this request enter the application?
+2. Where is its input checked and transformed?
+3. Which layer owns the business rule?
+4. What SQL is eventually sent to PostgreSQL?
 
----
+If you can answer those four questions, you can usually change the backend safely.
 
-## 1. The request lifecycle
+## 1. The big picture
 
-Every request flows through the same pipeline. Nothing skips a layer.
+A request travels through the application like this:
 
-```
-request
-  → route (express router)          declares the path, wires middleware
-  → requireAuth                     who are you? (session cookie → Redis)
-  → validateParams / validateInput / validateQuery   is the input trustworthy?
-  → controller                      thin: unpack input, call service, respond
-  → service                         business rules, transactions, SQL
-  → db (drizzle / postgres-js)      actual queries
-  ← ApiResponse envelope            { success, statusCode, message, data }
-      ↘ on any throw → globalError middleware → JSON error + log
+```text
+HTTP request
+  -> Express route
+  -> authentication middleware
+  -> validation middleware
+  -> controller
+  -> service
+  -> Drizzle or postgres-js
+  -> PostgreSQL
+
+success:  service result -> controller -> ApiResponse -> JSON
+failure:  anything throws -> globalError -> error JSON
 ```
 
-Two consequences of this shape:
-
-- **Controllers never touch the database.** If a controller needs a `JOIN`,
-  that logic belongs in a service.
-- **Services never read `req`.** They take plain typed arguments
-  (`(id, data)`), which makes them callable from queues, cron jobs, or tests
-  without fabricating an HTTP request.
-
----
-
-## 2. What each layer is allowed to do
-
-| Layer          | May do                                        | Must not do                       |
-| -------------- | --------------------------------------------- | --------------------------------- |
-| **Routes**     | declare paths, order middleware               | any logic                         |
-| **Middleware** | authenticate, validate + replace raw input    | business rules                    |
-| **Controller** | unpack validated input, pick status code      | SQL, multi-step business rules    |
-| **Service**    | transactions, ownership checks, 4xx/5xx logic | read `req`, format HTTP responses |
-| **DB/schema**  | column types, FKs, indexes, enums             | —                                 |
-
-The one-line mental model: **middleware makes input trustworthy, services
-make it _correct_, controllers just translate.**
-
----
-
-## 3. Validation patterns (zod)
-
-All request schemas live in `src/validations/<resource>.validation.ts`, and
-every exported schema ships with an inferred type:
+For example, `GET /api/v1/jobs` is mounted like this:
 
 ```ts
-export type CreateJobForSubjectInput = z.infer<
-  typeof createJobForSubjectSchema
->;
+app.use("/api/v1/jobs", jobsRouter);
 ```
 
-`z.infer` means the validation schema is the **single source of truth** for
-both runtime checking _and_ TypeScript types. When the payload shape changes,
-the compiler tells you which services/controllers broke.
+Then the jobs router adds the remaining path and middleware:
 
-### 3.1 `z.strictObject` — reject unknown keys
+```ts
+router.get(
+  "/",
+  requireAuth,
+  validateQuery(listItemsQuerySchema),
+  listJobsHandler,
+);
+```
+
+The request therefore passes through:
+
+```text
+GET /api/v1/jobs
+  -> requireAuth
+  -> validateQuery(listItemsQuerySchema)
+  -> listJobsHandler
+  -> listJobs(query)
+  -> jobs table
+```
+
+### The responsibility rule
+
+- **Routes** describe where a request goes.
+- **Middleware** authenticates and validates input.
+- **Controllers** translate HTTP into service calls and service results into HTTP responses.
+- **Services** contain business rules and database operations.
+- **Schemas** describe the database structure and constraints.
+
+A useful phrase is:
+
+> Middleware makes input trustworthy. Services make operations correct. Controllers translate.
+
+Controllers should not contain SQL. Services should not read `req` or `res`. This keeps services reusable from HTTP handlers, jobs, scripts, or tests.
+
+## 2. Routes and middleware
+
+A route should mostly be wiring:
+
+```ts
+router.patch(
+  "/:id",
+  requireAuth,
+  validateParams(idParamsSchema),
+  validateInput(updateJobSchema),
+  updateJobHandler,
+);
+```
+
+The usual order is:
+
+```text
+requireAuth
+  -> validateParams
+  -> validateInput or validateQuery
+  -> handler
+```
+
+Authentication comes first because unauthenticated callers should not reach protected business logic. Validation comes before the controller so the controller can trust the shape it receives.
+
+### Authentication
+
+`requireAuth` reads the `sessionId` cookie, looks up the session in Redis, validates the stored session object, attaches the user to `req.user`, and refreshes the Redis expiry.
+
+```ts
+const sessionId = req.cookies?.sessionId as string | undefined;
+if (!sessionId) throw new ApiError(401, "Not authenticated");
+```
+
+Authentication is not authorization. The current application has one authenticated user and does not yet have per-user permissions. If roles or ownership rules are added later, they belong in a separate authorization middleware or in explicit service checks.
+
+### Validation middleware
+
+There are three input locations:
+
+```ts
+validateInput(schema); // req.body
+validateParams(schema); // req.params
+validateQuery(schema); // req.query
+```
+
+Each uses `safeParse`. On failure it throws a 400 `ApiError` containing field-level errors. On success it replaces the raw request value with parsed data, so defaults, coercion, and trimming have already happened before the controller runs.
+
+Express 5 treats `req.query` differently from `req.params`: `req.query` is a getter. That is why `validateQuery` redefines the property instead of assigning to it directly.
+
+## 3. Validation with Zod
+
+Validation schemas live in `src/validations`. They are both runtime contracts and TypeScript type sources:
 
 ```ts
 export const createPaymentSchema = z.strictObject({
-  amount: paymentAmountSchema,
+  amount: z.coerce.number().positive(),
   paidAt: z.coerce.date().default(() => new Date()),
 });
+
+export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 ```
 
-Why strict: if the frontend sends `{ amont: 2500 }` (typo), a normal object
-schema silently drops it and the payment insert fails downstream with a
-confusing NOT NULL error. `strictObject` fails immediately with
-_"Unrecognized key: amont"_ — the bug is caught at the door.
+There is one source of truth: the schema. `z.infer` prevents the TypeScript type and runtime validation rules from drifting apart.
 
-### 3.2 `z.coerce` — HTTP input is always strings
+### Strict objects
 
-Query strings and form data arrive as strings: `?limit=5` is `"5"`. Every
-number and date in an incoming payload goes through `z.coerce`:
+The project uses `z.strictObject` so unexpected keys fail immediately:
 
 ```ts
-limit: z.coerce.number().int().positive().max(100).default(10),
-paidAt: z.coerce.date().default(() => new Date()),
+z.strictObject({ amount: paymentAmountSchema });
 ```
 
-Coerce-first matches how the web actually works, and it also accepts real
-numbers/JSON dates from `fetch` bodies — both clients are handled by one
-schema.
+A typo such as `{ ammount: 2500 }` should produce a clear 400 instead of silently dropping the key and causing a confusing database error later.
 
-### 3.3 `.default()` — the server decides missing values
+### Coercion
 
-```ts
-status: z.enum(["pending", "completed", "canceled"]).default("pending"),
-relationship: z.string().trim().min(1).max(50).default("self"),
+HTTP query parameters arrive as strings:
+
+```http
+GET /api/v1/jobs?limit=20
 ```
 
-After `validateInput` replaces `req.body` with the parsed value, **the
-service never has to check for `undefined`** — `status` is always one of the
-three enum values. Defaults encode business policy ("a new job is pending")
-in the schema instead of scattering `?? "pending"` through the codebase.
-
-### 3.4 `.optional()` vs `.nullish()` — and the 1970 trap
+The actual raw value is `"20"`, not the number `20`. That is why query schemas use:
 
 ```ts
-dueDate: z.coerce.date().nullish(),   // accepts absent, null, or a date
+limit: z.coerce.number().int().positive().max(100);
 ```
 
-- `.optional()` — key may be _absent_.
-- `.nullish()` — absent **or explicitly `null`**. Used for `dueDate` /
-  `deliveredAt` because "clear this date" is a legitimate update
-  (`PATCH /jobs/:id` with `{ "dueDate": null }`).
-
-The trap that forced `nullish()`: with `z.coerce.date().optional()` alone,
-sending `"dueDate": null` falls through to the date schema, and
-`new Date(null)` is **1970-01-01** — a silently wrong date in your database
-instead of a 400.
-
-### 3.5 `superRefine` — rules that span multiple fields
+Dates use the same idea:
 
 ```ts
-const jobSubjectSchema = z.strictObject({ ... }).superRefine((subject, ctx) => {
+paidAt: z.coerce.date();
+```
+
+### Optional versus nullable
+
+These are different requests:
+
+```json
+{}
+```
+
+means "do not change this field", while:
+
+```json
+{ "dueDate": null }
+```
+
+means "clear this field".
+
+For PATCH fields that can be cleared, the schema uses `.nullish()`:
+
+```ts
+dueDate: z.coerce.date().nullish(),
+deliveredAt: z.coerce.date().nullish(),
+```
+
+Be careful with `z.coerce.date().optional()` alone. In JavaScript, `new Date(null)` becomes 1970-01-01, so an explicit JSON `null` can accidentally become a real date instead of clearing the field.
+
+### Cross-field rules
+
+A field rule cannot express "name is required unless relationship is self". That is a relationship between two fields, so the project uses `superRefine`:
+
+```ts
+.superRefine((subject, ctx) => {
   if (subject.relationship !== "self" && !subject.name) {
-    ctx.addIssue({ code: "custom", path: ["name"], message: "…" });
+    ctx.addIssue({
+      code: "custom",
+      path: ["name"],
+      message: 'Subject name is required when relationship is not "self"',
+    });
   }
 });
 ```
 
-Single-field rules live on the fields; rules _between_ fields live in
-`superRefine` (`name` required iff `relationship !== "self"`). `path: ["name"]`
-puts the error on the exact field, so the frontend can highlight the right
-input. The frontend shape we support even allows whole-array rules:
-`subjects: z.array(jobSubjectSchema).length(1, "Exactly one subject is
-required per job")` encodes the business rule "one subject per job" as a
-validation error instead of a 500.
+The error path matters: the frontend can attach the error directly to the `name` input.
 
-### 3.6 Limits must mirror the database
+The job creation schema also requires exactly one subject:
 
 ```ts
-// numeric(12, 2) in Postgres caps values at 9999999999.99
-agreedPrice: jobPriceSchema,   // .max(9999999999.99, "…")
+subjects: z.array(jobSubjectSchema).length(1);
 ```
 
-If validation is looser than the column, you don't get a 400 — you get a
-Postgres _numeric field overflow_ 500 at insert time. **Every numeric cap in
-a schema quotes the column definition it protects.** This exact mismatch
-already happened once (validation allowed 9999999999.99 while the column was
-`numeric(6,2)`); the test suite caught it, and we widened the column.
+The database may allow many subjects per customer, but this endpoint creates one subject per job. That is an endpoint rule, so it belongs in validation.
 
-### 3.7 The three validation middlewares
+### Validation must agree with PostgreSQL
 
-`src/middleware/validation.middleware.ts` has one middleware per request
-compartment: `validateInput` (body), `validateParams` (path), `validateQuery`
-(query string). All three do the same job — `safeParse`, throw
-`ApiError(400, …, fieldErrors)` on failure, and **replace the raw value with
-the parsed one**:
+Jobs and payments use `numeric(12, 2)`. The validation maximum is therefore `9999999999.99`.
+
+If Zod accepts a value the database cannot store, the client receives a late 500 instead of an early 400. Database precision, validation limits, and tests must be changed together.
+
+## 4. Controllers
+
+Controllers should be boring. Their normal shape is:
 
 ```ts
-req.body = result.data; // body: defaults applied, coerced, trimmed
-req.params = result.data; // params: still strings, but proven uuids
-```
+export const getJobHandler = async (req: Request, res: Response) => {
+  const { id } = req.params as IdParams;
+  const job = await getJob(id);
 
-Because the middleware guarantees the shape, controllers can later write
-`req.body as CreateJobNewCustomerInput` without a runtime check.
-
-`validateQuery` has one Express 5 wrinkle worth understanding: `req.query`
-is a **lazy getter**, not a plain property, so `req.query = parsed` throws.
-The middleware therefore redefines the own property:
-
-```ts
-Object.defineProperty(req, "query", { value: result.data, … });
-```
-
-And because `@types/express` still _types_ `req.query` as `ParsedQs`, the
-controller reads it with a double cast, documented inline:
-
-```ts
-const { limit } = req.query as unknown as TopCustomersQuery;
-```
-
-Runtime is guaranteed by the middleware; the cast is purely for the compiler.
-
----
-
-## 4. Controller patterns
-
-Controllers are deliberately boring. The whole job:
-
-```ts
-export const createJobForSubjectHandler = async (
-  req: Request,
-  res: Response,
-) => {
-  const { id: subjectId } = req.params as IdParams; // 1. unpack (validated)
-  const data = req.body as CreateJobForSubjectInput; //    input
-  const job = await createJobForSubject(subjectId, data); // 2. delegate
-  res.status(201).json(new ApiResponse(201, "Job created successfully", job)); // 3. respond
+  res.status(200).json(new ApiResponse(200, "Job fetched successfully", job));
 };
 ```
 
-Three conventions to notice:
+The controller does three things:
 
-1. **Status codes are chosen here** — `201` for creation, `200` for
-   reads/updates/deletes. The service doesn't know HTTP exists.
-2. **Plain `async` handlers.** Express 5 forwards rejected promises to the
-   error middleware natively, so controllers don't need the `asyncHandler`
-   wrapper (an Express 4 habit — in Express 4 an async throw would crash
-   the process unhandled). It survives in `utils/` and is still used by the
-   validation middlewares.
-3. **One handler, one endpoint.** No shared "do things" handlers with mode
-   flags; the route file decides which handler serves which verb.
+1. Unpack validated parameters, body, or query.
+2. Call one service function.
+3. Choose the HTTP status and response message.
 
----
+It should not decide whether a job can be deleted, calculate payment balances, or build SQL. Those are service responsibilities.
 
-## 5. Service patterns
+Express 5 forwards rejected promises from async handlers to the error middleware. The project still has `asyncHandler`, and it is used by some older handlers and validation middleware, but plain async controllers are safe under Express 5.
 
-`src/services/*.service.ts` is where correctness lives. The patterns below
-are the reason the API behaves predictably.
+## 5. Services
 
-### 5.1 Transactions for multi-table writes
+Services are the most important layer because they protect data correctness.
+
+### Creating related records atomically
+
+Creating a job for a new customer creates four records:
+
+```text
+customer -> subject -> measurement -> job
+```
+
+The service wraps those inserts in a transaction:
 
 ```ts
 const job = await db.transaction(async (tx) => {
-  const [customer]  = await tx.insert(customersTable)…;
-  const [subject]   = await tx.insert(subjectsTable)…;
-  const [measurement] = await tx.insert(measurementsTable)…;
-  const [newJob]    = await tx.insert(jobsTable)…;
+  const [customer] = await tx.insert(customersTable).values(...).returning();
+  const [subject] = await tx.insert(subjectsTable).values(...).returning();
+  const [measurement] = await tx.insert(measurementsTable).values(...).returning();
+  const [newJob] = await tx.insert(jobsTable).values(...).returning();
   return newJob;
 });
 ```
 
-Creating a job for a new customer writes **four rows**. Without a
-transaction, a failure on step 3 leaves an orphan customer+subject forever.
-Inside `db.transaction`, any `throw` rolls back all four. Note we use `tx`
-(the transaction handle) for _every_ query inside the callback — mixing in
-`db` would silently escape the transaction.
+If the measurement or job insert fails, the customer and subject inserts roll back too. Use `tx` for every query inside the callback. Accidentally using `db` inside the transaction escapes the transaction and can leave partial data behind.
 
-### 5.2 `.returning()` + the array guard
+### Returning inserted rows
+
+Drizzle insert and update operations return arrays. If the service needs the created row, it must request it:
 
 ```ts
-const [newJob] = await tx.insert(jobsTable).values({ … }).returning();
+const [newJob] = await tx.insert(jobsTable).values(values).returning();
+
 if (!newJob) throw new ApiError(500, "Failed to create job");
 ```
 
-Two things packed together:
+Without `.returning()`, the insert can succeed while the service receives no row. That was a real bug in this codebase.
 
-- **`.returning()`** makes Postgres hand back the inserted row (with DB
-  generated fields: `id`, `createdAt`). This was once missing in a draft —
-  the insert _succeeded_ but the function read garbage and threw "Failed to
-  create job" on every success. Rule: **if you need the row, ask for it.**
-- **The guard after the destructure** is honest about a case that is
-  virtually impossible (`INSERT … RETURNING` returning zero rows) but not
-  _theoretically_ impossible — and it gives TypeScript a non-undefined value
-  to return, satisfying `noUncheckedIndexedAccess`.
+### Ownership checks
 
-### 5.3 Status codes as a vocabulary: 404 / 409 / 500
+Foreign keys prove that an ID exists. They do not always prove that two IDs belong together.
 
-Services throw `ApiError` with _meaningful_ codes:
-
-- **404** — the entity genuinely doesn't exist (`Subject not found`).
-- **409** — the request conflicts with business state (`Job has payments and
-cannot be deleted`). A delete blocked by payments is not "not found"; 409
-  tells the frontend to show a "this job has payments" message instead of a
-  generic error.
-- **500** — _our_ failure (an INSERT that should not fail). `globalError`
-  logs 5xx with the full error object but only logs 4xx as a warning line.
-
-### 5.4 Ownership and consistency checks
+This check is important:
 
 ```ts
-const [measurement] = await tx
-  .select({ id: measurementsTable.id })
-  .from(measurementsTable)
-  .where(
-    and(
-      eq(measurementsTable.id, measurementId),
-      eq(measurementsTable.subjectId, subjectId), // ← the ownership clause
-    ),
-  );
-if (!measurement)
-  throw new ApiError(404, "Measurement not found for this subject");
+.where(
+  and(
+    eq(measurementsTable.id, measurementId),
+    eq(measurementsTable.subjectId, subjectId),
+  ),
+)
 ```
 
-The FKs on `jobs` only check _existence_, not _fit_: without the second
-`eq`, a client could attach **one customer's measurements to another
-customer's job** and the database would accept it happily. Same idea, other
-direction: `createJobForSubject` takes only `subjectId` and derives
-`customerId` from the subject row — the client is never trusted to name both
-sides of the relationship.
+Without `eq(measurementsTable.subjectId, subjectId)`, a caller could attach a measurement belonging to one subject to a job for another subject. The database would accept both IDs because both rows exist.
 
-### 5.5 Pessimistic locking where money moves
+When possible, derive related IDs on the server. `createJobForSubject` receives a subject ID and obtains the customer ID from the subject instead of trusting the client to send both.
+
+### Error vocabulary
+
+Services use `ApiError` to communicate meaningful outcomes:
+
+- `400`: the request cannot be processed as sent;
+- `401`: authentication failed;
+- `404`: the requested entity does not exist;
+- `409`: the entity exists but its current state conflicts with the request;
+- `500`: an unexpected server or database failure.
+
+Deleting a job with payments is a `409`, not a `404`: the job exists, but its state prevents deletion.
+
+### Payment locking
+
+`createPayment` selects the job with `FOR UPDATE`:
 
 ```ts
-const [job] = await tx
-  .select({ id: jobsTable.id })
-  .from(jobsTable)
-  .where(eq(jobsTable.id, jobId))
-  .for("update");
+.where(eq(jobsTable.id, jobId))
+.for("update");
 ```
 
-`FOR UPDATE` locks the job row until the transaction commits. Right now
-`createPayment` just verifies existence, but the moment we add an
-overpayment check (sum of payments vs `agreedPrice`), two simultaneous
-payments could both read the same balance and both pass. Locking the job row
-serializes payment attempts per job, so the future check is race-free.
+The lock lasts until the transaction commits. It currently protects the job existence check. It also provides the correct foundation for a future overpayment check: concurrent payment requests for the same job will wait instead of both reading and spending the same balance.
 
-### 5.6 Partial updates: `undefined` vs `null` in drizzle
+## 6. Reads with related records
 
-```ts
-export const updateJob = async (id: string, jobData: UpdateJobInput) => {
-  if (Object.keys(jobData).length === 0)
-    throw new ApiError(400, "No fields to update");
-  const [job] = await db
-    .update(jobsTable)
-    .set(jobData)
-    .where(eq(jobsTable.id, id))
-    .returning();
-  if (!job) throw new ApiError(404, "Job not found");
-  return job;
-};
-```
+A one-to-many join can multiply a parent row. A job with four payments becomes four SQL rows containing the same job data.
 
-The zod schema guarantees at least one key and that absent keys are absent
-(not `undefined`) — drizzle skips `undefined` columns, and an explicit
-`null` writes SQL `NULL` (clearing the date). So one `.set(jobData)` cleanly
-handles "change status", "change status _and_ clear dueDate", and every
-other combination, without building a patch object by hand.
-
-### 5.7 Derived data is written, not computed everywhere
-
-When `relationship === "self"`, the subject's name is _copied from_ the
-customer at creation time:
-
-```ts
-const subjectName =
-  subjectData.relationship === "self" ? customer.name : subjectData.name!;
-```
-
-Both write paths enforce this — `createJobNewCustomer` (job + subject born
-together) and `addSubject` (`POST /customers/:id/subjects`, which also
-resolves the customer's name and 404s on a bogus customer id _before_
-inserting, turning what used to be a raw FK-violation 500 into a clean 404).
-Its zod schema (`createSubjectSchema`) mirrors the rule with `superRefine`:
-`name` is optional, but required when `relationship !== "self"`.
-
-`subjects.name` is always populated, so every read path can use it directly.
-`getJob` additionally guards against drift with a SQL `CASE` (see §6.1). The
-general principle: decide once, explicitly, whether a value is _derived
-on read_ (computed in SQL) or _denormalized on write_ (copied and stored) —
-and never mix the two silently.
-
-### 5.8 Reads that fan out: attach children with a second query, not a join
-
-When one endpoint needs a parent _and_ a one-to-many collection (job + its
-payments, customer + subjects + measurements + jobs), resist the urge to
-join everything into one query. Joining job × payments multiplies the job
-row once per payment — 4 payments means 4 identical job rows to dedupe.
-Instead, run independent queries concurrently and assemble in JS:
+`getJob` therefore runs two queries concurrently:
 
 ```ts
 const [job, payments] = await Promise.all([
-  db.select({/* joined job row */}).from(jobsTable).where(eq(jobsTable.id, id)),
-  db
-    .select({
-      id: paymentsTable.id,
-      amount: paymentsTable.amount,
-      paidAt: paymentsTable.paidAt,
-    })
+  // one joined job row
+  db.select(...).from(jobsTable).where(eq(jobsTable.id, id)),
+
+  // zero or more payment rows
+  db.select({ id, amount, paidAt })
     .from(paymentsTable)
     .where(eq(paymentsTable.jobId, id))
     .orderBy(desc(paymentsTable.paidAt)),
 ]);
-if (!job) throw new ApiError(404, "Job not found");
+```
+
+The response is assembled as:
+
+```ts
 return { ...job, payments };
 ```
 
-The parent query doubles as the 404 guard (a bogus id returns no job, and
-the payments fetched alongside it are discarded), the parent row comes back
-exactly once regardless of how many children it has, and total latency stays
-at one round-trip because the queries run in parallel. Same shape as
-`getCustomer`'s three-way fan-out.
+This keeps the job as one object and payments as an array. A valid job with no payments returns `payments: []`.
 
----
+The same principle applies to a customer with subjects, measurements, and jobs: separate fan-out queries are often easier to understand and avoid deduplicating a Cartesian multiplication in JavaScript.
 
-## 6. When we drop to raw SQL (reports)
+## 7. Cursor pagination
 
-Drizzle's query builder is the default (`db.select()…`) because it is typed
-and composable. Raw SQL via the postgres-js client (`pg` from
-`config/db.ts`) is allowed for the things a builder can't express —
-primarily **window functions**.
+Cursor pagination means:
 
-### 6.1 SQL expressions inside the builder
+> Return rows after a bookmark instead of skipping a number of rows with OFFSET.
 
-`getJob` needs "the customer's name for self-subjects, otherwise the
-subject's own name". The tempting JS version is a bug:
+Your previous implementation is the simple form:
 
 ```ts
-// WRONG — evaluated in JavaScript at query-build time:
-subjectName: subjectsTable.relationship === "self"   // column object === "self"
-  ? customersTable.name : subjectsTable.name,        // always the else-branch!
+const conditions = cursor
+  ? and(
+      eq(activitiesTable.cardId, cardId),
+      lt(activitiesTable.createdAt, new Date(cursor)),
+    )
+  : eq(activitiesTable.cardId, cardId);
+
+const activities = await db
+  .select(...)
+  .from(activitiesTable)
+  .where(conditions)
+  .orderBy(desc(activitiesTable.createdAt))
+  .limit(limit + 1);
 ```
 
-A Drizzle column is an object, not a value — the ternary compiles no
-decision into SQL at all. The correct form compiles the decision into a
-**SQL `CASE`**:
+The project uses the same five steps:
+
+1. Read the cursor if one was provided.
+2. Filter after the cursor.
+3. Order consistently.
+4. Fetch `limit + 1` rows.
+5. Use the extra row to decide whether another page exists.
+
+### Why the project cursor has two values
+
+`GET /jobs` orders by:
 
 ```ts
-subjectName: sql<string>`
-  case when ${subjectsTable.relationship} = 'self'
-    then ${customersTable.name}
-    else ${subjectsTable.name}
-  end`,
+.orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
 ```
 
-Rule of thumb: **a condition involving column _values_ must exist in SQL** —
-via `.where()`, `case`, or a join — never as a JS ternary over column objects.
+The cursor therefore contains:
 
-### 6.2 The monthly revenue report — window functions
+```text
+createdAt|id
+```
+
+The first value is the normal sort value. The ID is a deterministic tie-breaker.
+
+Suppose the order is:
+
+```text
+createdAt  id
+10:00      Z
+10:00      Y
+10:00      X
+09:59      A
+```
+
+With a page size of two:
+
+```text
+page 1: Z, Y
+cursor: 10:00|Y
+```
+
+The next condition is:
 
 ```sql
-with
-  monthly_revenue as (
-    select
-      date_trunc ('month', paid_at) as month,
-      sum(amount) as revenue
-    from
-      payments
-    group by
-      month
-  )
-select
-  month,
-  revenue,
-  sum(revenue) over (
-    order by
-      month asc
-  ) as running_total
-from
-  monthly_revenue
-order by
-  month asc
+WHERE
+  (created_at, id) < ('10:00', 'Y')
 ```
 
-- `date_trunc('month', …)` buckets any payment date into its month.
-- `sum(revenue) OVER (ORDER BY month)` is a **window function**: it sums
-  across rows without collapsing them — the running total. The query builder
-  has no clean equivalent, which is exactly why this report is raw SQL.
-- In JS, rows are parsed once: `revenue: Number(row.revenue)`,
-  `runningTotal: Number(row.running_total)`.
+That means:
 
-### 6.3 Money never gets an `::int` (or float) cast
+```sql
+WHERE
+  created_at < '10:00'
+  OR (
+    created_at = '10:00'
+    AND id < 'Y'
+  )
+```
 
-postgres-js returns `numeric`/`count` as **strings** — that's Postgres
-protecting precision. The instinctive `SUM(amount)::int` or
-`Number(x)`-everywhere loses cents (and floats drift). Pattern: keep SQL
-exact, parse the string **once** at the service boundary, and keep raw row
-interfaces honest about it:
+The next page is `X, A`.
+
+A timestamp-only cursor would be:
+
+```sql
+WHERE
+  created_at < '10:00'
+```
+
+That would skip `X`, because `X.created_at` equals the cursor instead of being less than it. Changing `<` to `<=` would duplicate `Z` and `Y`.
+
+This is why `cursor.ts` exists. It centralizes:
+
+- splitting `value|id`;
+- checking the UUID;
+- checking timestamp syntax;
+- constructing the row-wise comparison.
+
+It is still the same cursor idea as your previous method. The only conceptual addition is the ID tie-breaker.
+
+### `limit + 1`
+
+If the client asks for 10 rows, the service asks PostgreSQL for 11:
 
 ```ts
-interface MonthlyRevenueRow {
-  month: Date;
-  revenue: string; // numeric arrives as a string
-  running_total: string;
+.limit(limit + 1)
+```
+
+If 11 arrive, there is another page. Return the first 10 and create a cursor from the tenth. If only 10 or fewer arrive, `nextCursor` is `null`.
+
+This avoids an expensive `COUNT(*)` on every request.
+
+### Cursor precision warning
+
+The current job implementation creates its cursor with:
+
+```ts
+last.createdAt.toISOString();
+```
+
+JavaScript `Date` stores milliseconds, while PostgreSQL `timestamptz` can store microseconds. A database value such as:
+
+```text
+2026-09-07 22:56:56.047399+00
+```
+
+can become:
+
+```text
+2026-09-07T22:56:56.047Z
+```
+
+The microseconds are lost. That means the composite design is correct, but the timestamp representation should be fixed before treating this as production-ready. A robust implementation should preserve the database timestamp text for the cursor or deliberately normalize both database values and cursors to the same precision.
+
+### Customers use the same machinery
+
+`GET /customers` is ordered by:
+
+```ts
+.orderBy(asc(customersTable.name), asc(customersTable.id))
+```
+
+Its cursor is:
+
+```text
+name|id
+```
+
+Because this is ascending, the next-page comparison uses `>` instead of `<`.
+
+The reusable idea is:
+
+```text
+DESC list -> rows less than the cursor row
+ASC list  -> rows greater than the cursor row
+```
+
+## 8. Indexes and query shape
+
+An index is useful when it matches how a query finds or orders rows. A foreign key does not automatically create an index in PostgreSQL.
+
+The project has indexes for:
+
+- `subjects.customer_id` — used by customer subject lists;
+- `measurements.subject_id` — used by subject measurement lists;
+- `jobs.customer_id` — used by per-customer job lists and reports;
+- `jobs.created_at, jobs.id` — used by job cursor pagination;
+- `payments.job_id, payments.paid_at` — used when fetching a job's payments in date order;
+- job status and due date — useful for future job-board queries.
+
+The important index for cursor pagination is the same as the ordering:
+
+```sql
+CREATE INDEX ... ON jobs (created_at, id);
+```
+
+Without it, PostgreSQL may scan and sort the whole jobs table for every page. With it, PostgreSQL can walk the index backward and stop after `limit + 1` rows.
+
+Indexes are not automatically used just because they exist. PostgreSQL may correctly choose a sequential scan for a tiny table because reading the whole table is cheaper than performing an index lookup. Use `EXPLAIN (ANALYZE, BUFFERS)` with realistic data before judging an index.
+
+## 9. Reports and raw SQL
+
+Drizzle's query builder is the default. Reports use postgres-js raw SQL where SQL is clearer or where window functions are needed.
+
+### Monthly revenue
+
+The report first groups payments by month:
+
+```sql
+WITH
+  monthly_revenue AS (
+    SELECT
+      date_trunc ('month', paid_at) AS month,
+      sum(amount) AS revenue
+    FROM
+      payments
+    GROUP BY
+      month
+  )
+SELECT
+  month,
+  revenue,
+  sum(revenue) OVER (
+    ORDER BY
+      month
+  ) AS running_total
+FROM
+  monthly_revenue
+ORDER BY
+  month;
+```
+
+`GROUP BY` reduces many payments to one row per month. The window function calculates a running total without collapsing those monthly rows.
+
+### Top customers
+
+Payments do not contain `customer_id`, so the report follows the relationship:
+
+```text
+payments -> jobs -> customers
+```
+
+It ranks by:
+
+```sql
+sum(p.amount) AS total_paid
+ORDER BY
+  total_paid DESC
+```
+
+It does not rank by job count. Job count is extra context only.
+
+### Outstanding payments
+
+The report uses `LEFT JOIN payments` because a job with zero payments is still outstanding. `COALESCE(sum(p.amount), 0)` converts the no-payment case into numeric zero. The balance is calculated after grouping, so the filter belongs in `HAVING`, not `WHERE`:
+
+```sql
+HAVING
+  j.agreed_price - coalesce(sum(p.amount), 0) > 0
+```
+
+Money remains exact in PostgreSQL. The service converts aggregate results once at the boundary because raw PostgreSQL numeric values can arrive as strings.
+
+## 10. Errors and response envelopes
+
+Successful responses use `ApiResponse`:
+
+```ts
+new ApiResponse(200, "Jobs fetched successfully", jobs, {
+  nextCursor,
+});
+```
+
+The JSON shape is:
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Jobs fetched successfully",
+  "data": [],
+  "meta": {
+    "nextCursor": "..."
+  }
 }
 ```
 
-### 6.4 `topCustomers` — tracing money across a join path
+The `meta` property is optional, so non-paginated responses do not need to include it.
 
-```sql
-from payments p
-join jobs j on j.id = p.job_id
-join customers c on c.id = j.customer_id
-group by c.id
-order by total_paid desc
-limit ${limit}
-```
-
-There is no `customer_id` on `payments` — money is traced through the FK
-path payment → job → customer. Two subtleties, both commented in the code:
-
-- `GROUP BY c.id` alone suffices because `c.id` is the primary key; Postgres
-  lets other `c.*` columns ride along (functional dependency).
-- `${limit}` is interpolated by postgres-js as a **bound parameter** (`$1`),
-  not string-concatenated — raw SQL here is still injection-safe.
-
-The ranking is by `sum(p.amount)` — money paid — _not_ by job count. That
-distinction was an explicit product decision.
-
-### 6.5 `outstandingPayments` — LEFT JOIN, COALESCE, HAVING
-
-```sql
-from
-  jobs j
-  join customers c on c.id = j.customer_id
-  join subjects s on s.id = j.subject_id
-  left join payments p on p.job_id = j.id
-group by
-  j.id,
-  c.id,
-  s.id
-having
-  j.agreed_price - coalesce(sum(p.amount), 0) <> 0
-order by
-  balance_due desc
-```
-
-- **`LEFT JOIN` is load-bearing.** An inner join would drop jobs with _zero_
-  payments — the most outstanding jobs of all. `COALESCE(sum(…), 0)` turns
-  "no payments" into a number.
-- **`HAVING`, not `WHERE`:** the balance exists only _after_ grouping;
-  `WHERE` filters rows before aggregation and cannot see it.
-- `balanceDue = agreedPrice − totalPaid`: **positive = still owed** (sorted
-  most-owed first), negative = overpaid. If you only want debtors, change
-  the `HAVING` to `> 0`.
-
-### 6.6 Timezone traps in date formatting
-
-`monthlyRevenue` returns both a machine key and a display label:
+Validation and service failures throw `ApiError`:
 
 ```ts
-monthKey: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-month: date.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
-```
-
-`date.toISOString().slice(0, 7)` looks equivalent but isn't: ISO conversion
-shifts to UTC, and midnight local becomes _the previous day_ UTC — so a
-September bucket could be labeled `2026-08`. Always derive calendar parts
-from local getters (or store `date_trunc` output as a date column).
-
----
-
-## 7. Errors and responses
-
-Two tiny classes in `src/utils/apiResponse.ts` define the entire API's
-contract:
-
-```ts
-new ApiResponse(201, "Job created successfully", job);
-// → { "success": true, "statusCode": 201, "message": "…", "data": { … } }
-
 throw new ApiError(404, "Job not found");
-// → globalError → { "success": false, "message": "Job not found" }
 ```
 
-- `ApiResponse.success` is _derived_ (`statusCode < 400`) — one less thing
-  to keep honest by hand.
-- `ApiError` carries an optional `errors: FieldError[]` array — that's how
-  zod issues reach the frontend as `{ field, message }` pairs it can map
-  onto form inputs (`field` is the dotted path, e.g. `subjects.0.name`).
-- `globalError` is the single place errors become JSON: known `ApiError`s
-  pass through; unknown ones become 500s (logged with full stack in dev,
-  message hidden behind the standard error shape).
-- `notFound` turns unmatched URLs into the same JSON shape — no HTML 404s.
+`globalError` converts errors into JSON and logs server failures. In development it can include a stack trace; production should not expose internal details.
 
-The payoff: **services throw, middleware throws, nobody writes
-`try/catch`**, and every client gets the same envelope on every outcome.
-That's what makes the frontend's error handling trivial later.
+The frontend can therefore handle errors consistently:
 
----
+```text
+if success === true: use data
+if success === false: show message and field errors when present
+```
 
-## 8. Database conventions
+## 11. Stress-test scripts and EXPLAIN
 
-- **Money is `numeric(12, 2)`** (`agreedPrice`, `payments.amount`) — exact
-  decimals, ~10 digits of headroom. Validation caps quote this: `.max(9999999999.99)`.
-- **Free-form shapes are `jsonb`** (`measurements`, `styleRef`,
-  `finishedJob`) with a `$type<…>()` annotation so drizzle types the column.
-- **FK delete rules are deliberate:** `subjects.customerId` cascades
-  (a customer's subjects are meaningless alone), while
-  `jobs.customerId/subjectId/measurementId` and `payments.jobId` **restrict**
-  (you must settle the job first — `deleteJob`'s 409 exists so users get a
-  clean error instead of an FK 500).
-- **Migrations are generated, not hand-written** (`bun run db:generate` →
-  review the SQL → `bun run db:migrate`). e.g. the price-cap widening
-  produced exactly one line: `ALTER TABLE "jobs" ALTER COLUMN "agreed_price"
-SET DATA TYPE numeric(12, 2);`. Never `db:push` on a shared database.
-- **Env vars are zod-validated at boot** (`config/env.ts`) — same
-  fail-fast philosophy as request validation, applied to configuration.
+The repository contains three learning scripts:
 
----
+```bash
+bun scripts/stress-seed.ts
+bun scripts/explain-stress.ts
+bun scripts/stress-cleanup.ts
+```
 
-## 9. Express 5 notes
+### Persistent experiment
 
-Three version-specific behaviors the code depends on:
+To populate the development database:
 
-1. **Async handlers are safe plain functions.** Express 5 forwards rejected
-   promises to `globalError`; the `asyncHandler` wrapper is no longer needed
-   (it remains in `utils/` for middleware that predates the convention).
-2. **`req.query` is a getter** — assignment throws; `validateQuery`
-   redefines the property (§3.7).
-3. **`req.params` stays assignable**, which is why `validateParams` can
-   still do `req.params = result.data`.
+```bash
+bun scripts/stress-seed.ts
+```
 
----
+The default creates roughly:
 
-## 10. Real bugs these patterns would have caught
+```text
+400 customers
+2,400 subjects
+7,200 measurements
+9,600 jobs
+up to about 28,800 payments
+```
 
-Each of these actually happened during development — they're the best
-argument for the rules above:
+Stress customers are named `Stress #1`, `Stress #2`, and so on. The cleanup script uses that marker and foreign-key lineage, so it does not touch normal application data.
 
-| Bug                                                                | Lesson now encoded                                |
-| ------------------------------------------------------------------ | ------------------------------------------------- |
-| `INSERT` without `.returning()` — success threw "Failed to create" | §5.2 — if you need the row, ask for it            |
-| JS ternary over a Drizzle column in a select                       | §6.1 — column-value logic must be SQL (`CASE`)    |
-| Validation cap 9999999999.99 vs column `numeric(6,2)`              | §3.6 — caps mirror the column; tests enforce it   |
-| `m.monthly_total` reading a column aliased `revenue`               | §6.2 — response fields must match SQL aliases     |
-| `z.coerce.date()` turning explicit `null` into 1970-01-01          | §3.4 — `.nullish()` for clearable dates           |
-| Job creation could pair one customer's measurements with another's | §5.4 — ownership clauses + derive IDs server-side |
+When finished:
 
----
+```bash
+bun scripts/stress-cleanup.ts
+```
 
-## 11. Checklist: adding a new resource
+The cleanup deletes payments first, then jobs, measurements, subjects, and stress customers, all inside one transaction. It runs `ANALYZE` afterward so PostgreSQL statistics reflect the restored database.
 
-The jobs resource is the reference implementation; every new resource
-follows the same five moves:
+### Temporary experiment
 
-1. **Schema** — `src/db/schema/<x>.ts`: columns, FKs with deliberate delete
-   rules, indexes for anything you'll filter on.
-2. **Validation** — `src/validations/<x>.validation.ts`: `strictObject`
-   schemas per operation, `z.coerce` for primitives, `.default()` for
-   policy, caps that mirror columns, `superRefine` for cross-field rules.
-   Export the inferred `XInput` types.
-3. **Service** — `src/services/<x>.service.ts`: one exported function per
-   use case, transactions for multi-table writes, `.returning()` + guards,
-   404/409 semantics, ownership checks.
-4. **Controller** — `src/controllers/<x>.controller.ts`: unpack → delegate →
-   `ApiResponse` with the right status code. Nothing else.
-5. **Routes + mount** — `src/routes/<x>.routes.ts` ordering
-   `requireAuth → validateParams → validateInput/validateQuery → handler`,
-   then mount in `app.ts` under `/api/v1/<x>`.
+`explain-stress.ts` inserts rows inside a transaction and deliberately rolls the transaction back. It is useful when you want a one-command experiment without persistent stress data:
 
-Add validation unit tests alongside (see `tests/*.validation.test.ts` — they
-run in milliseconds and need no database), and update
-`docs/04-api-design.md`.
+```bash
+bun scripts/explain-stress.ts
+```
+
+### Reading an EXPLAIN plan
+
+Run a read-only query like this:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT ...;
+```
+
+Read the output from the bottom upward:
+
+1. Find the deepest scan. That is where PostgreSQL gets the rows.
+2. Follow each parent node to see filtering, joining, sorting, or grouping.
+3. Compare estimated `rows=` with `actual rows=`.
+4. Look for `Rows Removed by Filter`.
+5. Look for `Sort Method: external merge` and `Disk:` — that means a sort spilled to disk.
+6. Compare `Buffers: shared hit` and `read` to understand page activity.
+7. Check total `Execution Time`, but do not trust a single timing run blindly.
+
+`ANALYZE` executes the statement. It is safe for SELECT queries, but never run it casually against UPDATE or DELETE. For writes, use a transaction you will explicitly roll back, or use plain `EXPLAIN` without `ANALYZE`.
+
+A healthy cursor plan for jobs should look conceptually like:
+
+```text
+Index Scan Backward using jobs_created_at_id_idx
+  -> fetch only limit + 1 jobs
+  -> lookup each subject by primary key
+```
+
+The important signs are that PostgreSQL can use the ordering index, there is no full-table sort, and work stays close to the page size instead of growing with the total number of jobs.
+
+## 12. A checklist for new work
+
+When adding an endpoint:
+
+1. **Define the database shape.** Add columns, foreign keys, delete behavior, and indexes for real filters/orderings.
+2. **Define the input contract.** Add a strict Zod schema and export its inferred type.
+3. **Write the service.** Put business rules, transactions, ownership checks, and queries there.
+4. **Write the controller.** Unpack validated input, call the service, and return `ApiResponse`.
+5. **Wire the route.** Use authentication and the appropriate validation middleware.
+6. **Add tests.** Validation tests are fast; service/integration tests protect database behavior.
+7. **Check the query plan.** Use realistic data and `EXPLAIN (ANALYZE, BUFFERS)` when a query filters, joins, sorts, aggregates, or paginates.
+8. **Update this guide or the API documentation** when a new pattern or decision is introduced.
+
+The main discipline is separation: validate at the boundary, enforce correctness in the service, and keep the controller thin enough that the important behavior is easy to find.

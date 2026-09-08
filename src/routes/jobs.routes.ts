@@ -12,6 +12,7 @@ import { requireAuth } from "../middleware/requireAuth";
 import {
   validateInput,
   validateParams,
+  validateQuery,
 } from "../middleware/validation.middleware";
 import {
   createJobForSubjectSchema,
@@ -23,10 +24,16 @@ import {
   idParamsSchema,
   jobIdParamsSchema,
 } from "../validations/params.validation";
+import { listItemsQuerySchema } from "../validations/customers.validation";
 
 const router = Router();
 
-router.get("/", requireAuth, listJobsHandler);
+router.get(
+  "/",
+  requireAuth,
+  validateQuery(listItemsQuerySchema),
+  listJobsHandler,
+);
 
 router.get("/:id", requireAuth, validateParams(idParamsSchema), getJobHandler);
 
