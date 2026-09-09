@@ -8,8 +8,16 @@ const jobMeasurementsSchema = z
     message: "Provide at least one measurement",
   });
 
+// Clients reference uploaded photos by the public_id Cloudinary returned at
+// upload time — never by a client-supplied URL. The service resolves each
+// public_id against Cloudinary and derives the stored URL server-side, so a
+// forged URL can never reach the database.
 const imageSchema = z.strictObject({
-  url: z.url("Invalid image URL").max(2048, "Image URL is too long"),
+  publicId: z
+    .string()
+    .trim()
+    .min(1, "Image public id is required")
+    .max(255, "Image public id must be at most 255 characters"),
   alt: z
     .string()
     .trim()

@@ -26,9 +26,11 @@
  *   git checkout b1fa5cc -- frontend/src/app/dashboard
  */
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import NewJobModal from "@/components/new-job-modal";
+import TabBar from "@/components/tab-bar";
 import ThemeToggle from "@/components/theme-toggle";
 import {
   getMonthlyRevenue,
@@ -126,22 +128,6 @@ function CountUp({
 /* ---------------------------------- icons ---------------------------------- */
 
 /* SF-Symbols-style glyphs, drawn inline (stroke, currentColor). */
-function IconHouse() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z" />
-      <path d="M9.5 20.5v-5.5h5v5.5" />
-    </svg>
-  );
-}
 function IconScissors() {
   return (
     <svg
@@ -161,42 +147,6 @@ function IconScissors() {
     </svg>
   );
 }
-function IconCustomers() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="9" cy="7.5" r="3.5" />
-      <path d="M3 20.5v-1a6 6 0 0 1 12 0v1" />
-      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.5" />
-      <path d="M17.5 14.6a6 6 0 0 1 3.5 5.4v.5" />
-    </svg>
-  );
-}
-function IconReports() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-      <path d="M8 17v-4" />
-      <path d="M13 17V7" />
-      <path d="M18 17v-7" />
-    </svg>
-  );
-}
 
 /* ---------------------------------- atoms ---------------------------------- */
 
@@ -205,16 +155,20 @@ const cardClass = "rounded-[20px] bg-[var(--hig-card)]";
 
 /**
  * iOS grouped-list section header: 13px semibold uppercase secondary label,
- * with an optional trailing link. 32px of air above (8pt grid).
+ * with an optional trailing link. 32px of air above (8pt grid). When
+ * `linkHref` is set the link navigates (prefetched next/link, like the tab
+ * bar); without it the link text is a plain label (e.g. the balances count).
  */
 function GroupHeader({
   title,
   link,
+  linkHref,
   className = "",
   delay = 0,
 }: {
   title: string;
   link?: string;
+  linkHref?: string;
   className?: string;
   delay?: number;
 }) {
@@ -226,11 +180,19 @@ function GroupHeader({
       <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
         {title}
       </h2>
-      {link && (
-        <span className="text-[13px] font-medium text-[var(--hig-accent)]">
-          {link}
-        </span>
-      )}
+      {link &&
+        (linkHref ? (
+          <Link
+            href={linkHref}
+            className="cursor-pointer text-[13px] font-medium text-[var(--hig-accent)] transition-opacity duration-200 active:opacity-60"
+          >
+            {link}
+          </Link>
+        ) : (
+          <span className="text-[13px] font-medium text-[var(--hig-accent)]">
+            {link}
+          </span>
+        ))}
     </div>
   );
 }
@@ -599,7 +561,7 @@ export default function DashboardPage() {
         </section>
 
         {/* ---------- latest work ---------- */}
-        <GroupHeader title="Latest Work" link="View all" className="mt-8" delay={180} />
+        <GroupHeader title="Latest Work" link="View all" linkHref="/jobs" className="mt-8" delay={180} />
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
@@ -670,7 +632,17 @@ export default function DashboardPage() {
               return (
                 <div
                   key={o.jobId}
-                  className="flex items-center gap-3 px-4 py-3"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open job: ${o.description ?? "Garment"} for ${customerName || "the client"}`}
+                  onClick={() => router.push(`/jobs/${o.jobId}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/jobs/${o.jobId}`);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-[var(--hig-fill)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
                 >
                   {/* initials avatar — tinted from the customer's name so each
                       client keeps one colour across every screen (avatarColor) */}
@@ -746,15 +718,15 @@ export default function DashboardPage() {
       </div>
 
       {/* ---------- FAB + tab bar (anchored to the phone-width column, full-bleed) ---------- */}
-      <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-        <div className="relative mx-auto w-full max-w-[430px]">
-          {/* New job — the one primary action, system Blue */}
+      <TabBar
+        active="overview"
+        fab={
           <button
             type="button"
             aria-label="New job"
             title="New job"
             onClick={() => setNewJobOpen(true)}
-            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
+            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
           >
             <svg
               viewBox="0 0 24 24"
@@ -770,43 +742,8 @@ export default function DashboardPage() {
               <path d="M5.5 12h13" />
             </svg>
           </button>
-          {/* Material tab bar, full-bleed, rounded top — translucent + blurred */}
-          <div className="pointer-events-auto flex h-16 items-center rounded-t-[24px] bg-[var(--hig-bar)] px-2 shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150">
-            {[
-              { label: "Overview", icon: <IconHouse />, active: true },
-              { label: "Jobs", icon: <IconScissors /> },
-              { label: "Customers", icon: <IconCustomers /> },
-              { label: "Reports", icon: <IconReports /> },
-            ].map((tab) => (
-              <button
-                key={tab.label}
-                type="button"
-                aria-label={tab.label}
-                aria-current={tab.active ? "page" : undefined}
-                onClick={
-                  tab.label === "Jobs"
-                    ? () => router.push("/jobs")
-                    : tab.label === "Customers"
-                      ? () => router.push("/customers")
-                      : undefined
-                }
-                className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] transition-all duration-200 active:scale-95 ${
-                  tab.active
-                    ? "bg-[var(--hig-accent-tint)] text-[var(--hig-accent)]"
-                    : "text-[var(--hig-label-tertiary)]"
-                }`}
-              >
-                <span className="h-[22px] w-[22px]">{tab.icon}</span>
-                <span
-                  className={`text-[10px] ${tab.active ? "font-semibold" : "font-medium"}`}
-                >
-                  {tab.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+        }
+      />
 
       {/* The Cutting Table — new job sheet (Concept 2, wired to the API) */}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />
@@ -838,6 +775,7 @@ const statusMeta: Record<Job["status"], { chip: string }> = {
 
 
 function JobRow({ job }: { job: Job }) {
+  const router = useRouter();
   const delivered = job.deliveredAt !== null;
   const meta = statusMeta[job.status] ?? statusMeta.pending;
   const label =
@@ -858,7 +796,19 @@ function JobRow({ job }: { job: Job }) {
         : "no due date";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open job: ${job.description || "Garment"} for ${job.subjectName ?? "the client"}`}
+      onClick={() => router.push(`/jobs/${job.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/jobs/${job.id}`);
+        }
+      }}
+      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-[var(--hig-fill)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
+    >
       {/* decorative glowing dot — keyed to the SUBJECT's name (avatarColor),
           so a job's dot always matches that subject's avatar hue; self
           subjects carry the customer's name, matching their avatar too */}

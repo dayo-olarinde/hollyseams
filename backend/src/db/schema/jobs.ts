@@ -38,11 +38,13 @@ export const jobsTable = pgTable(
         onDelete: "restrict",
       })
       .notNull(),
+    // publicId (Cloudinary) is optional for legacy rows; new rows always
+    // carry it so assets can be destroyed when a job or photo is removed.
     styleRef: jsonb("style_ref")
-      .$type<{ url: string; alt: string }[]>()
+      .$type<{ url: string; publicId?: string; alt: string }[]>()
       .notNull(),
     finishedJob: jsonb("finished_job")
-      .$type<{ url: string; alt: string }[]>()
+      .$type<{ url: string; publicId?: string; alt: string }[]>()
       .notNull(),
     // A short, searchable brief keeps the tailor’s style direction with the job record.
     description: text("description").notNull().default(""),

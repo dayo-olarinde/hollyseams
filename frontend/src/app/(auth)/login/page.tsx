@@ -25,10 +25,17 @@ const PIN_LENGTH = 4;
  * - Returns 401 for invalid PIN, 429 for rate limit
  */
 export default function LoginPage() {
-  const { login, error, clearError, isLoading } = useAuth();
+  const { login, error, clearError, isLoading, isAuthenticated } = useAuth();
   const [pin, setPin] = useState("");
   const [isShaking, setIsShaking] = useState(false);
   const dotsRef = useRef<HTMLDivElement>(null);
+
+  /* Session already exists (or login just succeeded) → straight to the
+     dashboard. The root AuthProvider no longer redirects; this auth entry
+     point owns it so deep links into the app are never bounced. */
+  useEffect(() => {
+    if (isAuthenticated) window.location.replace("/dashboard");
+  }, [isAuthenticated]);
 
   const handleSubmit = useCallback(
     async (pinValue: string) => {

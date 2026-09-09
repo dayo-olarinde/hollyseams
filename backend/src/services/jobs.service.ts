@@ -14,9 +14,27 @@ import type { ListJobsQuery } from "../validations/jobs.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
+  JobDataInput,
   UpdateJobInput,
 } from "../validations/jobs.validation";
 import type { CreatePaymentInput } from "../validations/payments.validation";
+import type { ResolvedPhoto } from "./cloudinary.service";
+
+// The service layer only ever persists photos that have already been verified
+// against Cloudinary (server-derived URL + publicId). The wire schemas carry
+// the unverified {publicId, alt} shape; controllers resolve them before
+// reaching these types.
+type PersistedJobData = Omit<JobDataInput, "styleRef" | "finishedJob"> & {
+  styleRef: ResolvedPhoto[];
+  finishedJob: ResolvedPhoto[];
+};
+type PersistedUpdateData = Omit<
+  UpdateJobInput,
+  "styleRef" | "finishedJob"
+> & {
+  styleRef?: ResolvedPhoto[];
+  finishedJob?: ResolvedPhoto[];
+};
 
 export const listJobs = async (
   { cursor, limit, status }: ListJobsQuery = { limit: 10 },
@@ -27,8 +45,19 @@ export const listJobs = async (
       subjectId: jobsTable.subjectId,
       subjectName: subjectsTable.name,
       measurementId: jobsTable.measurementId,
-      styleRef: jobsTable.styleRef,
-      finishedJob: jobsTable.finishedJob,
+      /* list payloads stay lean — the full photo arrays ship only on
+         GET /jobs/:id; list cards need exactly one cover URL + a count,
+         computed here in SQL from the jsonb arrays (finished wins). */
+      coverUrl: sql<string | null>`
+        case
+          when jsonb_array_length(${jobsTable.finishedJob}) > 0
+            then nullif(${jobsTable.finishedJob}[0] ->> 'url', '')
+          when jsonb_array_length(${jobsTable.styleRef}) > 0
+            then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
+          else null
+        end`,
+      photoCount: sql<number>`
+        jsonb_array_length(${jobsTable.finishedJob}) + jsonb_array_length(${jobsTable.styleRef})`,
       description: jobsTable.description,
       agreedPrice: jobsTable.agreedPrice,
       status: jobsTable.status,
@@ -74,8 +103,18 @@ export const listCustomerJobs = async (
       subjectId: jobsTable.subjectId,
       subjectName: subjectsTable.name,
       measurementId: jobsTable.measurementId,
-      styleRef: jobsTable.styleRef,
-      finishedJob: jobsTable.finishedJob,
+      /* list payloads stay lean — one cover URL + photo count in SQL (see
+         listJobs above); the full arrays ship only on GET /jobs/:id. */
+      coverUrl: sql<string | null>`
+        case
+          when jsonb_array_length(${jobsTable.finishedJob}) > 0
+            then nullif(${jobsTable.finishedJob}[0] ->> 'url', '')
+          when jsonb_array_length(${jobsTable.styleRef}) > 0
+            then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
+          else null
+        end`,
+      photoCount: sql<number>`
+        jsonb_array_length(${jobsTable.finishedJob}) + jsonb_array_length(${jobsTable.styleRef})`,
       description: jobsTable.description,
       agreedPrice: jobsTable.agreedPrice,
       status: jobsTable.status,
@@ -160,7 +199,9 @@ export const getJob = async (id: string) => {
   return { ...job, payments };
 };
 
-export const createJobNewCustomer = async (data: CreateJobNewCustomerInput) => {
+export const createJobNewCustomer = async (
+  data: Omit<CreateJobNewCustomerInput, "job"> & { job: PersistedJobData },
+) => {
   const { customer: customerData, subjects, job: jobData } = data;
   const subjectData = subjects[0]!;
 
@@ -222,7 +263,7 @@ export const createJobNewCustomer = async (data: CreateJobNewCustomerInput) => {
 
 export const createJobForSubject = async (
   subjectId: string,
-  data: CreateJobForSubjectInput,
+  data: Omit<CreateJobForSubjectInput, "job"> & { job: PersistedJobData },
 ) => {
   const { measurementId, job: jobData } = data;
 
@@ -266,7 +307,7 @@ export const createJobForSubject = async (
   return job;
 };
 
-export const updateJob = async (id: string, jobData: UpdateJobInput) => {
+export const updateJob = async (id: string, jobData: PersistedUpdateData) => {
   if (Object.keys(jobData).length === 0) {
     throw new ApiError(400, "No fields to update");
   }

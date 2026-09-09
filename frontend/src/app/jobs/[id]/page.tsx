@@ -606,6 +606,64 @@ function ActionBar({ job }: { job: Job }) {
 /* ---------------------------------- skeleton ---------------------------------- */
 
 /** Bars mirror the real anatomy so loading never shifts the layout. */
+/**
+ * A Cloudinary photo with a skeleton while it loads and a tap-to-zoom
+ * affordance. The pulse layer sits behind the img, which fades in only on
+ * load; onError also releases the skeleton so a broken URL never pulses
+ * forever. The whole slot is one button — tapping opens the lightbox.
+ */
+function LoadablePhoto({
+  src,
+  alt,
+  eager,
+  onOpen,
+}: {
+  src: string;
+  alt: string;
+  eager?: boolean;
+  onOpen: () => void;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`View ${alt} full screen`}
+      className="group absolute inset-0 h-full w-full cursor-zoom-in"
+    >
+      {!loaded && (
+        <span
+          className="absolute inset-0 animate-pulse bg-[var(--hig-separator)]"
+          aria-hidden="true"
+        />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      {/* quiet zoom hint — appears on hover (desktop), invisible on touch */}
+      <span
+        className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5">
+          <path d="M15 3h6v6" />
+          <path d="M9 21H3v-6" />
+          <path d="M21 3l-7 7" />
+          <path d="M3 21l7-7" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
 function DetailSkeleton() {
   const bar = "animate-pulse rounded bg-[var(--hig-separator)]";
   return (
@@ -641,16 +699,39 @@ export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [payOpen, setPayOpen] = useState(false);
+  /* full-screen photo viewer — the image being inspected, or null. */
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
-  /* the single source of truth for this screen — GET /jobs/:id */
+  /* the single source of truth for this screen — GET /jobs/:id.
+     Long freshness (5 min) + long-lived cache (1 h): revisiting a job
+     renders instantly from memory instead of re-hitting the backend (the
+     default gcTime of 5 min would evict the entry and re-show the
+     skeleton). Mutations below invalidate ["job", id] on change, so the
+     stale window is just a safety net, not the freshness source. */
   const jobQ = useQuery({
     queryKey: ["job", id],
     queryFn: () => getJob(id),
     enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
   const job = jobQ.data?.data;
   const overdue = job ? isOverdue(job) : false;
+
+  /* Lightbox: Escape closes, page scroll locks while it is up. */
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [lightbox]);
 
   /* comparison — reference wins the left slot, finished the right; the
      right slot stays dashed until the finished shots exist */
@@ -814,10 +895,11 @@ export default function JobDetailPage() {
                 </p>
                 <div className="relative aspect-[3/4] overflow-hidden rounded-[20px] bg-[var(--hig-fill)] shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                   {ref?.url ? (
-                    <img
+                    <LoadablePhoto
                       src={ref.url}
                       alt={ref.alt || "Style reference"}
-                      className="absolute inset-0 h-full w-full object-cover"
+                      eager
+                      onOpen={() => setLightbox({ src: ref.url!, alt: ref.alt || "Style reference" })}
                     />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--hig-label-tertiary)]">
@@ -839,10 +921,10 @@ export default function JobDetailPage() {
                 </p>
                 {fin?.url ? (
                   <div className="relative aspect-[3/4] overflow-hidden rounded-[20px] bg-[var(--hig-fill)] shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
-                    <img
+                    <LoadablePhoto
                       src={fin.url}
                       alt={fin.alt || "Finished piece"}
-                      className="absolute inset-0 h-full w-full object-cover"
+                      onOpen={() => setLightbox({ src: fin.url!, alt: fin.alt || "Finished piece" })}
                     />
                   </div>
                 ) : (
@@ -972,6 +1054,31 @@ export default function JobDetailPage() {
       {job && <ActionBar job={job} />}
       {job && (
         <PaymentSheet job={job} open={payOpen} onClose={() => setPayOpen(false)} />
+      )}
+
+      {/* ---------- full-screen photo viewer ---------- */}
+      {lightbox && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={lightbox.alt}
+          onClick={() => setLightbox(null)}
+          className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/90 px-4"
+        >
+          <img
+            src={lightbox.src}
+            alt={lightbox.alt}
+            className="max-h-[88dvh] w-auto max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setLightbox(null)}
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </main>
   );

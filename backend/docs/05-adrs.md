@@ -20,6 +20,11 @@
 **Decision:** Use Cloudinary, since it's already familiar and handles storage reliably.
 **Consequences:** Photos are safe and backed up. Adds a small external dependency and cost, acceptable for the reliability gained.
 
+## ADR-004a: Signed direct uploads, verified by public_id before persisting
+**Context:** The browser must upload photos without streaming bytes through Express, but the database must never store a client-supplied URL string.
+**Decision:** The backend issues a short-lived signed upload (`GET /jobs/signature`, 15-minute `expires_at`, image-only, fixed `CLOUDINARY_UPLOAD_FOLDER`); the browser uploads straight to Cloudinary; the client then references photos only by the `public_id` Cloudinary returned. Before any create/update persists, the backend resolves each `public_id` via Cloudinary's Admin API and stores the server-derived `secure_url` alongside it (`{url, publicId, alt}`). Assets dropped from a job or released by a job deletion are destroyed afterwards (best-effort, only after the DB write succeeds).
+**Consequences:** File bytes never touch the server, forged URLs cannot reach the DB, and removed photos don't accumulate in storage. Cost: one Admin-API lookup per photo per save, and uploads not attached to a job remain orphaned until cleanup — accepted at single-user scale.
+
 ## ADR-005: A job represents one unit of work, not one payment or one visit
 **Context:** A customer can bring multiple items in one visit (e.g. 5 kids' outfits), each needing separate tracking and pricing.
 **Decision:** Each item is its own Job, even if paid for together in one visit.

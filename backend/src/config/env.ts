@@ -24,6 +24,14 @@ const envSchema = z.object({
   REDIS_HOST: z.string().default("localhost"),
   REDIS_PORT: z.coerce.number().int().positive().default(6379),
   REDIS_PASSWORD: z.string().optional(),
+
+  CLOUDINARY_URL: z.string(),
+  CLOUDINARY_CLOUD_NAME: z.string(),
+  CLOUDINARY_API_KEY: z.string(),
+  CLOUDINARY_API_SECRET: z.string(),
+  // Folder signed uploads land in; the backend verifies every persisted
+  // photo lives under this prefix before it is attached to a job.
+  CLOUDINARY_UPLOAD_FOLDER: z.string().default("hollyseams/photos"),
 });
 
 const result = envSchema.safeParse(process.env);

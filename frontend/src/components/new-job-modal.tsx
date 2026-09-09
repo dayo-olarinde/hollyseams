@@ -53,12 +53,17 @@
  *        date and use the returned id; otherwise we reuse the id of the
  *        latest saved fitting.
  *
- *   5. PHOTOS
- *      styleRef on the job schema is { url, alt }[] — the backend has no
- *      upload endpoint yet (docs plan Cloudinary later), so the picker
- *      here only PREVIEWS locally (object URLs) and the photos are NOT
- *      included in the request. Re-enable by mapping uploaded URLs into
- *      job.styleRef once uploads exist.
+ *   5. PHOTOS → signed direct upload, verified server-side
+ *      Picking files fetches ONE short-lived signature (GET /jobs/signature,
+ *      15-min expiry) and uploads each file straight to Cloudinary
+ *      (uploadPhotoToCloudinary — plain fetch, NOT the axios client, whose
+ *      interceptor expects the app's ApiResponse envelope). Each tile
+ *      tracks its own status (uploading / done / error + retry). On submit
+ *      the job carries styleRef as [{ publicId, alt }] — never a URL: the
+ *      backend resolves each publicId against Cloudinary and derives the
+ *      URL itself. Photos removed BEFORE create are never persisted and
+ *      become Cloudinary orphans (a cleanup sweep is the accepted answer at
+ *      this scale). The 10 MB cap mirrors the backend's verification limit.
  *
  *   6. DUE DATE
  *      The jobs table stores a `date` column; the UI sends the explicit
@@ -69,15 +74,18 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import {
   addSubject,
   createJob,
   createJobForSubject,
   createMeasurement,
+  getUploadSignature,
   listCustomers,
   listMeasurements,
   listSubjects,
+  uploadPhotoToCloudinary,
   type Customer,
   type Job,
   type Measurement,
@@ -149,10 +157,18 @@ interface ModalSubject {
   latestMeasId?: string;       // id of the newest saved fitting — reused when untouched
 }
 
-interface PhotoPreview {
-  url: string;
+/** One tile in the style-reference strip. The file is kept so a failed
+    upload can retry without re-picking; publicId arrives from Cloudinary. */
+interface WizardPhoto {
+  file: File;
+  previewUrl: string;
   alt: string;
+  publicId?: string;
+  status: "uploading" | "done" | "error";
+  error?: string;
 }
+
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // mirrors backend cloudinary.service.ts
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -194,6 +210,7 @@ const miniLabelClass =
 export default function NewJobModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const router = useRouter();
 
   /* ---------- 01 · client ---------- */
   const [customers, setCustomers] = useState<Customer[] | null>(null);
@@ -218,7 +235,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   const [desc, setDesc] = useState("");
   const [price, setPrice] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [photos, setPhotos] = useState<PhotoPreview[]>([]);
+  const [photos, setPhotos] = useState<WizardPhoto[]>([]);
 
   /* ---------- sheet state ---------- */
   const [fold, setFold] = useState<1 | 2 | 3>(1);
@@ -466,19 +483,77 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setEditingMeas(null);
   }
 
-  /* ---------- photos (local preview only — see header step 5) ---------- */
+  /* ---------- photos: signed direct upload (see header step 5) ---------- */
 
   function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])];
-    const room = 6 - photos.length;
-    setPhotos((prev) => [
-      ...prev,
-      ...files.slice(0, Math.max(0, room)).map((f) => ({
-        url: URL.createObjectURL(f),
-        alt: "Style reference",
-      })),
-    ]);
     e.target.value = "";
+    const batch = files.slice(0, Math.max(0, 6 - photos.length));
+    if (batch.length === 0) return;
+
+    // One signature per pick batch (15-min expiry) — it signs the folder +
+    // timestamp, not the file contents, so all files share it.
+    const sigPromise = getUploadSignature();
+    for (const file of batch) {
+      // "IMG_2042.jpg" → "Style reference — IMG 2042" (≤ 200, backend cap).
+      const stem = file.name
+        .replace(/\.[a-z0-9]+$/i, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+      const alt = `Style reference${stem ? ` — ${stem}` : ""}`.slice(0, 200);
+      const previewUrl = URL.createObjectURL(file);
+      setPhotos((prev) => [
+        ...prev,
+        { file, previewUrl, alt, status: "uploading" },
+      ]);
+      void uploadOne(file, previewUrl, sigPromise);
+    }
+  }
+
+  /** Upload one picked file; resolves its tile to done or error + retry. */
+  async function uploadOne(
+    file: File,
+    previewUrl: string,
+    sigPromise: ReturnType<typeof getUploadSignature>,
+  ) {
+    try {
+      if (file.size > MAX_PHOTO_BYTES) {
+        throw new Error("Over the 10 MB limit — pick a smaller photo");
+      }
+      const sig = await sigPromise;
+      const { publicId } = await uploadPhotoToCloudinary(file, sig);
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.previewUrl === previewUrl
+            ? { ...p, publicId, status: "done" as const }
+            : p,
+        ),
+      );
+    } catch (err) {
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.previewUrl === previewUrl
+            ? {
+                ...p,
+                status: "error" as const,
+                error:
+                  err instanceof Error
+                    ? err.message
+                    : "Upload failed — tap to retry",
+              }
+            : p,
+        ),
+      );
+    }
+  }
+
+  function retryPhoto(p: WizardPhoto) {
+    setPhotos((prev) =>
+      prev.map((x) =>
+        x.previewUrl === p.previewUrl ? { ...x, status: "uploading" } : x,
+      ),
+    );
+    void uploadOne(p.file, p.previewUrl, getUploadSignature());
   }
 
   /* ---------- submit: step 4 of the data flow ---------- */
@@ -528,10 +603,30 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     // The garment style has no column of its own, so the tailor types it
     // straight into `description` ("Gown — purple lace, puff sleeves") and
     // the overview's "Latest work" row shows it as-is.
+    // Photos upload the moment they're picked; by submit they are either
+    // done or errored. Only done photos ride along, as {publicId, alt} —
+    // the backend verifies them and derives the URL (see header step 5).
+    const uploading = photos.some((p) => p.status === "uploading");
+    const failed = photos.filter((p) => p.status === "error");
+    if (uploading) {
+      setError("Photos are still uploading — wait a moment.");
+      setFold(3);
+      return;
+    }
+    if (failed.length > 0) {
+      setError(
+        `Retry or remove the ${failed.length} failed photo${failed.length === 1 ? "" : "s"} first.`,
+      );
+      setFold(3);
+      return;
+    }
+    const styleRef = photos.map((p) => ({ publicId: p.publicId!, alt: p.alt }));
+
     const jobPayload = {
       description: desc.trim(),
       agreedPrice: priceNum,
       ...(dueDate ? { dueDate } : {}),
+      ...(styleRef.length > 0 ? { styleRef } : {}),
     };
 
     setSubmitting(true);
@@ -1099,12 +1194,49 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             <div className={miniLabelClass}>Style reference</div>
             <div className="flex flex-wrap gap-2 pt-1">
               {photos.map((p, i) => (
-                <div key={p.url} className="relative h-14 w-14 flex-shrink-0 overflow-visible rounded-[13px] border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)]">
-                  <img src={p.url} alt={p.alt} className="h-full w-full rounded-[11px] object-cover" />
+                <div
+                  key={p.previewUrl}
+                  className={`relative h-24 w-24 flex-shrink-0 overflow-visible rounded-[16px] border bg-[var(--hig-accent-tint)] ${
+                    p.status === "error"
+                      ? "border-[var(--hig-danger)]"
+                      : "border-[var(--hig-accent-line)]"
+                  }`}
+                >
+                  <img
+                    src={p.previewUrl}
+                    alt={p.alt}
+                    decoding="async"
+                    className={`h-full w-full rounded-[14px] object-cover ${p.status === "done" ? "" : "opacity-70"}`}
+                  />
+                  {p.status === "uploading" && (
+                    <span className="absolute inset-0 flex items-center justify-center rounded-[14px] bg-black/25">
+                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                    </span>
+                  )}
+                  {p.status === "error" && (
+                    <button
+                      type="button"
+                      aria-label="Retry upload"
+                      title={p.error}
+                      onClick={() => retryPhoto(p)}
+                      className="absolute inset-0 flex items-center justify-center rounded-[14px] bg-[var(--hig-danger)]/85 text-white transition-transform active:scale-95"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                        <path d="M3 12a9 9 0 1 0 2.6-6.3" />
+                        <path d="M3 4v5h5" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     type="button"
                     aria-label="Remove photo"
-                    onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                    onClick={() => {
+                      // Uploaded-but-removed photos were never persisted, so
+                      // they become Cloudinary orphans — accepted at this
+                      // scale (cleanup sweep idea in the ADR).
+                      URL.revokeObjectURL(p.previewUrl);
+                      setPhotos((prev) => prev.filter((_, j) => j !== i));
+                    }}
                     className="absolute -right-1.5 -top-1.5 flex h-[17px] w-[17px] items-center justify-center rounded-full border border-[var(--hig-danger)] bg-[var(--hig-danger-tint)] text-[10px] text-[var(--hig-danger)] shadow-[var(--hig-bar-shadow)] after:absolute after:-inset-3 after:content-['']"
                   >
                     ✕
@@ -1116,16 +1248,22 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   type="button"
                   aria-label="Add photo"
                   onClick={() => fileRef.current?.click()}
-                  className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[13px] border-[1.5px] border-dashed border-[var(--hig-accent-line)] bg-[var(--hig-fill)] text-[var(--hig-accent)] transition-transform active:scale-95"
+                  className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-[16px] border-[1.5px] border-dashed border-[var(--hig-accent-line)] bg-[var(--hig-fill)] text-[var(--hig-accent)] transition-transform active:scale-95"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-[17px] w-[17px]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-6 w-6">
                     <path d="M12 5v14" /><path d="M5 12h14" />
                   </svg>
                 </button>
               )}
             </div>
             <div className="mt-2 text-[12px] leading-snug text-[var(--hig-label-tertiary)]">
-              Local preview only — Cloudinary upload comes later; photos are not sent with the job until then.
+              {photos.some((p) => p.status === "uploading")
+                ? "Uploading…"
+                : photos.some((p) => p.status === "error")
+                  ? "Tap a failed photo to retry."
+                  : photos.length > 0
+                    ? "Uploaded — ready to create."
+                    : "Add up to 6 style-reference photos."}
             </div>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFiles} />
           </Fold>
@@ -1203,7 +1341,13 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               </button>
               <button
                 type="button"
-                onClick={confirmCreated}
+                onClick={() => {
+                  if (!created) return;
+                  // Close the sheet, then go straight to the job's
+                  // Inspection screen — the page owns its own loading state.
+                  onClose();
+                  router.push(`/jobs/${created.id}`);
+                }}
                 className="flex-1 rounded-[13px] bg-[var(--hig-accent)] py-3 text-[14px] font-semibold text-white shadow-[var(--hig-bar-shadow)] transition-colors"
               >
                 View job

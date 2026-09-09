@@ -25,12 +25,14 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import NewJobModal from "@/components/new-job-modal";
+import TabBar from "@/components/tab-bar";
 import ThemeToggle from "@/components/theme-toggle";
 import {
   listJobs,
   type Job,
   type JobStatusFilter,
 } from "@/lib/api-client";
+import { cloudinaryThumb } from "@/lib/cloudinary";
 
 /* ---------------------------------- filter ---------------------------------- */
 
@@ -163,17 +165,12 @@ function JobCard({ job }: { job: Job }) {
     note = "canceled";
   }
 
-  /* photo strip — once a finished-job photo exists it wins (it shows the
-     outcome); before that, fall back to the first style reference. A quiet
-     placeholder marks the slot when the job has no pictures at all. */
-  const stylePhotos = (job.styleRef ?? [])
-    .map((p) => p.url)
-    .filter(Boolean);
-  const finishedPhotos = (job.finishedJob ?? [])
-    .map((p) => p.url)
-    .filter(Boolean);
-  const photos = [...stylePhotos, ...finishedPhotos];
-  const cover = finishedPhotos[0] ?? stylePhotos[0];
+  /* photo strip — the list query ships exactly one cover URL (finished
+     wins) plus the photo count, so no array plucking is needed here; the
+     full photo arrays stay on GET /jobs/:id. A quiet placeholder marks
+     the slot when the job has no pictures at all. */
+  const cover = job.coverUrl;
+  const photoCount = job.photoCount ?? 0;
 
   /* the whole card is the tap target → /jobs/:id (the Inspection screen) */
   return (
@@ -194,8 +191,12 @@ function JobCard({ job }: { job: Job }) {
       <div className="relative w-1/3 min-h-[112px] shrink-0 self-stretch overflow-hidden bg-[var(--hig-fill)]">
         {cover ? (
           <img
-            src={cover}
+            /* thumbnail derivative (~20 KB) — the full-res original stays
+               on the detail page; see lib/cloudinary.ts */
+            src={cloudinaryThumb(cover)}
             alt={job.description || "Garment"}
+            loading="lazy"
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -203,9 +204,9 @@ function JobCard({ job }: { job: Job }) {
             <IconPhoto />
           </div>
         )}
-        {cover && photos.length > 1 && (
+        {cover && photoCount > 1 && (
           <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-            {photos.length}
+            {photoCount}
           </span>
         )}
       </div>
@@ -295,7 +296,6 @@ const EMPTY_COPY: Record<JobFilter, { big: string; small: string }> = {
 };
 
 export default function JobsPage() {
-  const router = useRouter();
   const [filter, setFilter] = useState<JobFilter>("all");
   const [newJobOpen, setNewJobOpen] = useState(false);
 
@@ -553,14 +553,15 @@ export default function JobsPage() {
       </div>
 
       {/* ---------- FAB + tab bar (anchored to the phone-width column) ---------- */}
-      <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-        <div className="relative mx-auto w-full max-w-[430px]">
+      <TabBar
+        active="jobs"
+        fab={
           <button
             type="button"
             aria-label="New job"
             title="New job"
             onClick={() => setNewJobOpen(true)}
-            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
+            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
           >
             <svg
               viewBox="0 0 24 24"
@@ -576,104 +577,8 @@ export default function JobsPage() {
               <path d="M5.5 12h13" />
             </svg>
           </button>
-          <div className="pointer-events-auto flex h-16 items-center rounded-t-[24px] bg-[var(--hig-bar)] px-2 shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150">
-            <button
-              type="button"
-              aria-label="Overview"
-              onClick={() => router.push("/dashboard")}
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z" />
-                  <path d="M9.5 20.5v-5.5h5v5.5" />
-                </svg>
-              </span>
-              <span className="text-[10px] font-medium">Overview</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Jobs"
-              aria-current="page"
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] bg-[var(--hig-accent-tint)] text-[var(--hig-accent)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="6" cy="6" r="2.6" />
-                  <circle cx="6" cy="18" r="2.6" />
-                  <path d="M20 4 8.4 15.6" />
-                  <path d="m14.2 14.2 5.8 5.8" />
-                  <path d="m8.4 8.4 3.4 3.4" />
-                </svg>
-              </span>
-              <span className="text-[10px] font-semibold">Jobs</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Customers"
-              onClick={() => router.push("/customers")}
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="9" cy="7.5" r="3.5" />
-                  <path d="M3 20.5v-1a6 6 0 0 1 12 0v1" />
-                  <path d="M16 4.6a3.5 3.5 0 0 1 0 6.5" />
-                  <path d="M17.5 14.6a6 6 0 0 1 3.5 5.4v.5" />
-                </svg>
-              </span>
-              <span className="text-[10px] font-medium">Customers</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Reports"
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-                  <path d="M8 17v-4" />
-                  <path d="M13 17V7" />
-                  <path d="M18 17v-7" />
-                </svg>
-              </span>
-              <span className="text-[10px] font-medium">Reports</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+        }
+      />
 
       {/* New job — same sheet as the dashboard, wired to the API */}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />

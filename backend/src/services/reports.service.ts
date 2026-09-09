@@ -76,6 +76,7 @@ interface OutstandingPaymentRow {
   customer_id: string;
   customer_name: string;
   subject_name: string;
+  description: string;
   status: string;
   due_date: Date | null;
   agreed_price: string;
@@ -90,6 +91,7 @@ export const outstandingPayments = async () => {
       c.id as customer_id,
       c.name as customer_name,
       s.name as subject_name,
+      j.description,
       j.status,
       j.due_date,
       j.agreed_price,
@@ -108,6 +110,7 @@ export const outstandingPayments = async () => {
     jobId: row.job_id,
     customer: { id: row.customer_id, name: row.customer_name },
     subjectName: row.subject_name,
+    description: row.description,
     status: row.status,
     dueDate: row.due_date,
     agreedPrice: Number(row.agreed_price),

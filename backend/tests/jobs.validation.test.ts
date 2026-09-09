@@ -17,7 +17,7 @@ const validNewCustomerPayload = {
     },
   ],
   job: {
-    styleRef: [{ url: "https://example.com/a.jpg", alt: "front" }],
+    styleRef: [{ publicId: "hollyseams/photos/a1b2c3", alt: "front" }],
     finishedJob: [],
     agreedPrice: 2500,
     status: "pending",
@@ -127,6 +127,30 @@ describe("createJobNewCustomerSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("rejects a client-supplied url — photos are referenced by public id", () => {
+    const result = createJobNewCustomerSchema.safeParse({
+      ...validNewCustomerPayload,
+      job: {
+        ...validNewCustomerPayload.job,
+        styleRef: [{ url: "https://example.com/a.jpg", alt: "front" }],
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a photo without alt text", () => {
+    const result = createJobNewCustomerSchema.safeParse({
+      ...validNewCustomerPayload,
+      job: {
+        ...validNewCustomerPayload.job,
+        styleRef: [{ publicId: "hollyseams/photos/a1b2c3", alt: "  " }],
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("updateJobSchema", () => {
@@ -167,6 +191,14 @@ describe("updateJobSchema", () => {
     const result = updateJobSchema.safeParse({ status: "shipped" });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts photo arrays by public id", () => {
+    const result = updateJobSchema.parse({
+      finishedJob: [{ publicId: "hollyseams/photos/x9y8z7", alt: "done" }],
+    });
+
+    expect(result.finishedJob).toHaveLength(1);
   });
 });
 

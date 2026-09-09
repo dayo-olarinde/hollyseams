@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter, Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth-context";
+import { QueryProvider } from "@/lib/query-provider";
+import { ToastProvider } from "@/components/toast";
 
 export const metadata: Metadata = {
   title: "Hollyseams",
@@ -8,26 +11,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * Design system typefaces:
- * - Fraunces + Space Grotesk — Midnight Indigo theme (used via `font-heading`/`font-body`)
- * - Inter — the Apple HIG theme (`.hig`), the playbook's cross-platform SF substitute;
- *   self-hosted by next/font so every device renders the same premium weight
+ * Inter — the Apple HIG typeface (the playbook's cross-platform SF
+ * substitute), self-hosted by next/font. The Midnight Indigo theme's
+ * Fraunces + Space Grotesk were removed: nothing renders that theme
+ * anymore (preserved in git at b1fa5cc), and preloading ~11 font files
+ * for it was pure bandwidth on every page load.
  */
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-fraunces",
-  display: "swap",
-});
-
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -54,8 +43,15 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body className={`${spaceGrotesk.variable} ${fraunces.variable} ${inter.variable}`}>
-        {children}
+      <body className={inter.variable}>
+        {/* Providers live at the ROOT, not per route: one QueryClient + one
+            session check per app load, so React Query's cache survives tab
+            switches (instant revisits) and toasts persist across screens. */}
+        <AuthProvider>
+          <QueryProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </QueryProvider>
+        </AuthProvider>
       </body>
     </html>
   );

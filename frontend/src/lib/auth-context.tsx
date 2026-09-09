@@ -7,9 +7,12 @@
  * tokens in JavaScript — the browser sends them automatically with requests
  * (via `credentials: "include"`).
  *
+ * Mounted ONCE at the root layout, so the session check runs a single time
+ * per app load (not on every tab switch). The login page owns the
+ * authenticated → /dashboard redirect (it flips `isAuthenticated`).
+ *
  * This context provides:
- * - A way to check if the user is authenticated (by calling /auth/login or a
- *   session-check endpoint)
+ * - A way to check if the user is authenticated (via the session-check read)
  * - Login/logout functions that call the backend
  * - Loading/error states for auth operations
  */
@@ -37,44 +40,28 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-export function AuthProvider({
-  children,
-  redirectAuthenticated = true,
-}: {
-  children: ReactNode;
-  /** Redirect authenticated users away from public auth screens. */
-  redirectAuthenticated?: boolean;
-}) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if user has an active session on mount
+  // Check if the user has an active session on mount (once, at the root).
   useEffect(() => {
     async function checkActiveSession() {
       try {
         // Reuse the Axios client so auth checks and dashboard queries share the
         // same cookie policy and error normalization.
         await apiCheckSession();
-
-        {
-          setIsAuthenticated(true);
-          // Only public auth screens should redirect an existing session.
-          // The dashboard also uses this provider, so redirecting from every
-          // provider instance would continuously reload /dashboard.
-          if (redirectAuthenticated && window.location.pathname !== "/dashboard") {
-            window.location.replace("/dashboard");
-          }
-        }
+        setIsAuthenticated(true);
       } catch {
-        // Not authenticated — stay on login
+        // Not authenticated — stay where we are
       } finally {
         setIsLoading(false);
       }
     }
 
     checkActiveSession();
-  }, [redirectAuthenticated]);
+  }, []);
 
   const login = useCallback(async (pin: string): Promise<boolean> => {
     setError(null);

@@ -69,9 +69,39 @@ export interface CreateMeasurementInput {
   date: string;
 }
 export type JobStatus = "pending" | "completed" | "canceled";
+/**
+ * A photo on a job. `url` is always derived server-side from Cloudinary's own
+ * API response — clients reference photos by `publicId` (the public_id the
+ * upload returned) and never send a URL. `publicId` is absent only on legacy
+ * rows persisted before verification existed.
+ */
 export interface JobImage {
   url: string;
+  publicId?: string;
   alt: string;
+}
+/**
+ * Photo reference as sent TO the API — publicId only, never a URL. The
+ * backend verifies each publicId against Cloudinary and derives the URL
+ * itself (see backend cloudinary.service.ts).
+ */
+export interface JobImageInput {
+  publicId: string;
+  alt: string;
+}
+/** Signed direct-upload credentials from GET /jobs/signature — short-lived. */
+export interface UploadSignature {
+  signature: string;
+  timestamp: number;
+  expiresAt: number;
+  folder: string;
+  resourceType: string;
+  cloudName: string;
+  apiKey: string;
+}
+export interface UploadedPhoto {
+  publicId: string;
+  url: string;
 }
 export interface Payment {
   id: string;
@@ -91,8 +121,14 @@ export interface Job {
   customerPhone?: string | null;
   /** Present on the single-job read — the fitting snapshot as name→value. */
   measurements?: Record<string, number | null>;
-  styleRef: JobImage[];
-  finishedJob: JobImage[];
+  /** Present on the single-job read only — list endpoints omit photo arrays
+      (Cloudinary URLs) to keep list payloads flat. */
+  styleRef?: JobImage[];
+  finishedJob?: JobImage[];
+  /** Present on list reads only — the card's cover (finished wins) and
+      photo count, computed in SQL so list payloads stay lean. */
+  coverUrl?: string | null;
+  photoCount?: number;
   description: string;
   agreedPrice: number;
   status: JobStatus;
@@ -110,8 +146,8 @@ export interface CreateJobInput {
     measurements: Record<string, number | null>;
   }>;
   job: {
-    styleRef?: JobImage[];
-    finishedJob?: JobImage[];
+    styleRef?: JobImageInput[];
+    finishedJob?: JobImageInput[];
     description?: string;
     agreedPrice: number;
     status?: JobStatus;
@@ -121,8 +157,8 @@ export interface CreateJobInput {
 export interface CreateJobForSubjectInput {
   measurementId: string;
   job: {
-    styleRef?: JobImage[];
-    finishedJob?: JobImage[];
+    styleRef?: JobImageInput[];
+    finishedJob?: JobImageInput[];
     description?: string;
     agreedPrice: number;
     status?: JobStatus;
@@ -130,8 +166,8 @@ export interface CreateJobForSubjectInput {
   };
 }
 export interface UpdateJobInput {
-  styleRef?: JobImage[];
-  finishedJob?: JobImage[];
+  styleRef?: JobImageInput[];
+  finishedJob?: JobImageInput[];
   description?: string;
   agreedPrice?: number;
   status?: JobStatus;
@@ -160,6 +196,7 @@ export interface OutstandingPayment {
   jobId: string;
   customerName?: string;
   subjectName: string;
+  description?: string;
   status?: JobStatus;
   dueDate?: string | null;
   agreedPrice: number;
@@ -334,6 +371,49 @@ export async function createPayment(jobId: string, input: CreatePaymentInput) {
     data: input,
   });
 }
+export async function getUploadSignature() {
+  const res = await request<UploadSignature>({ url: "/jobs/signature" });
+  return res.data!;
+}
+/**
+ * Upload a file straight to Cloudinary using a backend-issued signature.
+ * Uses plain fetch on purpose: Cloudinary's response is not an ApiResponse
+ * envelope, so it must never go through the axios client or its interceptor.
+ * Returns the public_id + URL the job payload then references by publicId.
+ */
+export async function uploadPhotoToCloudinary(
+  file: File,
+  sig: UploadSignature,
+): Promise<UploadedPhoto> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", sig.apiKey);
+  form.append("timestamp", String(sig.timestamp));
+  form.append("expires_at", String(sig.expiresAt));
+  form.append("folder", sig.folder);
+  form.append("resource_type", sig.resourceType);
+  form.append("signature", sig.signature);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${sig.cloudName}/auto/upload`,
+    { method: "POST", body: form },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+    throw new ApiError(
+      response.status,
+      body?.error?.message ?? "Upload to Cloudinary failed",
+    );
+  }
+  const body = (await response.json()) as {
+    public_id: string;
+    secure_url: string;
+  };
+  return { publicId: body.public_id, url: body.secure_url };
+}
+
 export async function getMonthlyRevenue() {
   return request<MonthlyRevenue[]>({ url: "/reports/monthly-revenue" });
 }

@@ -7,7 +7,10 @@ playbook (tokens, fonts, apple-look checklist). Two eras exist in git history:
 - **Apple HIG (current)** — system Blue accent, iOS grouped layout, Inter type.
 - **Midnight Indigo (heritage)** — the original custom brand theme (Fraunces +
   Space Grotesk, indigo/mint/amber). Preserved at commit `b1fa5cc`; roll back a
-  screen with `git checkout b1fa5cc -- frontend/src/app/<path>`.
+  screen with `git checkout b1fa5cc -- frontend/src/app/<path>`. Its fonts and
+  tokens are **not** in the live build anymore (only Inter ships — see
+  `app/layout.tsx` and the top of `globals.css`), so rollback also needs
+  `git checkout b1fa5cc -- frontend/src/app/layout.tsx frontend/src/app/globals.css`.
 
 ## Theme architecture
 
@@ -120,6 +123,10 @@ All animations are killed under `prefers-reduced-motion` (global rule in
   overdue).
 - **Tab bar** — full-bleed material (`--hig-bar` + `backdrop-blur(20px)`
   `saturate(150%)`), rounded top 24px, active tab = accent-tint pill.
+  One shared `components/tab-bar.tsx` on every screen: each tab is a
+  `Link` with default prefetch (routes load while idle → switching tabs is
+  instant; the page's own skeletons cover data loading), pointer cursor,
+  and the per-screen FAB passed in as a prop.
 - **FAB** — 56px accent circle, white plus, flush right edge, floats above the
   bar.
 - **Skeletons** — mirror real shapes (measured: chart block 183px, job row

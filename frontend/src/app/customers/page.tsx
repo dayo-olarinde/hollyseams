@@ -42,6 +42,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import NewJobModal from "@/components/new-job-modal";
+import TabBar from "@/components/tab-bar";
 import ThemeToggle from "@/components/theme-toggle";
 import {
   getOutstandingPayments,
@@ -76,48 +77,6 @@ function initials(name: string): string {
       .slice(0, 2)
       .map((w) => w[0]?.toUpperCase() ?? "")
       .join("") || "•"
-  );
-}
-
-/* ---------------------------------- icons ---------------------------------- */
-
-function IconHouse() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z" />
-      <path d="M9.5 20.5v-5.5h5v5.5" />
-    </svg>
-  );
-}
-function IconScissors() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="6" cy="6" r="2.6" />
-      <circle cx="6" cy="18" r="2.6" />
-      <path d="M20 4 8.4 15.6" />
-      <path d="m14.2 14.2 5.8 5.8" />
-      <path d="m8.4 8.4 3.4 3.4" />
-    </svg>
-  );
-}
-function IconCustomers() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="9" cy="7.5" r="3.5" />
-      <path d="M3 20.5v-1a6 6 0 0 1 12 0v1" />
-      <path d="M16 4.6a3.5 3.5 0 0 1 0 6.5" />
-      <path d="M17.5 14.6a6 6 0 0 1 3.5 5.4v.5" />
-    </svg>
-  );
-}
-function IconReports() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
-      <path d="M8 17v-4" />
-      <path d="M13 17V7" />
-      <path d="M18 17v-7" />
-    </svg>
   );
 }
 
@@ -169,6 +128,8 @@ function HouseholdCard({ customer }: { customer: Customer }) {
   );
 }
 
+/** Household card skeleton — mirrors the real card (44px avatar, name,
+    phone line, chevron) so loading doesn't shift the list. */
 function CardSkeleton() {
   const bar = "animate-pulse rounded bg-[var(--hig-separator)]";
   return (
@@ -176,9 +137,25 @@ function CardSkeleton() {
       <div className={`h-11 w-11 flex-shrink-0 rounded-full ${bar}`} />
       <div className="flex-1">
         <div className={`h-4 w-32 ${bar}`} />
-        <div className={`mt-2 h-3 w-40 ${bar}`} />
+        <div className={`mt-0.5 h-3 w-40 ${bar}`} />
       </div>
-      <div className={`h-4 w-3 ${bar}`} />
+      <div className={`h-[17px] w-2.5 ${bar}`} />
+    </div>
+  );
+}
+
+/** Filmstrip card skeleton — mirrors the real Top-clients card anatomy:
+    rank, avatar, name, job count, amount, "paid" caption. */
+function FilmstripCardSkeleton() {
+  const bar = "animate-pulse rounded bg-[var(--hig-separator)]";
+  return (
+    <div className="w-[150px] flex-shrink-0 rounded-[18px] bg-[var(--hig-card)] px-3.5 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+      <div className={`h-3 w-8 ${bar}`} />
+      <div className={`mt-2 h-9 w-9 rounded-full ${bar}`} />
+      <div className={`mt-2 h-3.5 w-24 ${bar}`} />
+      <div className={`mt-0.5 h-2.5 w-14 ${bar}`} />
+      <div className={`mt-2 h-5 w-20 ${bar}`} />
+      <div className={`mt-0.5 h-2.5 w-8 ${bar}`} />
     </div>
   );
 }
@@ -186,7 +163,6 @@ function CardSkeleton() {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function CustomersPage() {
-  const router = useRouter();
   const [newJobOpen, setNewJobOpen] = useState(false);
 
   /* 1 · the A→Z list — cursor-paginated (limit 20, ASC name) */
@@ -357,8 +333,8 @@ export default function CustomersPage() {
             ))}
             {topQ.isPending && (
               <>
-                <div className="h-[118px] w-[150px] flex-shrink-0 animate-pulse rounded-[18px] bg-[var(--hig-separator)]" />
-                <div className="h-[118px] w-[150px] flex-shrink-0 animate-pulse rounded-[18px] bg-[var(--hig-separator)]" />
+                <FilmstripCardSkeleton />
+                <FilmstripCardSkeleton />
               </>
             )}
           </div>
@@ -450,59 +426,23 @@ export default function CustomersPage() {
       </div>
 
       {/* ---------- FAB + tab bar (anchored to the phone-width column) ---------- */}
-      <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-        <div className="relative mx-auto w-full max-w-[430px]">
+      <TabBar
+        active="customers"
+        fab={
           <button
             type="button"
             aria-label="New client"
             title="New client"
             onClick={() => setNewJobOpen(true)}
-            className="pointer-events-auto absolute bottom-[84px] right-5 z-10 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
+            className="pointer-events-auto absolute bottom-[84px] right-5 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6" aria-hidden="true">
               <path d="M12 5.5v13" />
               <path d="M5.5 12h13" />
             </svg>
           </button>
-          <div className="pointer-events-auto flex h-16 items-center rounded-t-[24px] bg-[var(--hig-bar)] px-2 shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150">
-            <button
-              type="button"
-              aria-label="Overview"
-              onClick={() => router.push("/dashboard")}
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]"><IconHouse /></span>
-              <span className="text-[10px] font-medium">Overview</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Jobs"
-              onClick={() => router.push("/jobs")}
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]"><IconScissors /></span>
-              <span className="text-[10px] font-medium">Jobs</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Customers"
-              aria-current="page"
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] bg-[var(--hig-accent-tint)] text-[var(--hig-accent)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]"><IconCustomers /></span>
-              <span className="text-[10px] font-semibold">Customers</span>
-            </button>
-            <button
-              type="button"
-              aria-label="Reports"
-              className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
-            >
-              <span className="h-[22px] w-[22px]"><IconReports /></span>
-              <span className="text-[10px] font-medium">Reports</span>
-            </button>
-          </div>
-        </div>
-      </nav>
+        }
+      />
 
       {/* New job sheet — the same modal as jobs/dashboard (new-client flow) */}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />

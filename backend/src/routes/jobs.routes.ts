@@ -5,6 +5,7 @@ import {
   createPaymentHandler,
   deleteJobHandler,
   getJobHandler,
+  getUploadSignature,
   listJobsHandler,
   updateJobHandler,
 } from "../controllers/jobs.controller";
@@ -34,6 +35,10 @@ router.get(
   validateQuery(listJobsQuerySchema),
   listJobsHandler,
 );
+
+// Must be registered BEFORE /:id — otherwise "signature" is captured by the
+// id param and rejected by the UUID validator, silently killing the endpoint.
+router.get("/signature", requireAuth, getUploadSignature);
 
 router.get("/:id", requireAuth, validateParams(idParamsSchema), getJobHandler);
 
