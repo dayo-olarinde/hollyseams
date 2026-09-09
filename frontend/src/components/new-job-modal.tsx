@@ -155,25 +155,27 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 /* ----------------------------- shared styles ----------------------------- */
 
+/* Shared input/chip styles — Apple HIG: iOS fill surfaces, system separators,
+   accent focus ring (all via --hig-* vars so light/dark come free). */
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3 text-[13px] text-ink outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-stone focus:border-teal focus:shadow-[0_0_0_3px_rgba(91,124,250,0.18)]";
+  "w-full rounded-xl border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-4 py-3 text-[13px] text-[var(--hig-label)] outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-[var(--hig-label-tertiary)] focus:border-[var(--hig-accent)] focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]";
 
 const chipClass =
-  "inline-flex items-center gap-[7px] rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-ink-soft transition-all active:scale-95";
+  "inline-flex items-center gap-2 rounded-full border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-3 py-2 text-[11px] font-medium text-[var(--hig-label-secondary)] transition-all active:scale-95";
 
 const chipOnClass =
-  "border-teal bg-teal-tint text-ink shadow-[0_0_16px_-6px_rgba(91,124,250,0.7)]";
+  "border-[var(--hig-accent)] bg-[var(--hig-accent-tint)] text-[var(--hig-label)]";
 
 const chipAddClass =
-  "border-dashed border-teal-border bg-transparent text-teal-light";
+  "border-dashed border-[var(--hig-accent-line)] bg-transparent text-[var(--hig-accent)]";
 
 const monoClass =
-  "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-teal-border bg-teal-tint text-[8.5px] font-semibold text-teal-light";
+  "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] text-[11px] font-semibold text-[var(--hig-accent)]";
 
 // Section titles need clear air above them — a uniform mt-6 (24px) keeps
 // every title in the folds from feeling glued to the block above it.
 const miniLabelClass =
-  "mt-6 text-[8px] font-semibold uppercase tracking-[0.2em] text-stone";
+  "mt-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-[var(--hig-label-secondary)]";
 
 /* --------------------------------- UI --------------------------------- */
 
@@ -591,10 +593,22 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       ? client?.name ?? "Self"
       : s.name || "Subject";
 
-  const dueLabel = dueDate ? fmtDate(dueDate) : "no date";
+  // "no due date" stands alone — never rendered as "due no date" in the ticket.
+  const dueLabel = dueDate ? fmtDate(dueDate) : null;
   const clientLabel = (client?.name ?? query.trim()) || "no client yet";
   const priceNum = Number(price.replace(/[^\d.]/g, "")) || 0;
   const measCount = Object.keys(currentMeas()).length;
+
+  // One confirmation voice for Done / View job: the toast repeats the overlay
+  // headline's phrasing (what · for whom · price · due), never its own format.
+  const confirmCreated = () => {
+    if (!created) return;
+    toast.show({
+      title: "Cut and pinned.",
+      detail: `${created.description || "Garment"} for ${subjectLabel(activeSubject!)} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
+    });
+    onClose();
+  };
 
   if (!open) return null;
 
@@ -605,33 +619,38 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 w-full animate-fade-in bg-[rgba(5,8,18,0.55)]"
+        className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
 
       {/* bottom sheet — anchored to the phone-width column like the FAB */}
-      <div className="absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full max-w-[430px] animate-sheet-in flex-col overflow-hidden rounded-t-[26px] border border-b-0 border-white/10 bg-[#0D1526] shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.85)]">
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full max-w-[430px] animate-sheet-in flex-col overflow-hidden rounded-t-[26px] border border-b-0 border-[var(--hig-separator)] bg-[var(--hig-card)] shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
         {/* handle */}
-        <div className="mx-auto mt-2.5 h-1 w-[38px] flex-shrink-0 rounded-full bg-white/15" aria-hidden="true" />
+        <div className="mx-auto mt-3 h-1 w-[38px] flex-shrink-0 rounded-full bg-[var(--hig-separator)]" aria-hidden="true" />
 
         {/* head */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-5 pb-3 pt-2">
-          <h2 className="font-heading text-[22px] font-medium tracking-[-0.005em] text-ink">
-            The cutting <em className="italic text-teal-light">table</em>
-            <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-blink rounded-full bg-amber shadow-[0_0_10px_rgba(245,184,91,0.9)]" aria-hidden="true" />
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-[var(--hig-separator)] px-5 pb-3 pt-2">
+          <h2 className="text-[22px] font-medium tracking-[-0.005em] text-[var(--hig-label)]">
+            The cutting <span className="text-[var(--hig-accent)]">table</span>
+            {/* amber chip = the workbench light is on (static — no blinking) */}
+            <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--hig-warning)]" aria-hidden="true" />
           </h2>
+          {/* 44px hit area (invisible) around the 30px visual circle —
+              the target passes the touch-minimum without changing the look */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-white/10 bg-white/5 text-[13px] text-ink-soft transition-colors hover:text-ink"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--hig-label-secondary)] transition-colors hover:text-[var(--hig-label)]"
           >
-            ✕
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--hig-separator)] bg-[var(--hig-fill)] text-[13px]">
+              ✕
+            </span>
           </button>
         </div>
 
         {/* folds — scrolling closes the portaled dropdowns so they never float detached */}
         <div
-          className="flex-1 space-y-2.5 overflow-y-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex-1 space-y-3 overflow-y-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           onScroll={() => {
             setDdOpen(false);
             setSugOpen(false);
@@ -671,7 +690,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   type="button"
                   aria-label="Clear client"
                   onClick={clearClient}
-                  className="absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-[9px] text-ink-soft"
+                  className="absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--hig-separator)] text-[11px] text-[var(--hig-label-secondary)] after:absolute after:-inset-3 after:content-['']"
                 >
                   ✕
                 </button>
@@ -683,18 +702,18 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 <div
                   ref={ddRef}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="fixed z-[70] max-h-[208px] animate-fade-in overflow-y-auto rounded-2xl border border-teal-border bg-[#111B31] p-1 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.7)]"
+                  className="hig fixed z-[70] max-h-[208px] animate-fade-in overflow-y-auto rounded-2xl border border-[var(--hig-separator)] bg-[var(--hig-card)] p-1 shadow-[var(--hig-bar-shadow)]"
                   style={{ top: ddRect.top + 6, left: ddRect.left, width: ddRect.width }}
                 >
                   {customers === null ? (
-                    <div className="px-3.5 py-3 text-[11px] text-stone">Loading clients…</div>
+                    <div className="px-4 py-3 text-[11px] text-[var(--hig-label-tertiary)]">Loading clients…</div>
                   ) : filteredCustomers.length === 0 ? (
-                    <div className="px-3.5 py-3 text-[11px] text-stone">
+                    <div className="px-4 py-3 text-[11px] text-[var(--hig-label-tertiary)]">
                       No match — this will be a new client.
                     </div>
                   ) : (
                     <>
-                      <div className="px-2.5 pb-1 pt-1.5 text-[8px] font-semibold uppercase tracking-[0.2em] text-stone">
+                      <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--hig-label-tertiary)]">
                         Returning clients
                       </div>
                       {filteredCustomers.map((c) => (
@@ -702,18 +721,18 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                           key={c.id}
                           type="button"
                           onClick={() => pickClient(c)}
-                          className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-teal-tint"
+                          className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--hig-accent-tint)]"
                         >
-                          <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-teal-border bg-teal-tint text-[9px] font-semibold text-teal-light">
+                          <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] text-[11px] font-semibold text-[var(--hig-accent)]">
                             {initials(c.name)}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[12px] font-medium text-ink">{c.name}</span>
-                            <span className="block text-[9.5px] text-stone">
+                            <span className="block truncate text-[13px] font-medium text-[var(--hig-label)]">{c.name}</span>
+                            <span className="block text-[11px] text-[var(--hig-label-secondary)]">
                               {c.phoneNumber ?? "no phone on file"}
                             </span>
                           </span>
-                          <span className="text-[11px] text-teal-light">→</span>
+                          <span className="text-[11px] text-[var(--hig-accent)]">→</span>
                         </button>
                       ))}
                     </>
@@ -735,9 +754,9 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               />
             )}
             {client?.phoneNumber && (
-              <div className="mt-2 flex items-center gap-1.5 text-[10.5px] text-stone">
-                <span className="h-1.5 w-1.5 rounded-full bg-mint shadow-[0_0_8px_rgba(62,213,152,0.8)]" aria-hidden="true" />
-                Phone on file · <b className="font-medium tracking-[0.04em] text-ink-soft">{client.phoneNumber}</b>
+              <div className="mt-2 flex items-center gap-1.5 text-[10.5px] text-[var(--hig-label-secondary)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--hig-success)] shadow-[0_0_8px_rgba(48,209,88,0.6)]" aria-hidden="true" />
+                Phone on file · <b className="font-medium tracking-[0.04em] text-[var(--hig-label)]">{client.phoneNumber}</b>
               </div>
             )}
           </Fold>
@@ -751,7 +770,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             onToggle={() => setFold(fold === 2 ? 3 : 2)}
           >
             <div className={miniLabelClass}>For whom</div>
-            <div className="flex flex-wrap gap-[7px] pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               {subjects.map((s) => (
                 <button
                   key={s.key}
@@ -762,10 +781,10 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   <span className={monoClass}>{initials(subjectLabel(s))}</span>
                   {subjectLabel(s)}
                   {s.relationship !== "self" && (
-                    <span className="text-[9px] text-stone">{s.relationship}</span>
+                    <span className="text-[11px] text-[var(--hig-label-tertiary)]">{s.relationship}</span>
                   )}
                   {s.loaded && s.latestMeasId && (
-                    <span className="text-[9px] text-stone">· fitted</span>
+                    <span className="text-[11px] text-[var(--hig-label-tertiary)]">· fitted</span>
                   )}
                 </button>
               ))}
@@ -779,10 +798,10 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             {/* add-subject inline form — new clients keep it local, returning
                 clients persist via POST /customers/:id/subjects on ✓ */}
             {addingSubject && activeSubject?.key.startsWith("new-") && (
-              <div className="mt-2.5 animate-fade-in">
+              <div className="mt-3 animate-fade-in">
                 <div className="flex items-center gap-2">
                   <select
-                    className="flex-shrink-0 rounded-[10px] border border-white/10 bg-white/5 px-2 py-2 text-[11px] text-ink outline-none"
+                    className="flex-shrink-0 rounded-[10px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-2 py-2 text-[11px] text-[var(--hig-label)] outline-none"
                     value={activeSubject.relationship}
                     onChange={(e) =>
                       setSubjects((prev) =>
@@ -814,7 +833,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     aria-label="Add subject"
                     disabled={subjectSaving}
                     onClick={confirmSubject}
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] bg-teal text-white shadow-[0_8px_18px_-8px_rgba(91,124,250,0.8)] transition-all hover:bg-teal-deep active:scale-95 disabled:opacity-60"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-all active:scale-95 disabled:opacity-60"
                   >
                     {subjectSaving ? (
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -826,13 +845,13 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     type="button"
                     aria-label="Cancel add subject"
                     onClick={cancelSubject}
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-[10px] text-ink-soft transition-colors hover:text-ink"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] text-[10px] text-[var(--hig-label-secondary)] transition-colors hover:text-[var(--hig-label)]"
                   >
                     ✕
                   </button>
                 </div>
                 {subjectError && (
-                  <p className="mt-1.5 text-[10px] text-rose">{subjectError}</p>
+                  <p className="mt-2 text-[12px] text-[var(--hig-danger)]">{subjectError}</p>
                 )}
               </div>
             )}
@@ -840,14 +859,14 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             <div className={miniLabelClass}>
               Measurements <span className="font-normal normal-case tracking-[0.04em] text-stone">· cm</span>
             </div>
-            <div className="flex flex-wrap gap-[7px] pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               {Object.entries(currentMeas()).map(([key, value]) =>
                 editingMeas === key ? (
-                  <div key={key} className="flex items-center gap-2 rounded-full border border-teal bg-teal-tint py-1.5 pl-3 pr-1.5">
-                    <span className="text-[11px] font-medium text-teal-light">{key}</span>
+                  <div key={key} className="flex items-center gap-2 rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] py-2 pl-3 pr-2">
+                    <span className="text-[11px] font-medium text-[var(--hig-accent)]">{key}</span>
                     <input
                       id="editVal"
-                      className="w-[52px] rounded-lg border border-white/10 bg-white/5 py-1 text-center text-[12px] font-medium text-ink outline-none"
+                      className="w-[52px] rounded-lg border border-[var(--hig-separator)] bg-[var(--hig-fill)] py-1 text-center text-[12px] font-medium text-[var(--hig-label)] outline-none"
                       inputMode="decimal"
                       defaultValue={String(value ?? "")}
                       autoFocus
@@ -856,11 +875,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                       }}
                       onBlur={(e) => commitEdit(key, e.target.value)}
                     />
-                    <span className="text-[9px] text-stone">cm</span>
+                    <span className="text-[10px] text-[var(--hig-label-tertiary)]">cm</span>
                     <button
                       type="button"
                       aria-label="Save"
-                      className="flex h-6 w-6 items-center justify-center rounded-lg bg-mint text-[#05261A] shadow-[0_8px_16px_-8px_rgba(62,213,152,0.8)]"
+                      className="relative flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--hig-success)] text-white after:absolute after:-inset-3 after:content-['']"
                       onClick={() => commitEdit(key, (document.getElementById("editVal") as HTMLInputElement)?.value ?? "")}
                     >
                       <CheckIcon />
@@ -872,11 +891,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     type="button"
                     title="Tap to update"
                     onClick={() => setEditingMeas(key)}
-                    className={`${chipClass} ${chipOnClass} !px-2.5 !py-1.5`}
+                    className={`${chipClass} ${chipOnClass} !px-3 !py-2`}
                   >
                     <span className={monoClass}>{key.slice(0, 2).toUpperCase()}</span>
-                    {key} <b className="font-semibold text-ink">{value}</b>
-                    <span className="text-[8.5px] text-stone">cm</span>
+                    {key} <b className="font-medium text-[var(--hig-label)]">{value}</b>
+                    <span className="text-[10px] text-[var(--hig-label-tertiary)]">cm</span>
                     <span
                       aria-label={`Remove ${key}`}
                       onClick={(e) => {
@@ -885,7 +904,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                         delete next[key];
                         touchMeas(next);
                       }}
-                      className="flex h-[15px] w-[15px] items-center justify-center rounded-full bg-white/5 text-[8px] text-stone hover:text-rose"
+                      className="relative flex h-[15px] w-[15px] items-center justify-center rounded-full bg-[var(--hig-separator)] text-[10px] text-[var(--hig-label-tertiary)] hover:text-[var(--hig-danger)] after:absolute after:-inset-3 after:content-['']"
                     >
                       ✕
                     </span>
@@ -895,7 +914,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             </div>
 
             {/* composer: type → suggestion → just the value */}
-            <div ref={compWrapRef} className="relative mt-2.5">
+            <div ref={compWrapRef} className="relative mt-3">
               <input
                 ref={compInputRef}
                 className={inputClass}
@@ -918,7 +937,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 <div
                   ref={compRef}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="fixed z-[70] max-h-[172px] animate-fade-in overflow-y-auto rounded-2xl border border-teal-border bg-[#111B31] p-1 shadow-[0_20px_44px_-12px_rgba(0,0,0,0.7)]"
+                  className="hig fixed z-[70] max-h-[172px] animate-fade-in overflow-y-auto rounded-2xl border border-[var(--hig-separator)] bg-[var(--hig-card)] p-1 shadow-[var(--hig-bar-shadow)]"
                   style={{ top: compRect.top + 6, left: compRect.left, width: compRect.width }}
                 >
                   {suggestions.map((s) => (
@@ -935,12 +954,12 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                         setComposer("");
                         setSugOpen(false);
                       }}
-                      className={`flex w-full items-center justify-between rounded-[9px] px-2.5 py-2 text-left text-[11.5px] transition-colors hover:bg-teal-tint hover:text-ink ${
-                        s.custom ? "text-teal-light" : "text-ink-soft"
+                      className={`flex w-full items-center justify-between rounded-[9px] px-3 py-2 text-left text-[11.5px] transition-colors hover:bg-[var(--hig-accent-tint)] hover:text-[var(--hig-label)] ${
+                        s.custom ? "text-[var(--hig-accent)]" : "text-[var(--hig-label-secondary)]"
                       }`}
                     >
                       <span>{s.custom ? `Use "${s.name}"` : s.name}</span>
-                      <span className="font-mono text-[8.5px] text-stone">{s.key}</span>
+                      <span className="font-mono text-[10px] text-[var(--hig-label-secondary)]">{s.key}</span>
                     </button>
                   ))}
                 </div>,
@@ -950,12 +969,12 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
 
             {/* pending value entry for a tapped suggestion */}
             {pendingMeas && (
-              <div className="mt-2 flex animate-fade-in items-center gap-2 rounded-xl border border-teal-border bg-teal-tint p-2">
-                <span className="flex-shrink-0 text-[11px] font-semibold text-teal-light">{pendingMeas.name}</span>
-                <span className="flex-shrink-0 font-mono text-[8px] text-stone">{pendingMeas.key}</span>
+              <div className="mt-2 flex animate-fade-in items-center gap-2 rounded-xl border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] p-2">
+                <span className="flex-shrink-0 text-[11px] font-semibold text-[var(--hig-accent)]">{pendingMeas.name}</span>
+                <span className="flex-shrink-0 font-mono text-[10px] text-[var(--hig-label-secondary)]">{pendingMeas.key}</span>
                 <input
                   id="pendVal"
-                  className="min-w-0 flex-1 rounded-[9px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] font-medium text-ink outline-none"
+                  className="min-w-0 flex-1 rounded-[9px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-3 py-2 text-[13px] font-medium text-[var(--hig-label)] outline-none"
                   inputMode="decimal"
                   placeholder="0"
                   autoFocus
@@ -963,8 +982,8 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     if (e.key === "Enter") commitPending();
                   }}
                 />
-                <span className="text-[9px] text-stone">cm</span>
-                <button type="button" aria-label="Add value" onClick={commitPending} className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[9px] bg-mint text-[#05261A] shadow-[0_8px_16px_-8px_rgba(62,213,152,0.8)]">
+                <span className="text-[10px] text-[var(--hig-label-tertiary)]">cm</span>
+                <button type="button" aria-label="Add value" onClick={commitPending} className="relative flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[9px] bg-[var(--hig-success)] text-white after:absolute after:-inset-3 after:content-['']">
                   <CheckIcon />
                 </button>
               </div>
@@ -991,9 +1010,9 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             />
             <div className={miniLabelClass}>Agreed price</div>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-medium text-teal-light">₦</span>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-medium text-[var(--hig-accent)]">₦</span>
               <input
-                className={`${inputClass} !pl-8 !text-[17px] !font-semibold`}
+                className={`${inputClass} !pl-8 !text-[17px] !font-medium`}
                 placeholder="0"
                 inputMode="numeric"
                 value={price}
@@ -1002,12 +1021,12 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             </div>
             <div className={miniLabelClass}>Due date</div>
             <div className="relative">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="pointer-events-none absolute left-3.5 top-1/2 h-[14px] w-[14px] -translate-y-1/2 text-teal-light">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="pointer-events-none absolute left-3.5 top-1/2 h-[14px] w-[14px] -translate-y-1/2 text-[var(--hig-accent)]">
                 <rect x="3.5" y="5" width="17" height="16" rx="3" /><path d="M3.5 10h17" /><path d="M8 3v4" /><path d="M16 3v4" />
               </svg>
               <input
                 type="date"
-                className={`${inputClass} !pl-9 [color-scheme:dark]`}
+                className={inputClass + " !pl-9"}
                 value={dueDate}
                 min={todayISO()}
                 onChange={(e) => setDueDate(e.target.value)}
@@ -1016,13 +1035,13 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             <div className={miniLabelClass}>Style reference</div>
             <div className="flex flex-wrap gap-2 pt-1">
               {photos.map((p, i) => (
-                <div key={p.url} className="relative h-14 w-14 flex-shrink-0 overflow-visible rounded-[13px] border border-teal-border bg-teal-tint">
+                <div key={p.url} className="relative h-14 w-14 flex-shrink-0 overflow-visible rounded-[13px] border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)]">
                   <img src={p.url} alt={p.alt} className="h-full w-full rounded-[11px] object-cover" />
                   <button
                     type="button"
                     aria-label="Remove photo"
                     onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute -right-1.5 -top-1.5 flex h-[17px] w-[17px] items-center justify-center rounded-full border border-rose/50 bg-[#241019] text-[8px] text-rose shadow-[0_4px_10px_-2px_rgba(0,0,0,0.6)]"
+                    className="absolute -right-1.5 -top-1.5 flex h-[17px] w-[17px] items-center justify-center rounded-full border border-[var(--hig-danger)] bg-[var(--hig-danger-tint)] text-[10px] text-[var(--hig-danger)] shadow-[var(--hig-bar-shadow)] after:absolute after:-inset-3 after:content-['']"
                   >
                     ✕
                   </button>
@@ -1033,7 +1052,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   type="button"
                   aria-label="Add photo"
                   onClick={() => fileRef.current?.click()}
-                  className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[13px] border-[1.5px] border-dashed border-teal-border bg-white/[0.03] text-teal-light transition-transform active:scale-95"
+                  className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[13px] border-[1.5px] border-dashed border-[var(--hig-accent-line)] bg-[var(--hig-fill)] text-[var(--hig-accent)] transition-transform active:scale-95"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-[17px] w-[17px]">
                     <path d="M12 5v14" /><path d="M5 12h14" />
@@ -1041,7 +1060,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 </button>
               )}
             </div>
-            <div className="mt-1.5 text-[9px] text-stone">
+            <div className="mt-2 text-[12px] leading-snug text-[var(--hig-label-tertiary)]">
               Local preview only — Cloudinary upload comes later; photos are not sent with the job until then.
             </div>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFiles} />
@@ -1051,27 +1070,34 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         {/* error line */}
         {error && (
           <div className="flex-shrink-0 px-4 pb-2">
-            <p className="animate-shake rounded-xl border border-rose/25 bg-rose/10 px-3.5 py-2.5 text-[11.5px] text-rose">{error}</p>
+            <p className="animate-shake rounded-xl bg-[var(--hig-danger-tint)] px-4 py-3 text-[13px] leading-snug text-[var(--hig-danger)]">{error}</p>
           </div>
         )}
 
         {/* live ticket footer */}
-        <div className="flex flex-shrink-0 items-center gap-3 border-t border-white/10 bg-[#0D1526] px-4 pb-4 pt-3">
+        <div className="flex flex-shrink-0 items-center gap-3 border-t border-[var(--hig-separator)] bg-[var(--hig-card)] px-4 pb-4 pt-3">
           <div className="min-w-0 flex-1">
-            <div className="mb-1 text-[7.5px] font-semibold uppercase tracking-[0.22em] text-stone">Ticket</div>
-            <div className="whitespace-nowrap text-[20px] font-bold leading-none tracking-[-0.02em] text-ink">
-              <small className="mr-0.5 text-[12px] font-medium text-teal-light">₦</small>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--hig-label-tertiary)]">Ticket</div>
+            <div className="whitespace-nowrap text-[20px] font-medium leading-none tracking-[-0.02em] text-[var(--hig-label)] [font-variant-numeric:tabular-nums]">
+              <small className="mr-0.5 text-[13px] font-medium text-[var(--hig-accent)]">₦</small>
               {priceNum.toLocaleString("en-US")}
             </div>
-            <div className="mt-1 truncate whitespace-nowrap text-[9px] text-stone">
-              due <b className="font-semibold text-amber">{dueLabel}</b> · {clientLabel}
+            <div className="mt-1 truncate whitespace-nowrap text-[12.5px] text-[var(--hig-label-secondary)]">
+              {dueLabel ? (
+                <>
+                  due <b className="font-medium text-[var(--hig-warning)]">{dueLabel}</b> ·{" "}
+                </>
+              ) : (
+                "no due date · "
+              )}
+              {clientLabel}
             </div>
           </div>
           <button
             type="button"
             onClick={handleCreate}
             disabled={submitting}
-            className="flex flex-shrink-0 items-center gap-2 rounded-2xl bg-teal px-5 py-3.5 text-[12.5px] font-semibold text-white shadow-[0_12px_26px_-10px_rgba(91,124,250,0.8)] transition-all hover:bg-teal-deep active:scale-95 disabled:opacity-60"
+            className="flex flex-shrink-0 items-center gap-2 rounded-2xl bg-[var(--hig-accent)] px-5 py-3 text-[14px] font-semibold text-white shadow-[var(--hig-bar-shadow)] transition-all active:scale-95 disabled:opacity-60"
           >
             {submitting ? (
               <span className="h-[15px] w-[15px] animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -1086,53 +1112,35 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
 
         {/* success overlay */}
         {created && (
-          <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center rounded-t-[26px] bg-[#0D1526] px-8 text-center">
-            <div className="mb-4 flex h-[62px] w-[62px] items-center justify-center rounded-full border border-mint/40 bg-mint/10 shadow-[0_0_30px_-8px_rgba(62,213,152,0.7)]">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#3ED598" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]">
+          <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center rounded-t-[26px] bg-[var(--hig-card)] px-8 text-center">
+            <div className="mb-4 flex h-[62px] w-[62px] items-center justify-center rounded-full border border-[var(--hig-success)] bg-[var(--hig-success-tint)] shadow-[0_0_30px_-8px_rgba(48,209,88,0.45)]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--hig-success)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px]">
                 <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
               </svg>
             </div>
-            <h3 className="font-heading text-[22px] font-medium text-ink">
-              Cut and <em className="italic text-mint">pinned</em>.
+            <h3 className="text-[22px] font-medium text-[var(--hig-label)]">
+              Cut and <span className="text-[var(--hig-success)]">pinned</span>.
             </h3>
-            <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-soft">
+            <p className="mt-3 text-[16px] leading-snug text-[var(--hig-label)]">
               {created.description || "Garment"} for {subjectLabel(activeSubject!)} — {naira.format(created.agreedPrice)}.
             </p>
-            <div className="mt-3.5 w-full rounded-[13px] border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left">
-              <div className="flex items-baseline justify-between text-[13px] font-semibold">
-                <span className="truncate">{clientLabel} · {subjectLabel(activeSubject!)} · {created.description || "—"}</span>
-                <span className="ml-3 flex-shrink-0 text-teal-light">{naira.format(created.agreedPrice)}</span>
-              </div>
-              <div className="mt-1 text-[9.5px] text-stone">
-                due {created.dueDate ? fmtDate(created.dueDate) : "no date"} · {measCount} measurement{measCount === 1 ? "" : "s"} saved
-              </div>
-            </div>
-            <div className="mt-4 flex w-full gap-2.5">
+            {/* One quiet meta line — the headline above already says what,
+                for whom, and the price, so nothing repeats. */}
+            <p className="mt-2 text-[13.5px] text-[var(--hig-label-secondary)]">
+              {created.dueDate ? `due ${fmtDate(created.dueDate)}` : "no due date"} · {measCount} measurement{measCount === 1 ? "" : "s"} saved
+            </p>
+            <div className="mt-4 flex w-full gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  // The in-sheet confirmation closes; the toast keeps the
-                  // confirmation alive over the overview.
-                  toast.show({
-                    title: "Cut and pinned.",
-                    detail: `${clientLabel} · ${created.description || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
-                  });
-                  onClose();
-                }}
-                className="flex-1 rounded-[13px] border border-white/10 bg-white/5 py-3 text-[11.5px] font-semibold text-ink-soft transition-colors hover:text-ink"
+                onClick={confirmCreated}
+                className="flex-1 rounded-[13px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] py-3 text-[14px] font-semibold text-[var(--hig-label-secondary)] transition-colors hover:text-[var(--hig-label)]"
               >
                 Done
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  toast.show({
-                    title: "Cut and pinned.",
-                    detail: `${clientLabel} · ${created.description || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
-                  });
-                  onClose();
-                }}
-                className="flex-1 rounded-[13px] bg-teal py-3 text-[11.5px] font-semibold text-white shadow-[0_12px_26px_-10px_rgba(91,124,250,0.8)] transition-colors hover:bg-teal-deep"
+                onClick={confirmCreated}
+                className="flex-1 rounded-[13px] bg-[var(--hig-accent)] py-3 text-[14px] font-semibold text-white shadow-[var(--hig-bar-shadow)] transition-colors"
               >
                 View job
               </button>
@@ -1162,14 +1170,14 @@ function Fold({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`overflow-hidden rounded-[18px] border border-white/10 bg-white/[0.03] transition-colors ${open ? "border-teal/35" : ""}`}>
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3.5">
-        <span className={`w-6 flex-shrink-0 text-right font-heading text-[15px] italic transition-colors ${open ? "text-teal-light" : "text-stone"}`}>
+    <section className={`overflow-hidden rounded-[18px] border border-[var(--hig-separator)] bg-[var(--hig-card)] transition-colors ${open ? "border-[var(--hig-accent-line)]" : ""}`}>
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3">
+        <span className={`w-6 flex-shrink-0 text-right text-[15px] transition-colors ${open ? "font-semibold text-[var(--hig-accent)]" : "text-[var(--hig-label-tertiary)]"}`}>
           {num}
         </span>
-        <span className="flex-1 text-left text-[13.5px] font-semibold tracking-[0.01em] text-ink">{name}</span>
-        <span className="max-w-[110px] truncate text-[9.5px] text-stone">{summary}</span>
-        <span className={`flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-ink-soft transition-transform duration-300 ${open ? "rotate-180 text-teal-light" : ""}`}>
+        <span className="flex-1 text-left text-[15px] font-semibold tracking-[0.01em] text-[var(--hig-label)]">{name}</span>
+        <span className="max-w-[110px] truncate text-[11px] text-[var(--hig-label-secondary)]">{summary}</span>
+        <span className={`flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-[var(--hig-separator)] bg-[var(--hig-fill)] text-[var(--hig-label-secondary)] transition-transform duration-300 ${open ? "rotate-180 text-[var(--hig-accent)]" : ""}`}>
           <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="h-2.5 w-2.5">
             <path d="M1.5 3.5 5 7l3.5-3.5" />
           </svg>

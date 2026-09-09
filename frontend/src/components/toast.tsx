@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * Toast — tailor-themed confirmation toasts (Midnight Indigo).
+ * Toast — confirmation toasts (Apple HIG theme).
  *
  * A tiny context-based toast system: `useToast()` returns `show({ title,
  * detail })` and the provider renders the queue anchored to the phone-width
- * column, just above the tab bar. Styling follows the design system —
- * Fraunces italic headline (the wordmark voice), flat colours, glow via
- * shadows, and a stitched (dashed) ring that nods to the sewing motif.
- * Toasts auto-dismiss after 3.6s or on ✕.
+ * column, just above the tab bar. Styling follows the HIG design system —
+ * Inter type, iOS card surface, success-green stitched (dashed) ring that
+ * keeps the sewing motif. Toasts auto-dismiss after 3.6s or on ✕.
  */
 import {
   createContext,
@@ -62,29 +61,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={t.id}
               role="status"
-              className="pointer-events-auto flex animate-toast-in items-center gap-3 rounded-2xl border border-white/10 bg-[#0D1526] px-4 py-3 shadow-[0_24px_60px_-16px_rgba(0,0,0,0.9),0_0_40px_-24px_rgba(91,124,250,0.5)]"
+              className="hig pointer-events-auto flex animate-toast-in items-center gap-3 rounded-2xl border border-[var(--hig-separator)] bg-[var(--hig-card)] px-4 py-3 shadow-[var(--hig-bar-shadow)]"
             >
-              {/* stitched ring + check — the sewing motif */}
+              {/* stitched ring + check — the sewing motif, now in system green */}
               <span
-                className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-mint/50 bg-mint/10"
+                className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-dashed border-[var(--hig-success)] bg-[var(--hig-success-tint)]"
                 aria-hidden="true"
               >
-                <span className="absolute inset-[3px] rounded-full border border-mint/15" />
-                <svg viewBox="0 0 24 24" fill="none" stroke="#3ED598" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]">
+                <span className="absolute inset-[3px] rounded-full border border-[var(--hig-success)] opacity-20" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--hig-success)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]">
                   <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-heading text-[14px] italic leading-tight text-ink">{t.title}</p>
+                <p className="text-[15px] font-medium leading-tight text-[var(--hig-label)]">{t.title}</p>
                 {t.detail && (
-                  <p className="mt-0.5 truncate text-[10.5px] leading-snug text-ink-soft">{t.detail}</p>
+                  <p className="mt-1 truncate text-[12.5px] leading-snug text-[var(--hig-label-secondary)]">{t.detail}</p>
                 )}
               </div>
               <button
                 type="button"
                 aria-label="Dismiss"
                 onClick={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}
-                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-white/5 text-[8px] text-stone transition-colors hover:text-ink"
+                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--hig-separator)] text-[8px] text-[var(--hig-label-tertiary)] transition-colors hover:text-[var(--hig-label)]"
               >
                 ✕
               </button>

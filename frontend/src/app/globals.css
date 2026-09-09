@@ -89,6 +89,11 @@
  */
 .hig {
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: light; /* native controls (date picker, scrollbars) follow the theme */
+}
+
+html.hig-dark .hig {
+  color-scheme: dark;
 }
 
 /* Light scheme — iOS system palette */
