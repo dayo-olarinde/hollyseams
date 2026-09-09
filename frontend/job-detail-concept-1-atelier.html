@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" class="hig-light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Job — Concept 1 · The Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   HOLLYSEAMS JOB — CONCEPT 1 · THE ATELIER
+   One garment, up close. The finished photo (or the style
+   reference — whichever exists first) leads as a full-bleed
+   hero; the file card overlaps it like a work order pinned to
+   the board. Everything below is the tailor's working sheet:
+   the tape (measurements), the money (payments + balance), and
+   the moodboard (style references).
+
+   Data comes from GET /jobs/:id exactly:
+     subjectName, customerPhone, description, agreedPrice,
+     status, dueDate, deliveredAt, createdAt,
+     measurements: {name: value|null}, styleRef: [{url,alt}],
+     finishedJob: [{url,alt}], payments: [{amount, paidAt}]
+   No backend changes were needed to build this screen.
+
+   HIG playbook: Inter, iOS surfaces, 8pt grid, one blue accent,
+   semantic status colours, flat fills (no gradients — depth
+   from surface layering + the hero photo), light + dark,
+   reduced-motion safe. The dashed hairlines echo the app's
+   "stitched seam" motif.
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F2F2F7; --card: #FFFFFF; --fill: #E9E9EB;
+  --label: #000000; --label-2: rgba(60,60,67,.60); --label-3: rgba(60,60,67,.30);
+  --sep: rgba(60,60,67,.12);
+  --accent: #007AFF; --accent-soft: rgba(0,122,255,.12); --accent-line: rgba(0,122,255,.35);
+  --bar: rgba(255,255,255,.74);
+  --ok: #34C759; --ok-tint: rgba(52,199,89,.14);
+  --warn: #FF9500; --warn-tint: rgba(255,149,0,.14);
+  --danger: #FF3B30; --danger-tint: rgba(255,59,48,.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.14);
+  --ease: cubic-bezier(.4,0,.2,1);
+}
+.hig-dark {
+  --bg: #000000; --card: #1C1C1E; --fill: #2C2C2E;
+  --label: #FFFFFF; --label-2: rgba(235,235,245,.60); --label-3: rgba(235,235,245,.30);
+  --sep: rgba(84,84,88,.50);
+  --accent: #0A84FF; --accent-soft: rgba(10,132,255,.20); --accent-line: rgba(10,132,255,.45);
+  --bar: rgba(22,22,24,.76);
+  --ok: #30D158; --ok-tint: rgba(48,209,88,.16);
+  --warn: #FF9F0A; --warn-tint: rgba(255,159,10,.16);
+  --danger: #FF453A; --danger-tint: rgba(255,69,58,.16);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3); --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.5);
+}
+html, body { -webkit-font-smoothing: antialiased; }
+body {
+  min-height: 100vh; background: #D8D8DC;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--label); display: flex; align-items: stretch; justify-content: center;
+}
+.hig-dark body { background: #050505; }
+.phone { width: 100%; max-width: 430px; background: var(--bg); position: relative; overflow: hidden; transition: background .25s var(--ease); }
+.scroll { height: 100vh; overflow-y: auto; padding-bottom: 150px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- hero: full-bleed photo, floating chrome ---------- */
+.hero { position: relative; height: 380px; background: var(--fill); }
+.hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* no-photo placeholder: a quiet workshop wall with the photo icon */
+.hero .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-3); }
+.hero .ph svg { width: 44px; height: 44px; }
+.hero .fabs {
+  position: absolute; top: 14px; left: 20px; right: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.hero .fabs a, .hero .fabs .tag {
+  height: 44px; display: grid; place-items: center; border-radius: 999px;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--shadow-md); color: var(--label); text-decoration: none;
+}
+.hero .fabs a { width: 44px; font-size: 18px; }
+.hero .fabs .tag { padding: 0 16px; font-size: 12px; font-weight: 600; }
+.hero .fabs .side { display: flex; align-items: center; gap: 10px; }
+.hero .fabs .side button {
+  width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--shadow-md); color: var(--label);
+}
+.hero .fabs .side button svg { width: 18px; height: 18px; }
+
+/* ---------- the work order card, overlapping the photo ---------- */
+.sheet {
+  margin: -34px 20px 0; position: relative; z-index: 2;
+  background: var(--card); border-radius: 24px; box-shadow: var(--shadow-lg);
+  padding: 20px;
+}
+.sheet .kicker { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--label-3); }
+.sheet h1 { margin-top: 4px; font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; }
+.sheet .who { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+.sheet .who .avatar {
+  width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; background: var(--accent-soft); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.sheet .who .nm { flex: 1; min-width: 0; }
+.sheet .who .nm b { display: block; font-size: 14.5px; font-weight: 600; }
+.sheet .who .nm small { font-size: 12px; color: var(--label-2); }
+.sheet .who a {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); text-decoration: none; font-size: 16px;
+}
+.sheet .meta {
+  margin-top: 16px; display: flex; border-top: 1px dashed var(--sep); padding-top: 14px;
+}
+.sheet .meta div { flex: 1; }
+.sheet .meta div + div { border-left: 1px dashed var(--sep); padding-left: 14px; }
+.sheet .meta small { font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--label-3); }
+.sheet .meta b { display: block; margin-top: 3px; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sheet .meta b.due { color: var(--accent); }
+.sheet .meta b.over { color: var(--danger); }
+
+/* ---------- section headers ---------- */
+.sec { margin: 26px 20px 0; }
+.sec .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.sec .head h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--label-2); }
+.sec .head span { font-size: 12px; color: var(--label-3); font-variant-numeric: tabular-nums; }
+
+/* ---------- the tape: measurements as a stitched grid ---------- */
+.tape {
+  background: var(--card); border-radius: 20px; box-shadow: var(--shadow-sm);
+  padding: 6px 16px; display: grid; grid-template-columns: 1fr 1fr;
+}
+.tape .m { padding: 12px 0; }
+.tape .m:nth-child(odd) { border-right: 1px dashed var(--sep); padding-right: 16px; }
+.tape .m:nth-child(even) { padding-left: 16px; }
+.tape .m + .m { border-top: 1px dashed var(--sep); }
+.tape .m small { font-size: 9.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--label-3); }
+.tape .m b { display: block; margin-top: 3px; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tape .m b em { font-style: normal; font-size: 10px; font-weight: 500; color: var(--label-2); margin-left: 2px; }
+.tape .m.null b { color: var(--label-3); font-weight: 500; }
+
+/* ---------- the money: progress + payments ---------- */
+.money { background: var(--card); border-radius: 20px; box-shadow: var(--shadow-sm); padding: 16px; }
+.money .row { display: flex; align-items: baseline; justify-content: space-between; }
+.money .row + .row { margin-top: 8px; }
+.money .row small { font-size: 12px; color: var(--label-2); }
+.money .row b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.money .row b.good { color: var(--ok); }
+.money .row b.due { color: var(--warn); }
+.money .track { margin-top: 12px; height: 6px; border-radius: 999px; background: var(--fill); overflow: hidden; }
+.money .track i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.money .pay { margin-top: 6px; }
+.money .pay .p {
+  display: flex; align-items: center; gap: 10px; padding: 11px 0;
+}
+.money .pay .p + .p { border-top: 1px dashed var(--sep); }
+.money .pay .p .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--ok); flex-shrink: 0; }
+.money .pay .p .d { flex: 1; font-size: 13.5px; font-weight: 500; }
+.money .pay .p .d small { display: block; font-size: 11px; color: var(--label-2); margin-top: 1px; }
+.money .pay .p b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.money .cta {
+  margin-top: 10px; width: 100%; border: 0; border-radius: 14px; padding: 13px;
+  background: var(--fill); color: var(--label); font: 600 13.5px "Inter", sans-serif; cursor: pointer;
+  transition: transform .15s var(--ease);
+}
+.money .cta:active { transform: scale(.97); }
+
+/* ---------- moodboard: style references as a filmstrip ---------- */
+.film { display: flex; gap: 10px; overflow-x: auto; padding: 2px 20px 10px; margin: 0 -20px; scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%); }
+.film::-webkit-scrollbar { display: none; }
+.film .f { scroll-snap-align: start; flex: 0 0 132px; }
+.film .f .im {
+  height: 132px; border-radius: 16px; overflow: hidden; position: relative; background: var(--fill);
+  box-shadow: var(--shadow-sm);
+}
+.film .f .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.film .f .im .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-3); }
+.film .f .im .ph svg { width: 22px; height: 22px; }
+.film .f .im .st {
+  position: absolute; left: 8px; bottom: 8px; font-size: 9px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff;
+}
+.film .f .im .st.fin { background: var(--accent); }
+.film .f .cap { margin-top: 6px; font-size: 10.5px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- action bar: the one next step ---------- */
+.actbar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--sep); border-radius: 24px 24px 0 0;
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+  display: flex; gap: 10px;
+}
+.actbar .primary {
+  flex: 1; border: 0; border-radius: 16px; padding: 15px; cursor: pointer;
+  background: var(--accent); color: #fff; font: 600 15px "Inter", sans-serif;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .15s var(--ease);
+}
+.actbar .primary:active { transform: scale(.97); }
+.actbar .ghost2 {
+  width: 52px; border: 0; border-radius: 16px; cursor: pointer;
+  background: var(--card); color: var(--label); box-shadow: var(--shadow-sm);
+  display: grid; place-items: center; font-size: 17px;
+  transition: transform .15s var(--ease);
+}
+.actbar .ghost2:active { transform: scale(.93); }
+
+/* entrances */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .3s var(--ease) both; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .1s; } .d3 { animation-delay: .15s; }
+.d4 { animation-delay: .2s; } .d5 { animation-delay: .25s; } .d6 { animation-delay: .3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+    <!-- ── HERO: the finished piece (or the style reference) ── -->
+    <div class="hero rise">
+      <img id="heroImg" src="" alt="" />
+      <div class="ph" id="heroPh" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.8 17.2 4.2-4.2 2.8 2.8 3.2-3.2 2.2 2.2"/></svg>
+      </div>
+      <div class="fabs">
+        <a href="jobs-concept-4-rail-v2.html" aria-label="Back to jobs">‹</a>
+        <div class="side">
+          <span class="tag" id="heroTag">In progress</span>
+          <button id="themeBtn" aria-label="Toggle theme" title="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 12 4 8.2"/><path d="M12 12l8-3.8"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── THE WORK ORDER ── -->
+    <section class="sheet rise d1">
+      <p class="kicker">Order file · Sep 9</p>
+      <h1 id="desc">Gown — purple lace, puff sleeves</h1>
+      <div class="who">
+        <div class="avatar" id="av">K</div>
+        <div class="nm"><b id="subj">Kamsi</b><small id="ph">+234 803 555 0123</small></div>
+        <a href="#" aria-label="Call" title="Call">✆</a>
+        <a href="#" aria-label="Message" title="Message">✉</a>
+      </div>
+      <div class="meta">
+        <div><small>Due</small><b class="due" id="due">2 Oct</b></div>
+        <div><small>Price</small><b id="price">₦85,000</b></div>
+        <div><small>Balance</small><b class="due" id="bal">₦30,000</b></div>
+      </div>
+    </section>
+
+    <!-- ── THE TAPE: measurements ── -->
+    <section class="sec rise d2">
+      <div class="head"><h2>The tape</h2><span id="mcount">7 taken</span></div>
+      <div class="tape" id="tape"></div>
+    </section>
+
+    <!-- ── THE MONEY: payments + balance ── -->
+    <section class="sec rise d3">
+      <div class="head"><h2>The money</h2><span id="paycount"></span></div>
+      <div class="money">
+        <div class="row"><small>Agreed</small><b id="agreed">₦85,000</b></div>
+        <div class="row"><small>Paid so far</small><b class="good" id="paid">₦55,000</b></div>
+        <div class="row"><small>Balance to collect</small><b class="due" id="balance">₦30,000</b></div>
+        <div class="track"><i id="pbar" style="width:64.7%"></i></div>
+        <div class="pay" id="paylist"></div>
+        <button class="cta">+ Record a payment</button>
+      </div>
+    </section>
+
+    <!-- ── THE MOODBOARD: style references ── -->
+    <section class="sec rise d4">
+      <div class="head"><h2>Moodboard</h2><span id="shotcount"></span></div>
+    </section>
+    <div class="film rise d5" id="film"></div>
+
+    <p class="sec rise d6" style="font-size:11.5px;color:var(--label-3);text-align:center;line-height:1.6">
+      Fitted 9 Sep · due 2 Oct · photos update when the finished piece lands.
+    </p>
+  </div>
+
+  <!-- ── ACTION BAR: the one next step for this status ── -->
+  <nav class="actbar">
+    <button class="primary" id="act">Mark ready to collect <span>→</span></button>
+    <button class="ghost2" aria-label="Add payment" title="Add payment">＋</button>
+  </nav>
+</div>
+
+<script>
+/* ================ theme toggle (same as the app) ================ */
+const root = document.documentElement;
+if (localStorage.getItem("hig-theme") === "dark") root.classList.replace("hig-light", "hig-dark");
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const dark = root.classList.toggle("hig-dark");
+  root.classList.toggle("hig-light", !dark);
+  localStorage.setItem("hig-theme", dark ? "dark" : "light");
+});
+
+/* ================ data — mirrors GET /jobs/:id exactly ================
+   { id, customerId, customerPhone, subjectId, subjectName,
+     measurementsId, measurements: {name: value|null},
+     styleRef: [{url,alt}], finishedJob: [{url,alt}],
+     description, agreedPrice, status, dueDate, deliveredAt, createdAt,
+     payments: [{id, amount, paidAt}] }   // paidAt newest first
+   Paid = Σ payments; balance = agreed − paid. "Ready" is derived
+   (completed + no deliveredAt) exactly like the dashboard. */
+const JOB = {
+  id: "3f2a…", customerId: "c-1", customerPhone: "+234 803 555 0123",
+  subjectId: "s-1", subjectName: "Kamsi",
+  measurementsId: "m-1",
+  measurements: { chest: 40, waist: 34, hips: 44, shoulder: 18, sleeve: 24, length: 58, neck: 15 },
+  styleRef: [
+    { url: "https://picsum.photos/seed/gown-silk/900/1200", alt: "Silk gown sketch — front" },
+    { url: "https://picsum.photos/seed/gown-sleeve/900/1200", alt: "Puff sleeve detail" },
+  ],
+  finishedJob: [{ url: "https://picsum.photos/seed/gown-finished/900/1200", alt: "Finished piece" }],
+  description: "Gown — purple lace, puff sleeves",
+  agreedPrice: 85000, status: "pending",
+  dueDate: "2026-10-02", deliveredAt: null, createdAt: "2026-09-09T10:24:00.000Z",
+  payments: [
+    { id: "p-1", amount: 20000, paidAt: "2026-09-10T11:00:00.000Z" },
+    { id: "p-2", amount: 20000, paidAt: "2026-09-02T15:20:00.000Z" },
+    { id: "p-3", amount: 15000, paidAt: "2026-08-25T09:45:00.000Z" },
+  ],
+};
+const naira = (n) => "₦" + n.toLocaleString("en-US");
+const fmt = (iso) => new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+const paid = JOB.payments.reduce((s, p) => s + p.amount, 0);
+const balance = JOB.agreedPrice - paid;
+
+/* ---------- hero: finished photo wins, style reference as fallback ---------- */
+const hero = JOB.finishedJob[0] || JOB.styleRef[0];
+const heroImg = document.getElementById("heroImg");
+if (hero) { heroImg.src = hero.url; heroImg.alt = hero.alt; }
+else document.getElementById("heroPh").hidden = false;
+
+/* ---------- work order sheet ---------- */
+document.getElementById("desc").textContent = JOB.description;
+document.getElementById("subj").textContent = JOB.subjectName;
+document.getElementById("ph").textContent = JOB.customerPhone || "no phone on file";
+document.getElementById("av").textContent = (JOB.subjectName || "•").split(/\s+/).map(w => w[0]).slice(0,2).join("").toUpperCase();
+document.getElementById("due").textContent = JOB.dueDate ? fmt(JOB.dueDate) : "no due date";
+document.getElementById("price").textContent = naira(JOB.agreedPrice);
+document.getElementById("bal").textContent = naira(balance);
+document.getElementById("heroTag").textContent = "In progress";
+
+/* ---------- the tape ---------- */
+const tape = document.getElementById("tape");
+const units = { chest: "in", waist: "in", hips: "in", shoulder: "in", sleeve: "in", length: "in", neck: "in" };
+document.getElementById("mcount").textContent = Object.keys(JOB.measurements).length + " taken";
+tape.innerHTML = Object.entries(JOB.measurements).map(([k, v]) => `
+  <div class="m ${v === null ? "null" : ""}">
+    <small>${k}</small>
+    <b>${v === null ? "not taken" : v + ` <em>${units[k] || "in"}</em>`}</b>
+  </div>`).join("");
+
+/* ---------- the money ---------- */
+document.getElementById("agreed").textContent = naira(JOB.agreedPrice);
+document.getElementById("paid").textContent = naira(paid);
+document.getElementById("balance").textContent = naira(balance);
+document.getElementById("pbar").style.width = Math.min(100, (paid / JOB.agreedPrice) * 100).toFixed(1) + "%";
+document.getElementById("paycount").textContent = JOB.payments.length + " payments";
+document.getElementById("paylist").innerHTML = JOB.payments.map(p => `
+  <div class="p"><span class="dot"></span>
+    <div class="d">Payment<small>${fmt(p.paidAt)}</small></div>
+    <b>${naira(p.amount)}</b>
+  </div>`).join("");
+
+/* ---------- moodboard: every shot, style first then finished ---------- */
+const shots = [
+  ...JOB.styleRef.map((s) => ({ ...s, kind: "style" })),
+  ...JOB.finishedJob.map((s) => ({ ...s, kind: "finished" })),
+];
+document.getElementById("shotcount").textContent = shots.length + " shots";
+document.getElementById("film").innerHTML = shots.map((s, i) => `
+  <div class="f">
+    <div class="im">
+      ${s.url ? `<img src="${s.url}" alt="${s.alt}" loading="lazy" />`
+        : `<div class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.8 17.2 4.2-4.2 2.8 2.8 3.2-3.2 2.2 2.2"/></svg></div>`}
+      <span class="st ${s.kind === "finished" ? "fin" : ""}">${s.kind === "finished" ? "Finished" : "Style " + (i + 1)}</span>
+    </div>
+    <div class="cap">${s.alt}</div>
+  </div>`).join("");
+</script>
+</body>
+</html>

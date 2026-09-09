@@ -87,6 +87,10 @@ export interface Job {
   subjectId: string;
   measurementId: string;
   subjectName?: string;
+  /** Present on the single-job read (GET /jobs/:id) — the customer's phone. */
+  customerPhone?: string | null;
+  /** Present on the single-job read — the fitting snapshot as name→value. */
+  measurements?: Record<string, number | null>;
   styleRef: JobImage[];
   finishedJob: JobImage[];
   description: string;

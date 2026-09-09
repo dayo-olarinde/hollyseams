@@ -62,11 +62,22 @@ function formatDueDate(value: string | null | undefined): string {
 const isPending = (j: Job) => j.status === "pending";
 const isReady = (j: Job) => j.status === "completed" && !j.deliveredAt;
 const isDelivered = (j: Job) => j.status === "completed" && !!j.deliveredAt;
+
+/* The pg `date` column serializes as ISO ("2026-09-24T00:00:00.000Z");
+   appending "T00:00:00" to that yields Invalid Date, so parse both shapes
+   before comparing (the detail page shares this helper's logic). */
+function parseDay(value: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return NaN;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
 const isOverdue = (j: Job) =>
   isPending(j) &&
   !!j.dueDate &&
-  new Date(j.dueDate + "T00:00:00").getTime() <
-    new Date(new Date().toDateString()).getTime();
+  Number.isFinite(parseDay(j.dueDate)) &&
+  parseDay(j.dueDate) < new Date(new Date().toDateString()).getTime();
 
 /* ---------------------------------- icons ---------------------------------- */
 
@@ -116,6 +127,7 @@ function IconPhoto() {
  * the garment description underneath, and the price + status pill at the foot.
  */
 function JobCard({ job }: { job: Job }) {
+  const router = useRouter();
   const overdue = isOverdue(job);
   const ready = isReady(job);
   const delivered = isDelivered(job);
@@ -163,8 +175,21 @@ function JobCard({ job }: { job: Job }) {
   const photos = [...stylePhotos, ...finishedPhotos];
   const cover = finishedPhotos[0] ?? stylePhotos[0];
 
+  /* the whole card is the tap target → /jobs/:id (the Inspection screen) */
   return (
-    <div className="flex overflow-hidden rounded-[20px] bg-[var(--hig-card)] shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)]">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open job: ${job.description || "Garment"} for ${job.subjectName ?? "the client"}`}
+      onClick={() => router.push(`/jobs/${job.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/jobs/${job.id}`);
+        }
+      }}
+      className="flex cursor-pointer overflow-hidden rounded-[20px] bg-[var(--hig-card)] shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)] transition-transform duration-200 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
+    >
       {/* photo strip — flush with the card's left edge, spans the full height */}
       <div className="relative w-1/3 min-h-[112px] shrink-0 self-stretch overflow-hidden bg-[var(--hig-fill)]">
         {cover ? (

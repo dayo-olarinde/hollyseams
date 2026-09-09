@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en" class="hig-light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Job — Concept 2 · The Order File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   HOLLYSEAMS JOB — CONCEPT 2 · THE ORDER FILE
+   A dossier, iOS-style: no full-bleed drama. The photo is a
+   composed banner, and everything below is grouped, scannable
+   "file cards" — the order's vital stats, the client, the tape,
+   the money — each an inset rounded group with hairline rows,
+   exactly how iOS presents a record you need to read fast.
+
+   Data comes from GET /jobs/:id exactly:
+     subjectName, customerPhone, description, agreedPrice,
+     status, dueDate, deliveredAt, createdAt,
+     measurements: {name: value|null}, styleRef: [{url,alt}],
+     finishedJob: [{url,alt}], payments: [{amount, paidAt}]
+   No backend changes were needed to build this screen.
+
+   HIG playbook: Inter, iOS surfaces, 8pt grid, one blue accent,
+   semantic status colours, flat fills, light + dark,
+   reduced-motion safe. Dashed hairlines echo the app's
+   "stitched seam" motif.
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F2F2F7; --card: #FFFFFF; --fill: #E9E9EB;
+  --label: #000000; --label-2: rgba(60,60,67,.60); --label-3: rgba(60,60,67,.30);
+  --sep: rgba(60,60,67,.12);
+  --accent: #007AFF; --accent-soft: rgba(0,122,255,.12); --accent-line: rgba(0,122,255,.35);
+  --bar: rgba(255,255,255,.74);
+  --ok: #34C759; --ok-tint: rgba(52,199,89,.14);
+  --warn: #FF9500; --warn-tint: rgba(255,149,0,.14);
+  --danger: #FF3B30; --danger-tint: rgba(255,59,48,.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --ease: cubic-bezier(.4,0,.2,1);
+}
+.hig-dark {
+  --bg: #000000; --card: #1C1C1E; --fill: #2C2C2E;
+  --label: #FFFFFF; --label-2: rgba(235,235,245,.60); --label-3: rgba(235,235,245,.30);
+  --sep: rgba(84,84,88,.50);
+  --accent: #0A84FF; --accent-soft: rgba(10,132,255,.20); --accent-line: rgba(10,132,255,.45);
+  --bar: rgba(22,22,24,.76);
+  --ok: #30D158; --ok-tint: rgba(48,209,88,.16);
+  --warn: #FF9F0A; --warn-tint: rgba(255,159,10,.16);
+  --danger: #FF453A; --danger-tint: rgba(255,69,58,.16);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3); --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+}
+html, body { -webkit-font-smoothing: antialiased; }
+body {
+  min-height: 100vh; background: #D8D8DC;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--label); display: flex; align-items: stretch; justify-content: center;
+}
+.hig-dark body { background: #050505; }
+.phone { width: 100%; max-width: 430px; background: var(--bg); position: relative; overflow: hidden; transition: background .25s var(--ease); }
+.scroll { height: 100vh; overflow-y: auto; padding-bottom: 150px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- chrome: back + screen title + theme toggle ---------- */
+.chrome {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px 0; pointer-events: none;
+}
+.chrome a, .chrome button {
+  pointer-events: auto; width: 44px; height: 44px; border-radius: 999px;
+  display: grid; place-items: center; border: 0; cursor: pointer;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--shadow-sm); color: var(--label); font-size: 17px; text-decoration: none;
+}
+.chrome button svg { width: 18px; height: 18px; }
+.chrome h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; pointer-events: auto; }
+
+/* ---------- the banner: composed photo card, not full-bleed ---------- */
+.banner { margin: 84px 20px 0; position: relative; }
+.banner .im {
+  height: 230px; border-radius: 24px; overflow: hidden; position: relative;
+  background: var(--fill); box-shadow: var(--shadow-md);
+}
+.banner .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner .im .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-3); }
+.banner .im .ph svg { width: 40px; height: 40px; }
+.banner .im::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); border-radius: inherit; }
+.banner .tag {
+  position: absolute; top: 12px; left: 12px; padding: 6px 12px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.banner .tag.over { background: var(--danger); }
+.banner .tag.ok { background: var(--ok); }
+.banner .tag.ready { background: var(--warn); }
+.banner .tag.fin { background: var(--accent); }
+.banner .count {
+  position: absolute; bottom: 12px; right: 12px; padding: 5px 10px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+
+/* ---------- dossier head: who, what, when ---------- */
+.doss { margin: 18px 20px 0; }
+.doss h2 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; }
+.doss .who { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+.doss .who .avatar {
+  width: 42px; height: 42px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 14px; font-weight: 600; background: var(--accent-soft); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.doss .who .nm { flex: 1; min-width: 0; }
+.doss .who .nm b { display: block; font-size: 15px; font-weight: 600; }
+.doss .who .nm small { font-size: 12.5px; color: var(--label-2); }
+.doss .who a {
+  width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); text-decoration: none; font-size: 17px;
+}
+
+/* ---------- grouped file cards (iOS inset groups) ---------- */
+.group { margin: 22px 20px 0; }
+.group > .g-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 8px; }
+.group > .g-head h3 { font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--label-2); }
+.group > .g-head span { font-size: 12px; color: var(--label-3); font-variant-numeric: tabular-nums; }
+.file {
+  background: var(--card); border-radius: 20px; box-shadow: var(--shadow-sm);
+  padding: 0 16px; overflow: hidden;
+}
+.file .row { display: flex; align-items: center; gap: 12px; padding: 13px 0; min-height: 48px; }
+.file .row + .row { border-top: 1px dashed var(--sep); }
+.file .row .lbl { flex: 1; font-size: 14px; font-weight: 500; color: var(--label); }
+.file .row .val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--label); }
+.file .row .val.dim { color: var(--label-3); font-weight: 500; }
+.file .row .val.due { color: var(--warn); }
+.file .row .val.over { color: var(--danger); }
+.file .row .val.good { color: var(--ok); }
+/* small status pill as a trailing value */
+.pill { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .03em; }
+.pill.work { background: var(--warn-tint); color: var(--warn); }
+.pill.ok { background: var(--ok-tint); color: var(--ok); }
+.pill.fin { background: var(--accent-soft); color: var(--accent); }
+.pill.over { background: var(--danger-tint); color: var(--danger); }
+.pill.gray { background: var(--fill); color: var(--label-2); }
+
+/* ---------- the tape: measurements as file rows ---------- */
+.tape .row { padding: 11px 0; min-height: 44px; }
+.tape .row .lbl { font-size: 13.5px; font-weight: 500; color: var(--label-2); text-transform: capitalize; }
+.tape .row .val { font-size: 15px; font-weight: 600; }
+.tape .row .val em { font-style: normal; font-size: 11px; font-weight: 500; color: var(--label-3); margin-left: 3px; }
+
+/* ---------- the money ---------- */
+.money .track { height: 6px; border-radius: 999px; background: var(--fill); overflow: hidden; margin: 4px 0 12px; }
+.money .track i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.money .pay { margin: 0 -16px; padding: 0 16px; }
+.money .pay .p { display: flex; align-items: center; gap: 10px; padding: 11px 0; }
+.money .pay .p + .p { border-top: 1px dashed var(--sep); }
+.money .pay .p .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--ok); flex-shrink: 0; }
+.money .pay .p .d { flex: 1; font-size: 13.5px; font-weight: 500; }
+.money .pay .p .d small { display: block; font-size: 11px; color: var(--label-2); margin-top: 1px; }
+.money .pay .p b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- photo tiles ---------- */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 20px; }
+.tiles .t { position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: var(--fill); box-shadow: var(--shadow-sm); }
+.tiles .t img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tiles .t .ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--label-3); }
+.tiles .t .ph svg { width: 22px; height: 22px; }
+.tiles .t .st {
+  position: absolute; left: 8px; bottom: 8px; font-size: 9px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff;
+}
+.tiles .t .st.fin { background: var(--accent); }
+.tiles .t.all { grid-column: 1 / -1; aspect-ratio: 16 / 7.5; }
+
+/* ---------- action bar ---------- */
+.actbar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--sep); border-radius: 24px 24px 0 0;
+  padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+  display: flex; gap: 10px;
+}
+.actbar .primary {
+  flex: 1; border: 0; border-radius: 16px; padding: 15px; cursor: pointer;
+  background: var(--accent); color: #fff; font: 600 15px "Inter", sans-serif;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .15s var(--ease);
+}
+.actbar .primary:active { transform: scale(.97); }
+.actbar .ghost2 {
+  width: 52px; border: 0; border-radius: 16px; cursor: pointer;
+  background: var(--card); color: var(--label); box-shadow: var(--shadow-sm);
+  display: grid; place-items: center; font-size: 17px;
+  transition: transform .15s var(--ease);
+}
+.actbar .ghost2:active { transform: scale(.93); }
+
+/* entrances */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .3s var(--ease) both; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .1s; } .d3 { animation-delay: .15s; }
+.d4 { animation-delay: .2s; } .d5 { animation-delay: .25s; } .d6 { animation-delay: .3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="phone">
+  <!-- ── chrome: back, screen name, theme toggle ── -->
+  <div class="chrome">
+    <a href="jobs-concept-4-rail-v2.html" aria-label="Back to jobs">‹</a>
+    <h1>Order file</h1>
+    <button id="themeBtn" aria-label="Toggle theme" title="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 12 4 8.2"/><path d="M12 12l8-3.8"/></svg></button>
+  </div>
+
+  <div class="scroll">
+    <!-- ── THE BANNER: finished photo wins, style reference falls back ── -->
+    <div class="banner rise">
+      <div class="im">
+        <img id="bannerImg" src="" alt="" />
+        <div class="ph" id="bannerPh" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.8 17.2 4.2-4.2 2.8 2.8 3.2-3.2 2.2 2.2"/></svg>
+        </div>
+        <span class="tag" id="bannerTag">In progress</span>
+        <span class="count" id="bannerCount"></span>
+      </div>
+    </div>
+
+    <!-- ── DOSSIER HEAD: what it is, who it's for ── -->
+    <div class="doss rise d1">
+      <h2 id="desc">Gown — purple lace, puff sleeves</h2>
+      <div class="who">
+        <div class="avatar" id="av">K</div>
+        <div class="nm"><b id="subj">Kamsi</b><small id="ph">+234 803 555 0123</small></div>
+        <a href="#" aria-label="Call" title="Call">✆</a>
+        <a href="#" aria-label="Message" title="Message">✉</a>
+      </div>
+    </div>
+
+    <!-- ── FILE: the order's vital stats ── -->
+    <section class="group rise d2">
+      <div class="g-head"><h3>The order</h3><span id="ordRef">ref 3f2a…</span></div>
+      <div class="file">
+        <div class="row"><span class="lbl">Status</span><span class="pill work" id="rowPill">In progress</span></div>
+        <div class="row"><span class="lbl">Placed</span><span class="val" id="placed">9 Sep</span></div>
+        <div class="row"><span class="lbl">Due</span><span class="val due" id="due">2 Oct</span></div>
+        <div class="row"><span class="lbl">Delivered</span><span class="val dim" id="deliv">—</span></div>
+      </div>
+    </section>
+
+    <!-- ── FILE: the tape (measurements) ── -->
+    <section class="group rise d3">
+      <div class="g-head"><h3>The tape</h3><span id="mcount">7 taken</span></div>
+      <div class="file tape" id="tape"></div>
+    </section>
+
+    <!-- ── FILE: the money ── -->
+    <section class="group rise d4">
+      <div class="g-head"><h3>The money</h3><span id="paycount"></span></div>
+      <div class="file money">
+        <div class="row"><span class="lbl">Agreed</span><span class="val" id="agreed">₦85,000</span></div>
+        <div class="row"><span class="lbl">Paid so far</span><span class="val good" id="paid">₦55,000</span></div>
+        <div class="row"><span class="lbl">Balance</span><span class="val due" id="balance">₦30,000</span></div>
+        <div class="track"><i id="pbar" style="width:64.7%"></i></div>
+        <div class="pay" id="paylist"></div>
+      </div>
+    </section>
+
+    <!-- ── PHOTOS: the full set, style + finished ── -->
+    <section class="group rise d5">
+      <div class="g-head"><h3>Photos</h3><span id="shotcount"></span></div>
+    </section>
+    <div class="tiles rise d6" id="tiles"></div>
+
+    <p class="group" style="font-size:11.5px;color:var(--label-3);text-align:center;line-height:1.6">
+      Fitted 9 Sep · due 2 Oct · photos update when the finished piece lands.
+    </p>
+  </div>
+
+  <!-- ── ACTION BAR ── -->
+  <nav class="actbar">
+    <button class="primary" id="act">Mark ready to collect <span>→</span></button>
+    <button class="ghost2" aria-label="Add payment" title="Add payment">＋</button>
+  </nav>
+</div>
+
+<script>
+/* ================ theme toggle ================ */
+const root = document.documentElement;
+if (localStorage.getItem("hig-theme") === "dark") root.classList.replace("hig-light", "hig-dark");
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const dark = root.classList.toggle("hig-dark");
+  root.classList.toggle("hig-light", !dark);
+  localStorage.setItem("hig-theme", dark ? "dark" : "light");
+});
+
+/* ================ data — mirrors GET /jobs/:id exactly ================
+   { id, customerId, customerPhone, subjectId, subjectName,
+     measurementsId, measurements: {name: value|null},
+     styleRef: [{url,alt}], finishedJob: [{url,alt}],
+     description, agreedPrice, status, dueDate, deliveredAt, createdAt,
+     payments: [{id, amount, paidAt}] }   // paidAt newest first
+   Paid = Σ payments; balance = agreed − paid. "Ready" is derived
+   (completed + no deliveredAt) exactly like the dashboard. */
+const JOB = {
+  id: "3f2a…", customerId: "c-1", customerPhone: "+234 803 555 0123",
+  subjectId: "s-1", subjectName: "Kamsi",
+  measurementsId: "m-1",
+  measurements: { chest: 40, waist: 34, hips: 44, shoulder: 18, sleeve: 24, length: 58, neck: 15 },
+  styleRef: [
+    { url: "https://picsum.photos/seed/gown-silk/900/1200", alt: "Silk gown sketch — front" },
+    { url: "https://picsum.photos/seed/gown-sleeve/900/1200", alt: "Puff sleeve detail" },
+  ],
+  finishedJob: [{ url: "https://picsum.photos/seed/gown-finished/900/1200", alt: "Finished piece" }],
+  description: "Gown — purple lace, puff sleeves",
+  agreedPrice: 85000, status: "pending",
+  dueDate: "2026-10-02", deliveredAt: null, createdAt: "2026-09-09T10:24:00.000Z",
+  payments: [
+    { id: "p-1", amount: 20000, paidAt: "2026-09-10T11:00:00.000Z" },
+    { id: "p-2", amount: 20000, paidAt: "2026-09-02T15:20:00.000Z" },
+    { id: "p-3", amount: 15000, paidAt: "2026-08-25T09:45:00.000Z" },
+  ],
+};
+const naira = (n) => "₦" + n.toLocaleString("en-US");
+const fmt = (iso) => new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+const paid = JOB.payments.reduce((s, p) => s + p.amount, 0);
+const balance = JOB.agreedPrice - paid;
+
+/* ---------- banner: finished photo wins, style reference falls back ---------- */
+const hero = JOB.finishedJob[0] || JOB.styleRef[0];
+const bannerImg = document.getElementById("bannerImg");
+if (hero) { bannerImg.src = hero.url; bannerImg.alt = hero.alt; }
+else document.getElementById("bannerPh").hidden = false;
+document.getElementById("bannerCount").textContent =
+  (JOB.finishedJob.length + JOB.styleRef.length) + " photos";
+
+/* ---------- dossier head ---------- */
+document.getElementById("desc").textContent = JOB.description;
+document.getElementById("subj").textContent = JOB.subjectName;
+document.getElementById("ph").textContent = JOB.customerPhone || "no phone on file";
+document.getElementById("av").textContent = (JOB.subjectName || "•").split(/\s+/).map(w => w[0]).slice(0,2).join("").toUpperCase();
+document.getElementById("ordRef").textContent = "ref " + JOB.id;
+
+/* ---------- the order file rows ---------- */
+const TAG = { pending: "In progress", ready: "Ready", delivered: "Delivered", canceled: "Canceled" };
+const tag = document.getElementById("bannerTag");
+const rowPill = document.getElementById("rowPill");
+if (JOB.status === "canceled") { tag.textContent = "Canceled"; tag.classList.add("gray"); rowPill.textContent = "Canceled"; rowPill.className = "pill gray"; }
+else if (JOB.deliveredAt) { tag.textContent = "Delivered"; tag.classList.add("fin"); rowPill.textContent = "Delivered"; rowPill.className = "pill fin"; }
+else if (JOB.status === "completed") { tag.textContent = "Ready"; tag.classList.add("ready"); rowPill.textContent = "Ready"; rowPill.className = "pill ok"; }
+else if (new Date(JOB.dueDate) < new Date()) { tag.textContent = "Overdue"; tag.classList.add("over"); rowPill.textContent = "Overdue"; rowPill.className = "pill over"; }
+else { tag.textContent = "In progress"; rowPill.textContent = "In progress"; }
+document.getElementById("placed").textContent = fmt(JOB.createdAt);
+document.getElementById("due").textContent = JOB.dueDate ? fmt(JOB.dueDate) : "no due date";
+const deliv = document.getElementById("deliv");
+if (JOB.deliveredAt) { deliv.textContent = fmt(JOB.deliveredAt); deliv.classList.remove("dim"); deliv.classList.add("good"); }
+
+/* ---------- the tape ---------- */
+const tape = document.getElementById("tape");
+const units = { chest: "in", waist: "in", hips: "in", shoulder: "in", sleeve: "in", length: "in", neck: "in" };
+document.getElementById("mcount").textContent = Object.keys(JOB.measurements).length + " taken";
+tape.innerHTML = Object.entries(JOB.measurements).map(([k, v]) => `
+  <div class="row">
+    <span class="lbl">${k}</span>
+    <span class="val ${v === null ? "dim" : ""}">${v === null ? "not taken" : v + ` <em>${units[k] || "in"}</em>`}</span>
+  </div>`).join("");
+
+/* ---------- the money ---------- */
+document.getElementById("agreed").textContent = naira(JOB.agreedPrice);
+document.getElementById("paid").textContent = naira(paid);
+document.getElementById("balance").textContent = naira(balance);
+document.getElementById("pbar").style.width = Math.min(100, (paid / JOB.agreedPrice) * 100).toFixed(1) + "%";
+document.getElementById("paycount").textContent = JOB.payments.length + " payments";
+document.getElementById("paylist").innerHTML = JOB.payments.map(p => `
+  <div class="p"><span class="dot"></span>
+    <div class="d">Payment<small>${fmt(p.paidAt)}</small></div>
+    <b>${naira(p.amount)}</b>
+  </div>`).join("");
+
+/* ---------- photos ---------- */
+const shots = [
+  ...JOB.styleRef.map((s) => ({ ...s, kind: "style" })),
+  ...JOB.finishedJob.map((s) => ({ ...s, kind: "finished" })),
+];
+document.getElementById("shotcount").textContent = shots.length + " shots";
+document.getElementById("tiles").innerHTML = shots.map((s, i) => `
+  <div class="t ${shots.length === 1 ? "all" : ""}">
+    ${s.url ? `<img src="${s.url}" alt="${s.alt}" loading="lazy" />`
+      : `<div class="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m5.8 17.2 4.2-4.2 2.8 2.8 3.2-3.2 2.2 2.2"/></svg></div>`}
+    <span class="st ${s.kind === "finished" ? "fin" : ""}">${s.kind === "finished" ? "Finished" : "Style " + (i + 1)}</span>
+  </div>`).join("");
+</script>
+</body>
+</html>

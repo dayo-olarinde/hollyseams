@@ -4,10 +4,12 @@
  * Toast — confirmation toasts (Apple HIG theme).
  *
  * A tiny context-based toast system: `useToast()` returns `show({ title,
- * detail })` and the provider renders the queue anchored to the phone-width
- * column, just above the tab bar. Styling follows the HIG design system —
- * Inter type, iOS card surface, success-green stitched (dashed) ring that
- * keeps the sewing motif. Toasts auto-dismiss after 3.6s or on ✕.
+ * detail })` and the provider renders the queue at the TOP of the phone-
+ * width column (below the status bar / safe area) so confirmations are
+ * seen immediately — a bottom position put them right where the thumb
+ * scrolls. Styling follows the HIG design system — Inter type, iOS card
+ * surface, success-green stitched (dashed) ring that keeps the sewing
+ * motif. Toasts auto-dismiss after 3.6s or on ✕.
  */
 import {
   createContext,
@@ -54,9 +56,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ show }}>
       {children}
 
-      {/* fixed to the phone-width column like the FAB + tab bar */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[108px] z-[60]">
-        <div className="mx-auto w-full max-w-[430px] space-y-2 px-4">
+      {/* fixed to the top of the phone-width column — below the safe area,
+          above every screen header (z-60 beats the sticky chrome's z-30) */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-[60]">
+        <div className="mx-auto w-full max-w-[430px] space-y-2 px-4 pt-[calc(10px+env(safe-area-inset-top))]">
           {items.map((t) => (
             <div
               key={t.id}

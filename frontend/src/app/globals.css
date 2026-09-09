@@ -72,7 +72,8 @@
   }
 
   @keyframes toast-in {
-    from { opacity: 0; transform: translateY(14px) scale(0.96); }
+    /* drops from above — toasts live at the top of the screen */
+    from { opacity: 0; transform: translateY(-14px) scale(0.96); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
 }
