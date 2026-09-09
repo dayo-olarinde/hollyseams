@@ -301,6 +301,13 @@ export async function createMeasurement(
 export async function listJobs(params?: JobsQuery) {
   return request<Job[], PaginationMeta>({ url: "/jobs", params });
 }
+/** One customer's jobs (GET /customers/:id/jobs) — same shape + status filter as /jobs. */
+export async function listCustomerJobs(customerId: string, params?: JobsQuery) {
+  return request<Job[], PaginationMeta>({
+    url: `/customers/${customerId}/jobs`,
+    params,
+  });
+}
 export async function getJob(id: string) {
   return request<Job>({ url: `/jobs/${id}` });
 }

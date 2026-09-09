@@ -172,6 +172,9 @@ function milestones(j: Job): Milestone[] {
   } else {
     ms.push({ label: "On the bench", sub: "in progress", state: "now", tag: "now" });
   }
+  /* "Ready to collect" is the derived state the whole app shares:
+     completed + no deliveredAt. Its date sub-line shows the delivery
+     date once set; until then the milestone itself is the "now" node. */
   ms.push({
     label: "Ready to collect",
     sub: delivered ? fmtISO(j.deliveredAt!) : "—",
@@ -369,7 +372,12 @@ function PaymentSheet({
       setError(err instanceof Error ? err.message : "Could not record the payment."),
   });
 
-  /* reset on open; Escape + scroll lock like the New Job sheet */
+  /* Reset-on-open WITHOUT useEffect — a deliberately subtle pattern:
+     this block runs DURING render (not after paint), so the sheet always
+     opens with a clean amount/date BEFORE the slide-up animation shows,
+     with zero flicker of stale values. `wasOpen` remembers the previous
+     open state across renders; the scroll lock pairs with it so closing
+     always restores page scrolling exactly once. */
   const [wasOpen, setWasOpen] = useState(false);
   if (open && !wasOpen) {
     setWasOpen(true);
@@ -648,6 +656,9 @@ export default function JobDetailPage() {
      right slot stays dashed until the finished shots exist */
   const ref = job?.styleRef?.[0];
   const fin = job?.finishedJob?.[0];
+  /* shots = every photo the job carries, used for the caption fallback
+     ("will appear here") once ANY photo exists but the finished slot is
+     still empty */
   const shots = (job?.styleRef ?? []).length + (job?.finishedJob ?? []).length;
 
   const rails = useMemo(() => (job ? milestones(job) : []), [job]);
@@ -661,6 +672,9 @@ export default function JobDetailPage() {
           <button
             type="button"
             aria-label="Back to jobs"
+            /* router.back() when we arrived via a link (keeps the list's
+               scroll position); a hard push only as a fallback when the
+               history is empty (direct URL load). */
             onClick={() => (window.history.length > 1 ? router.back() : router.push("/jobs"))}
             className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-[var(--hig-accent)] transition-transform duration-200 active:scale-90"
           >
@@ -733,15 +747,26 @@ export default function JobDetailPage() {
               {job.customerPhone && (
                 /* tel: opens the native dialer with the number pre-filled —
                    strip everything but digits and an optional leading + so
-                   spaces/dashes/braces can't break the URI */
+                   spaces/dashes/braces can't break the URI. The button is a
+                   BARE accent icon (no bg circle) on a 44px hit area. */
                 <a
                   href={`tel:${job.customerPhone.replace(/[^\d+]/g, "")}`}
                   aria-label={`Call ${job.customerPhone}`}
                   title={`Call ${job.customerPhone}`}
-                  /* 44px — HIG touch minimum (the 40px avatar next to it is decorative) */
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-[var(--hig-accent-tint)] text-[15px] text-[var(--hig-accent)] transition-transform duration-200 active:scale-90"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center text-[var(--hig-accent)] transition-transform duration-200 active:scale-90"
                 >
-                  ✆
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-7 w-7"
+                    aria-hidden="true"
+                  >
+                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2Z" />
+                  </svg>
                 </a>
               )}
             </div>

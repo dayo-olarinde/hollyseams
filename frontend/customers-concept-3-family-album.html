@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en" class="hig-light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Customers — Concept 3 · The Family Album</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   HOLLYSEAMS CUSTOMERS — CONCEPT 3 · THE FAMILY ALBUM
+   Households first. A client is rarely one person — the self
+   subject, a daughter, a son. Each card is a family: the
+   client's balance on the right, their people as tinted chips
+   underneath, so a glance answers "who do I sew for here?"
+
+   DATA (mirrors the real endpoints exactly):
+     GET /customers?limit&cursor          → { id, name, phoneNumber }[]
+                                            ASC(name) — alphabetical.
+     GET /customers/:id/subjects?limit    → { id, name, relationship,
+                                            createdAt }[] — newest first;
+                                            the SELF subject carries the
+                                            customer's own name (that is
+                                            how the backend stores it).
+     GET /subjects/:id/measurements?limit=1 → newest fitting per subject
+                                            (lazy companion reads — the
+                                            \"fitted 9 Sep\" notes).
+     GET /reports/outstanding-payments    → balances per customer.
+   The lazy measurement reads are exactly what the New Job modal
+   already does (listMeasurements limit 1) — no new endpoints.
+
+   HIG playbook: Inter, iOS surfaces, 8pt grid, one blue accent,
+   semantic status colours, flat fills, light + dark, reduced
+   motion. Hue-tinted chips: one person, one colour (avatar-colors).
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F2F2F7; --card: #FFFFFF; --fill: #E9E9EB;
+  --label: #000000; --label-2: rgba(60,60,67,.60); --label-3: rgba(60,60,67,.30);
+  --sep: rgba(60,60,67,.12);
+  --accent: #007AFF; --accent-soft: rgba(0,122,255,.12); --accent-line: rgba(0,122,255,.35);
+  --bar: rgba(255,255,255,.74);
+  --ok: #34C759; --ok-tint: rgba(52,199,89,.14);
+  --warn: #FF9500; --warn-tint: rgba(255,149,0,.14);
+  --danger: #FF3B30; --danger-tint: rgba(255,59,48,.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --ease: cubic-bezier(.4,0,.2,1);
+}
+.hig-dark {
+  --bg: #000000; --card: #1C1C1E; --fill: #2C2C2E;
+  --label: #FFFFFF; --label-2: rgba(235,235,245,.60); --label-3: rgba(235,235,245,.30);
+  --sep: rgba(84,84,88,.50);
+  --accent: #0A84FF; --accent-soft: rgba(10,132,255,.20); --accent-line: rgba(10,132,255,.45);
+  --bar: rgba(22,22,24,.76);
+  --ok: #30D158; --ok-tint: rgba(48,209,88,.16);
+  --warn: #FF9F0A; --warn-tint: rgba(255,159,10,.16);
+  --danger: #FF453A; --danger-tint: rgba(255,69,58,.16);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3); --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+}
+html, body { -webkit-font-smoothing: antialiased; }
+body {
+  min-height: 100vh; background: #D8D8DC;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--label); display: flex; align-items: stretch; justify-content: center;
+}
+.hig-dark body { background: #050505; }
+.phone { width: 100%; max-width: 430px; background: var(--bg); position: relative; overflow: hidden; transition: background .25s var(--ease); }
+.scroll { height: 100vh; overflow-y: auto; padding-bottom: 160px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ---------- chrome ---------- */
+.chrome {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px 10px; pointer-events: none;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.chrome .word { font-size: 20px; font-weight: 500; letter-spacing: -.02em; pointer-events: auto; }
+.chrome .word b { color: var(--accent); font-weight: 500; }
+.chrome button {
+  pointer-events: auto; width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--card); box-shadow: var(--shadow-sm); color: var(--label);
+  display: grid; place-items: center;
+}
+.chrome button svg { width: 18px; height: 18px; }
+
+/* ---------- head ---------- */
+.head { padding: 8px 20px 0; }
+.head .date { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--label-2); }
+.head h1 { margin-top: 2px; font-size: 34px; font-weight: 500; letter-spacing: -.02em; line-height: 41px; }
+.head h1 span { color: var(--accent); }
+.head .sub { margin-top: 4px; font-size: 13px; color: var(--label-2); }
+
+/* ---------- stat strip ---------- */
+.stats { margin: 18px 20px 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.stats .st { background: var(--card); border-radius: 18px; box-shadow: var(--shadow-sm); padding: 12px 6px; text-align: center; }
+.stats .st b { display: block; font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.stats .st b.due { color: var(--warn); }
+.stats .st b.over { color: var(--danger); }
+.stats .st b.ok { color: var(--ok); }
+.stats .st small { font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--label-3); }
+
+/* ---------- top clients (kept from overview Concept 3) ----------
+   The Top clients filmstrip from the early overview concept — the user
+   asked to keep it for this page. Re-themed to HIG: flat hue avatars
+   (no gradients), tabular money, soft edge mask for the scroll cue.
+   Data mirrors GET /reports/top-customers: { id, name, phoneNumber,
+   totalPaid, jobCount }, ordered by totalPaid DESC. */
+.topsec { margin-top: 22px; }
+.topsec .hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 20px; }
+.topsec .hd h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--label-2); }
+.topsec .hd span { font-size: 12px; color: var(--label-3); }
+.clients {
+  display: flex; gap: 10px; overflow-x: auto; padding: 8px 20px 12px;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+}
+.clients::-webkit-scrollbar { display: none; }
+.client-card {
+  flex: 0 0 150px; scroll-snap-align: start;
+  background: var(--card); border-radius: 18px; box-shadow: var(--shadow-sm);
+  padding: 13px; position: relative;
+}
+.client-rank { font-size: 9px; font-weight: 600; letter-spacing: .14em; color: var(--label-3); margin-bottom: 8px; }
+.client-rank b { color: var(--accent); font-weight: 600; }
+.client-av {
+  width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; margin-bottom: 9px;
+}
+.client-name { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.client-jobs { font-size: 9.5px; color: var(--label-3); margin-top: 2px; }
+.client-paid { margin-top: 9px; font-size: 16px; font-weight: 500; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.client-paid small { font-size: 9px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--label-3); display: block; }
+
+/* ---------- household cards ---------- */
+.hh { margin: 16px 20px 0; background: var(--card); border-radius: 20px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.hh + .hh { margin-top: 12px; }
+.hh .top { display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+.hh .av {
+  width: 46px; height: 46px; border-radius: 999px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 14.5px; font-weight: 600;
+}
+.hh .who { flex: 1; min-width: 0; }
+.hh .who b { display: block; font-size: 16px; font-weight: 500; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hh .who small { font-size: 12px; color: var(--label-2); }
+.hh .bal { text-align: right; flex-shrink: 0; }
+.hh .bal b { display: block; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hh .bal b.over { color: var(--danger); }
+.hh .bal b.due { color: var(--warn); }
+.hh .bal b.ok { color: var(--ok); }
+.hh .bal small { font-size: 9.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--label-3); }
+/* the people: tinted subject chips — one hue per person */
+.hh .chips { display: flex; gap: 8px; padding: 4px 16px 6px; overflow-x: auto; scrollbar-width: none; }
+.hh .chips::-webkit-scrollbar { display: none; }
+.hh .chip {
+  display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+  border-radius: 999px; padding: 6px 12px 6px 6px;
+  background: var(--fill); border: 1px solid transparent;
+}
+.hh .chip .mono {
+  width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 10px; font-weight: 600;
+}
+.hh .chip .who2 { min-width: 0; }
+.hh .chip .who2 b { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+.hh .chip .who2 small { font-size: 9px; color: var(--label-3); display: block; margin-top: 1px; white-space: nowrap; }
+.hh .chip .dot { width: 5px; height: 5px; border-radius: 999px; flex-shrink: 0; margin-left: 2px; }
+.hh .chip .dot.fit { background: var(--ok); }
+.hh .chip .dot.new { background: var(--accent); }
+/* foot: jobs summary + chevron */
+.hh .foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 16px 12px; border-top: 1px dashed var(--sep); margin: 0 16px 0;
+  font-size: 11.5px; color: var(--label-3);
+}
+.hh .foot b { color: var(--label-2); font-weight: 600; }
+.hh .foot .go { color: var(--accent); font-size: 13px; font-weight: 600; }
+
+/* ---------- show more + caught up ---------- */
+.more {
+  margin: 16px 20px 0; width: calc(100% - 40px); border: 0; border-radius: 16px;
+  padding: 15px; background: var(--card); color: var(--label); box-shadow: var(--shadow-sm);
+  font: 500 15px "Inter", sans-serif; cursor: pointer; transition: transform .15s var(--ease);
+}
+.more:active { transform: scale(.98); }
+.caught { margin-top: 16px; text-align: center; font-size: 11.5px; color: var(--label-3); }
+
+/* ---------- FAB + tab bar ---------- */
+.fab {
+  position: absolute; right: 20px; bottom: 78px; z-index: 11;
+  width: 56px; height: 56px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--accent); color: #fff; font-size: 24px;
+  box-shadow: 0 8px 24px rgba(0,122,255,.35); display: grid; place-items: center;
+  transition: transform .15s var(--ease);
+}
+.fab:active { transform: scale(.9); }
+.tabs {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: flex; height: 64px; padding: 0 8px calc(6px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0; background: var(--bar);
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 -8px 24px rgba(0,0,0,.06);
+}
+.tabs button {
+  flex: 1; border: 0; background: none; cursor: pointer; border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--label-3); transition: transform .15s var(--ease);
+}
+.tabs button:active { transform: scale(.95); }
+.tabs button.on { background: var(--accent-soft); color: var(--accent); }
+.tabs button svg { width: 22px; height: 22px; }
+.tabs button span { font-size: 10px; }
+.tabs button.on span { font-weight: 600; }
+
+/* entrances */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .3s var(--ease) both; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .1s; } .d3 { animation-delay: .15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="chrome">
+    <div class="word">Holly<b>Seams</b></div>
+    <button id="themeBtn" aria-label="Toggle theme" title="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 12 4 8.2"/><path d="M12 12l8-3.8"/></svg></button>
+  </div>
+
+  <div class="scroll">
+    <!-- ── head ── -->
+    <div class="head rise">
+      <p class="date">Wednesday, September 9</p>
+      <h1>The family <span>album.</span></h1>
+      <p class="sub">Every client, and the people you sew for.</p>
+    </div>
+
+    <!-- ── stat strip (derived from outstanding-payments) ── -->
+    <div class="stats rise d1">
+      <div class="st"><b class="due" id="stDue">₦308k</b><small>to collect</small></div>
+      <div class="st"><b class="over" id="stOver">₦45k</b><small>overdue</small></div>
+      <div class="st"><b id="stCust">10</b><small>households</small></div>
+    </div>
+
+    <!-- ── top clients: the filmstrip kept from overview Concept 3 ── -->
+    <section class="topsec rise d2">
+      <div class="hd"><h2>Top clients</h2><span>by amount paid</span></div>
+      <div class="clients" id="clientList"></div>
+    </section>
+
+    <!-- ── household cards ── -->
+    <div id="hhList"></div>
+
+    <button class="more rise" id="moreBtn" hidden>Show more clients</button>
+    <p class="caught" id="caught" hidden>You&apos;re all caught up — every household is here.</p>
+  </div>
+
+  <!-- ── FAB + tab bar ── -->
+  <button class="fab" aria-label="New client" title="New client">＋</button>
+  <nav class="tabs">
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z"/><path d="M9.5 20.5v-5.5h5v5.5"/></svg><span>Overview</span></button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M20 4 8.4 15.6"/><path d="m14.2 14.2 5.8 5.8"/><path d="m8.4 8.4 3.4 3.4"/></svg><span>Jobs</span></button>
+    <button class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7.5" r="3.5"/><path d="M3 20.5v-1a6 6 0 0 1 12 0v1"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.5"/><path d="M17.5 14.6a6 6 0 0 1 3.5 5.4v.5"/></svg><span>Customers</span></button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M8 17v-4"/><path d="M13 17V7"/><path d="M18 17v-7"/></svg><span>Reports</span></button>
+  </nav>
+</div>
+
+<script>
+/* ================ theme toggle ================ */
+const root = document.documentElement;
+if (localStorage.getItem("hig-theme") === "dark") root.classList.replace("hig-light", "hig-dark");
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const dark = root.classList.toggle("hig-dark");
+  root.classList.toggle("hig-light", !dark);
+  localStorage.setItem("hig-theme", dark ? "dark" : "light");
+});
+
+/* ================ data — mirrors the real endpoints ================
+   GET /customers → { id, name, phoneNumber }[]  ASC(name)
+   GET /customers/:id/subjects → { id, name, relationship,
+     createdAt }[]  (self subject = the customer's own name)
+   GET /subjects/:id/measurements?limit=1 → newest fitting date
+   GET /reports/outstanding-payments → balances per job            */
+const CUSTOMERS = [
+  { id: "c1", name: "Adaeze Okafor", phoneNumber: "+234 802 411 8820", subjects: [{ id: "s1", name: "Adaeze Okafor", relationship: "self" }, { id: "s2", name: "Chiamaka", relationship: "daughter", fitted: "2026-09-01" }] },
+  { id: "c2", name: "Bisi Adeyemi", phoneNumber: "+234 803 220 4151", subjects: [{ id: "s3", name: "Bisi Adeyemi", relationship: "self" }] },
+  { id: "c3", name: "Chidinma Eze", phoneNumber: null, subjects: [{ id: "s4", name: "Chidinma Eze", relationship: "self", fitted: "2026-08-22" }] },
+  { id: "c4", name: "Funmi Alade", phoneNumber: "+234 805 733 9084", subjects: [{ id: "s5", name: "Funmi Alade", relationship: "self" }, { id: "s6", name: "Seyi", relationship: "son", fitted: "2026-07-30" }] },
+  { id: "c5", name: "Ike Ogundipe", phoneNumber: "+234 806 118 2275", subjects: [{ id: "s7", name: "Ike", relationship: "self" }] },
+  { id: "c6", name: "Kamsi Nwosu", phoneNumber: "+234 803 555 0123", subjects: [{ id: "s8", name: "Kamsi", relationship: "self", fitted: "2026-09-08" }] },
+  { id: "c7", name: "Mummy Ike", phoneNumber: "0123456789", subjects: [{ id: "s9", name: "Mummy Ike", relationship: "self", fitted: "2026-09-09" }, { id: "s10", name: "Amara", relationship: "daughter", fitted: "2026-09-02" }] },
+  { id: "c8", name: "OmoJesu", phoneNumber: "08062300971", subjects: [{ id: "s11", name: "OmoJesu", relationship: "self", fitted: "2026-09-07" }] },
+  { id: "c9", name: "Tunde Bakare", phoneNumber: "+234 809 441 7362", subjects: [{ id: "s12", name: "Tunde Bakare", relationship: "self" }, { id: "s13", name: "Tobi", relationship: "son", fitted: "2026-08-15" }] },
+  { id: "c10", name: "Wunmi Adebayo", phoneNumber: "+234 802 977 3158", subjects: [{ id: "s14", name: "Wunmi Adebayo", relationship: "self", fitted: "2026-08-28" }] },
+];
+const OUTSTANDING = [
+  { jobId: "j1", customer: { id: "c7", name: "Mummy Ike" }, subjectName: "Mummy Ike", status: "pending", dueDate: "2026-09-24", agreedPrice: 150000, totalPaid: 1400, balanceDue: 148600 },
+  { jobId: "j2", customer: { id: "c5", name: "Ike Ogundipe" }, subjectName: "Ike", status: "pending", dueDate: "2026-09-12", agreedPrice: 70000, totalPaid: 0, balanceDue: 70000 },
+  { jobId: "j3", customer: { id: "c9", name: "Tunde Bakare" }, subjectName: "Tobi", status: "pending", dueDate: "2026-09-04", agreedPrice: 60000, totalPaid: 15000, balanceDue: 45000 },
+  { jobId: "j4", customer: { id: "c1", name: "Adaeze Okafor" }, subjectName: "Chiamaka", status: "pending", dueDate: "2026-10-01", agreedPrice: 40000, totalPaid: 28000, balanceDue: 12000 },
+  { jobId: "j5", customer: { id: "c8", name: "OmoJesu" }, subjectName: "OmoJesu", status: "completed", dueDate: "2026-09-11", agreedPrice: 6500, totalPaid: 4000, balanceDue: 2500 },
+  { jobId: "j6", customer: { id: "c6", name: "Kamsi Nwosu" }, subjectName: "Kamsi", status: "pending", dueDate: "2026-10-02", agreedPrice: 85000, totalPaid: 55000, balanceDue: 30000 },
+];
+const naira = (n) => "₦" + n.toLocaleString("en-US");
+const HUES = ["#0A84FF", "#BF5AF2", "#FF375F", "#40CBE0", "#FF9F0A", "#30D158", "#5E5CE6"];
+function hue(name) {
+  const key = (name || "").trim().toLowerCase();
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return HUES[h % HUES.length];
+}
+function initials(name) {
+  return (name || "•").split(/\s+/).filter((w) => !/^(mrs|mr|ms|dr)\.?$/i.test(w)).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "•";
+}
+const fmtDay = (iso) => new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+
+/* ================ stat strip ================ */
+const sumDue = OUTSTANDING.reduce((s, o) => s + o.balanceDue, 0);
+const sumOver = OUTSTANDING.filter((o) => o.status === "pending" && new Date(o.dueDate) < new Date()).reduce((s, o) => s + o.balanceDue, 0);
+document.getElementById("stDue").textContent = naira(Math.round(sumDue / 1000)) + "k";
+document.getElementById("stOver").textContent = naira(Math.round(sumOver / 1000)) + "k";
+document.getElementById("stCust").textContent = CUSTOMERS.length;
+
+/* ================ household cards ================ */
+const PAGE = 4;
+let page = 1;
+function renderAll() {
+  const all = [...CUSTOMERS].sort((a, b) => a.name.localeCompare(b.name));
+  const shown = all.slice(0, page * PAGE);
+  const hasMore = page * PAGE < all.length;
+  const balOf = (id) => OUTSTANDING.filter((o) => o.customer.id === id).reduce((s, o) => s + o.balanceDue, 0);
+  const jobsOf = (id) => OUTSTANDING.filter((o) => o.customer.id === id).length;
+  const overOf = (id) => OUTSTANDING.some((o) => o.customer.id === id && o.status === "pending" && new Date(o.dueDate) < new Date());
+
+  document.getElementById("hhList").innerHTML = shown.map((c) => {
+    const bal = balOf(c.id);
+    const over = overOf(c.id);
+    const jobs = jobsOf(c.id);
+    const col = bal === 0 ? "ok" : over ? "over" : "due";
+    const label = bal === 0 ? "settled" : over ? "overdue" : "to collect";
+    /* subject chips — the self subject carries the customer's name, so its
+       hue matches the big avatar: one person, one colour */
+    const chips = c.subjects.map((s) => {
+      const h = hue(s.name);
+      const note = s.fitted ? `fitted ${fmtDay(s.fitted)}` : "not fitted yet";
+      const dot = s.fitted ? "fit" : "new";
+      return `
+      <span class="chip" style="border-color:${h}33">
+        <span class="mono" style="background:${h}26;color:${h}">${initials(s.name)}</span>
+        <span class="who2"><b style="color:${h}">${s.name}</b><small>${s.relationship} · ${note}</small></span>
+        <span class="dot ${dot}" title="${s.fitted ? "has a fitting on file" : "no fitting on file"}"></span>
+      </span>`;
+    }).join("");
+    return `
+    <article class="hh rise d2">
+      <div class="top">
+        <span class="av" style="background:${hue(c.name)}26;color:${hue(c.name)};box-shadow:inset 0 0 0 1px ${hue(c.name)}4D">${initials(c.name)}</span>
+        <span class="who"><b>${c.name}</b><small>${c.phoneNumber ?? "no phone on file"}</small></span>
+        <span class="bal"><b class="${col}">${bal === 0 ? "—" : naira(bal)}</b><small>${label}</small></span>
+      </div>
+      <div class="chips">${chips}</div>
+      <div class="foot">
+        <span><b>${jobs}</b> open ${jobs === 1 ? "job" : "jobs"} · ${bal === 0 ? "nothing owing" : naira(bal) + " outstanding"}</span>
+        <span class="go">Open file ›</span>
+      </div>
+    </article>`;
+  }).join("");
+
+  document.getElementById("moreBtn").hidden = !hasMore;
+  document.getElementById("caught").hidden = hasMore;
+}
+document.getElementById("moreBtn").addEventListener("click", () => { page++; renderAll(); });
+
+/* ---------- top clients — GET /reports/top-customers shape ---------- */
+const TOP = [
+  { id: "c6", name: "Kamsi Nwosu", totalPaid: 55000, jobCount: 4 },
+  { id: "c1", name: "Adaeze Okafor", totalPaid: 28000, jobCount: 2 },
+  { id: "c9", name: "Tunde Bakare", totalPaid: 15000, jobCount: 2 },
+  { id: "c8", name: "OmoJesu", totalPaid: 4000, jobCount: 1 },
+  { id: "c7", name: "Mummy Ike", totalPaid: 1400, jobCount: 4 },
+];
+document.getElementById("clientList").innerHTML = TOP.map((t, i) => `
+  <div class="client-card">
+    <p class="client-rank">#<b>${String(i + 1).padStart(2, "0")}</b></p>
+    <span class="client-av" style="background:${hue(t.name)}26;color:${hue(t.name)};box-shadow:inset 0 0 0 1px ${hue(t.name)}4D">${initials(t.name)}</span>
+    <p class="client-name">${t.name}</p>
+    <p class="client-jobs">${t.jobCount} ${t.jobCount === 1 ? "job" : "jobs"}</p>
+    <p class="client-paid">${naira(t.totalPaid)}<small>paid</small></p>
+  </div>`).join("");
+
+renderAll();
+</script>
+</body>
+</html>

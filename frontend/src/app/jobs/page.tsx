@@ -346,7 +346,10 @@ export default function JobsPage() {
     countsQ.refetch();
   };
 
-  /* results line: loaded-vs-total, or a flat matching count per filter */
+  /* results line: while pages are still loading show "N of total" from the
+     counts feed; once the loaded count reaches the total, collapse to a
+     flat number ("3 jobs" / "2 matching"). Falls back to "N loaded" if
+     the counts feed hasn't returned yet. */
   const metaCount =
     !countsQ.data && listQ.data
       ? `${jobs.length} loaded`
@@ -364,15 +367,22 @@ export default function JobsPage() {
   return (
     <main className="hig min-h-dvh bg-[var(--hig-grouped)] pb-40 text-[var(--hig-label)] transition-colors duration-300">
       <div className="relative mx-auto w-full max-w-[430px]">
-        {/* ---------- header ---------- */}
-        <header className="hig-rise pt-3" style={{ animationDelay: "0ms" }}>
-          <div className="flex items-center justify-between">
-            <div className="text-[20px] font-medium tracking-[-0.02em]">
-              HollySeams
-            </div>
-            <ThemeToggle />
-          </div>
-          <p className="mt-4 text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+        {/* ---------- chrome ---------- */}
+        {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
+            Overview and Customers, so the brand row is identical on every tab. */}
+        <header
+          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-[var(--hig-bar)]/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
+          style={{ animationDelay: "0ms" }}
+        >
+          <p className="text-[20px] font-medium tracking-[-0.02em]">
+            Holly<span className="text-[var(--hig-accent)]">Seams</span>
+          </p>
+          <ThemeToggle />
+        </header>
+
+        {/* ---------- head ---------- */}
+        <div className="hig-rise px-5 pt-3" style={{ animationDelay: "40ms" }}>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
             {new Date().toLocaleDateString("en-US", {
               weekday: "long",
               day: "numeric",
@@ -382,7 +392,7 @@ export default function JobsPage() {
           <h1 className="mt-1 text-[34px] font-medium leading-[41px] tracking-[-0.02em]">
             Jobs, <span className="text-[var(--hig-accent)]">on the rack.</span>
           </h1>
-        </header>
+        </div>
 
         {/* ---------- status filter (counts in labels) ---------- */}
         {/* 24px section gap (8pt grid) between the header and the filter */}
@@ -617,6 +627,7 @@ export default function JobsPage() {
             <button
               type="button"
               aria-label="Customers"
+              onClick={() => router.push("/customers")}
               className="flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[var(--hig-label-tertiary)] transition-all duration-200 active:scale-95"
             >
               <span className="h-[22px] w-[22px]">

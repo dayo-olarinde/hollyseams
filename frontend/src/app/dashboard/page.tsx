@@ -420,14 +420,22 @@ export default function DashboardPage() {
     <main className="hig min-h-dvh bg-[var(--hig-grouped)] pb-40 text-[var(--hig-label)] transition-colors duration-300">
       {/* Mobile-only: the whole app keeps a fixed phone width, centred on larger screens.
           Full-bleed — no side padding; only cards pad their own content. */}
-      <div className="relative mx-auto w-full max-w-[430px]">        {/* ---------- header ---------- */}
-        <header className="hig-rise mb-8 pt-3" style={{ animationDelay: "0ms" }}>
-          <div className="flex items-center justify-between">
-            <div className="text-[20px] font-medium tracking-[-0.02em]">HollySeams</div>
-            {/* Dark/light toggle — persists in localStorage; see theme-toggle.tsx */}
-            <ThemeToggle />
-          </div>
+      <div className="relative mx-auto w-full max-w-[430px]">        {/* ---------- chrome ---------- */}
+        {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
+            Jobs and Customers, so the brand row is identical on every tab. */}
+        <header
+          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-[var(--hig-bar)]/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
+          style={{ animationDelay: "0ms" }}
+        >
+          <p className="text-[20px] font-medium tracking-[-0.02em]">
+            Holly<span className="text-[var(--hig-accent)]">Seams</span>
+          </p>
+          {/* Dark/light toggle — persists in localStorage; see theme-toggle.tsx */}
+          <ThemeToggle />
+        </header>
 
+        {/* ---------- hero ---------- */}
+        <div className="hig-rise mb-8 px-5 pt-3" style={{ animationDelay: "40ms" }}>
           {/* Greeting card — the page hero: accent-tinted surface, live studio
               pulse by the date, stitched seam at the foot (the tailoring motif). */}
           <div className="relative mt-3 rounded-[24px] bg-[var(--hig-accent-tint)] px-5 pb-3.5 pt-4">
@@ -466,7 +474,7 @@ export default function DashboardPage() {
               aria-hidden="true"
             />
           </div>
-        </header>
+        </div>
 
         {/* ---------- error banner ---------- */}
         {anyError && (
@@ -776,7 +784,11 @@ export default function DashboardPage() {
                 aria-label={tab.label}
                 aria-current={tab.active ? "page" : undefined}
                 onClick={
-                  tab.label === "Jobs" ? () => router.push("/jobs") : undefined
+                  tab.label === "Jobs"
+                    ? () => router.push("/jobs")
+                    : tab.label === "Customers"
+                      ? () => router.push("/customers")
+                      : undefined
                 }
                 className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] transition-all duration-200 active:scale-95 ${
                   tab.active
