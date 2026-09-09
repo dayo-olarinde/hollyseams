@@ -78,6 +78,104 @@
 }
 
 /*
+ * Apple HIG scoped theme — login + dashboard (Midnight Indigo preserved in git).
+ * Values mirror the playbook tokens; typeface is Inter (the playbook's
+ * cross-platform SF substitute) for a consistent, premium weight across devices.
+ *
+ * Themes are class-driven, not media-query-driven: an inline script in the root
+ * layout sets `hig-light` or `hig-dark` on <html> from localStorage (falling
+ * back to the OS preference), so the top-right toggle can override the system
+ * and both screens always agree.
+ */
+.hig {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Light scheme — iOS system palette */
+html.hig-light .hig {
+  --hig-accent: #007AFF;
+  --hig-accent-soft: rgba(0, 122, 255, 0.25);
+  --hig-accent-tint: rgba(0, 122, 255, 0.12); /* soft blue chip/avatar fills */
+  --hig-accent-line: rgba(0, 122, 255, 0.35); /* stitched seams, dashed accents */
+  --hig-bg: #FFFFFF;
+  --hig-fill: #F2F2F7;
+  --hig-label: #000000;
+  --hig-label-secondary: rgba(60, 60, 67, 0.6);
+  --hig-label-tertiary: rgba(60, 60, 67, 0.3);
+  --hig-dot-empty: rgba(0, 0, 0, 0.25);
+  --hig-error: #FF3B30;
+  --hig-grouped: #F2F2F7; /* screen background (iOS grouped) */
+  --hig-card: #FFFFFF; /* card surface */
+  --hig-separator: rgba(60, 60, 67, 0.29);
+  --hig-grid: rgba(60, 60, 67, 0.12); /* faint chart gridlines */
+  --hig-bar: rgba(255, 255, 255, 0.78); /* tab bar material */
+  --hig-bar-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --hig-success: #34C759;
+  --hig-success-tint: rgba(52, 199, 89, 0.12);
+  --hig-warning: #FF9500;
+  --hig-warning-tint: rgba(255, 149, 0, 0.12);
+  --hig-danger: #FF3B30;
+  --hig-danger-tint: rgba(255, 59, 48, 0.12);
+}
+
+/* Dark scheme — iOS system palette */
+html.hig-dark .hig {
+  --hig-accent: #0A84FF;
+  --hig-accent-soft: rgba(10, 132, 255, 0.25);
+  --hig-accent-tint: rgba(10, 132, 255, 0.14);
+  --hig-accent-line: rgba(10, 132, 255, 0.35);
+  --hig-bg: #000000;
+  --hig-fill: #2C2C2E;
+  --hig-label: #FFFFFF;
+  --hig-label-secondary: rgba(235, 235, 245, 0.6);
+  --hig-label-tertiary: rgba(235, 235, 245, 0.3);
+  --hig-dot-empty: rgba(255, 255, 255, 0.3);
+  --hig-error: #FF453A;
+  --hig-grouped: #000000;
+  --hig-card: #1C1C1E;
+  --hig-separator: rgba(84, 84, 88, 0.6);
+  --hig-grid: rgba(84, 84, 88, 0.28);
+  --hig-bar: rgba(24, 24, 28, 0.78);
+  --hig-bar-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --hig-success: #30D158;
+  --hig-success-tint: rgba(48, 209, 88, 0.14);
+  --hig-warning: #FF9F0A;
+  --hig-warning-tint: rgba(255, 159, 10, 0.14);
+  --hig-danger: #FF453A;
+  --hig-danger-tint: rgba(255, 69, 58, 0.14);
+}
+
+/* Studio-pulse halo: a slow expanding ping under status dots */
+@keyframes hig-ping {
+  0% { transform: scale(1); opacity: 0.45; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+.hig-ping {
+  animation: hig-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Theme-toggle icon swap: quick rotate + fade, standard ease */
+@keyframes hig-swap {
+  from { opacity: 0; transform: rotate(-60deg) scale(0.8); }
+  to { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+.hig-swap {
+  animation: hig-swap 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Entrance: fade + small rise/scale, 260ms on the standard ease — per playbook motion tokens */
+@keyframes hig-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hig-rise {
+  animation: hig-rise 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/*
  * Custom animations — not available as Tailwind utilities out of the box.
  * Only add animations that are actually used; remove when no longer needed.
  */

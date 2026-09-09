@@ -28,6 +28,7 @@ See [backend/README.md](backend/README.md) for full documentation.
 - **Language:** TypeScript
 - **Runtime:** Bun
 - **Styling:** Tailwind CSS
+- **Design:** Apple HIG — see [docs/design-system.md](docs/design-system.md) for the full design system (colours, typography, motion, components)
 
 ## Getting Started
 
