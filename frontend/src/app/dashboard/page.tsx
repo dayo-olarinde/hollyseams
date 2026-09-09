@@ -26,6 +26,7 @@
  *   git checkout b1fa5cc -- frontend/src/app/dashboard
  */
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import NewJobModal from "@/components/new-job-modal";
 import ThemeToggle from "@/components/theme-toggle";
@@ -367,6 +368,7 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [newJobOpen, setNewJobOpen] = useState(false);
   const revenueQ = useQuery({
     queryKey: ["reports", "monthly-revenue"],
@@ -773,6 +775,9 @@ export default function DashboardPage() {
                 type="button"
                 aria-label={tab.label}
                 aria-current={tab.active ? "page" : undefined}
+                onClick={
+                  tab.label === "Jobs" ? () => router.push("/jobs") : undefined
+                }
                 className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-[16px] transition-all duration-200 active:scale-95 ${
                   tab.active
                     ? "bg-[var(--hig-accent-tint)] text-[var(--hig-accent)]"

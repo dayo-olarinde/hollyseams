@@ -175,6 +175,18 @@ export interface PaginatedQuery {
   cursor?: string;
 }
 
+/**
+ * The statuses the jobs list endpoint can filter by. There is no literal
+ * "delivered" row status — the backend maps it to completed + delivered_at
+ * set (and "completed" to completed + delivered_at null, i.e. ready to
+ * collect). Canceled jobs have no filter value and only appear under All.
+ */
+export type JobStatusFilter = "pending" | "completed" | "delivered";
+
+export interface JobsQuery extends PaginatedQuery {
+  status?: JobStatusFilter;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly statusCode: number,
@@ -282,7 +294,7 @@ export async function createMeasurement(
     data: input,
   });
 }
-export async function listJobs(params?: PaginatedQuery) {
+export async function listJobs(params?: JobsQuery) {
   return request<Job[], PaginationMeta>({ url: "/jobs", params });
 }
 export async function getJob(id: string) {

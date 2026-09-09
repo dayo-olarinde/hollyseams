@@ -9,7 +9,8 @@ import {
 } from "../db";
 import { ApiError } from "../utils/apiResponse";
 import { keysetCondition } from "../utils/cursor";
-import type { ListItemsQuery } from "../validations/customers.validation";
+import { jobStatusFilterCondition } from "../utils/jobs-filter";
+import type { ListJobsQuery } from "../validations/jobs.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
@@ -18,7 +19,7 @@ import type {
 import type { CreatePaymentInput } from "../validations/payments.validation";
 
 export const listJobs = async (
-  { cursor, limit }: ListItemsQuery = { limit: 10 },
+  { cursor, limit, status }: ListJobsQuery = { limit: 10 },
 ) => {
   const rows = await db
     .select({
@@ -37,10 +38,15 @@ export const listJobs = async (
     })
     .from(jobsTable)
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
+    // Status filters scope the keyset pagination to a subset of jobs; the
+    // cursor still walks created_at/id within that subset, newest first.
     .where(
-      cursor
-        ? keysetCondition(jobsTable.createdAt, jobsTable.id, cursor)
-        : undefined,
+      and(
+        jobStatusFilterCondition(status),
+        cursor
+          ? keysetCondition(jobsTable.createdAt, jobsTable.id, cursor)
+          : undefined,
+      ),
     )
     .orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
     .limit(limit + 1);
@@ -58,9 +64,9 @@ export const listJobs = async (
 
 export const listCustomerJobs = async (
   customerId: string,
-  query: ListItemsQuery,
+  query: ListJobsQuery,
 ) => {
-  const { cursor, limit } = query;
+  const { cursor, limit, status } = query;
 
   const rows = await db
     .select({
@@ -82,6 +88,7 @@ export const listCustomerJobs = async (
     .where(
       and(
         eq(jobsTable.customerId, customerId),
+        jobStatusFilterCondition(status),
         cursor
           ? keysetCondition(jobsTable.createdAt, jobsTable.id, cursor)
           : undefined,

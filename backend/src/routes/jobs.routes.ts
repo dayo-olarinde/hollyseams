@@ -17,6 +17,7 @@ import {
 import {
   createJobForSubjectSchema,
   createJobNewCustomerSchema,
+  listJobsQuerySchema,
   updateJobSchema,
 } from "../validations/jobs.validation";
 import { createPaymentSchema } from "../validations/payments.validation";
@@ -24,14 +25,13 @@ import {
   idParamsSchema,
   jobIdParamsSchema,
 } from "../validations/params.validation";
-import { listItemsQuerySchema } from "../validations/customers.validation";
 
 const router = Router();
 
 router.get(
   "/",
   requireAuth,
-  validateQuery(listItemsQuerySchema),
+  validateQuery(listJobsQuerySchema),
   listJobsHandler,
 );
 

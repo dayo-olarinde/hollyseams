@@ -23,6 +23,7 @@ import {
 } from "../validations/customers.validation";
 import { idParamsSchema } from "../validations/params.validation";
 import { createSubjectSchema } from "../validations/subjects.validation";
+import { listJobsQuerySchema } from "../validations/jobs.validation";
 
 const router = Router();
 
@@ -74,7 +75,7 @@ router.post(
 router.get(
   "/:id/jobs",
   requireAuth,
-  validateQuery(listItemsQuerySchema),
+  validateQuery(listJobsQuerySchema),
   validateParams(idParamsSchema),
   listCustomerJobsHandler,
 );

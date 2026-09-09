@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createJobForSubjectSchema,
   createJobNewCustomerSchema,
+  listJobsQuerySchema,
   updateJobSchema,
 } from "../src/validations/jobs.validation";
 
@@ -166,6 +167,47 @@ describe("updateJobSchema", () => {
     const result = updateJobSchema.safeParse({ status: "shipped" });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("listJobsQuerySchema", () => {
+  it("defaults limit 10 with no status filter (All)", () => {
+    expect(listJobsQuerySchema.parse({})).toEqual({ limit: 10 });
+  });
+
+  it("accepts each status filter value", () => {
+    for (const status of ["pending", "completed", "delivered"]) {
+      expect(listJobsQuerySchema.parse({ status })).toEqual({
+        limit: 10,
+        status,
+      });
+    }
+  });
+
+  it("combines status with an explicit limit and cursor", () => {
+    const cursor =
+      "2026-09-08T10:00:00.000Z|2ac99efd-84ad-46aa-b5d5-3605cd98e4a7";
+    expect(
+      listJobsQuerySchema.parse({ status: "pending", limit: "5", cursor }),
+    ).toEqual({ limit: 5, status: "pending", cursor });
+  });
+
+  it("rejects an unknown status value", () => {
+    expect(listJobsQuerySchema.safeParse({ status: "shipped" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects canceled — canceled jobs only appear under All", () => {
+    expect(listJobsQuerySchema.safeParse({ status: "canceled" }).success).toBe(
+      false,
+    );
+  });
+
+  it("still rejects unknown keys", () => {
+    expect(
+      listJobsQuerySchema.safeParse({ status: "pending", page: "2" }).success,
+    ).toBe(false);
   });
 });
 

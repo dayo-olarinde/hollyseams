@@ -10,7 +10,7 @@ import {
   updateJob,
 } from "../services/jobs.service";
 import { ApiResponse } from "../utils/apiResponse";
-import type { ListItemsQuery } from "../validations/customers.validation";
+import type { ListJobsQuery } from "../validations/jobs.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
@@ -20,7 +20,7 @@ import type { IdParams, JobIdParams } from "../validations/params.validation";
 import type { CreatePaymentInput } from "../validations/payments.validation";
 
 export const listJobsHandler = async (req: Request, res: Response) => {
-  const query = req.query as unknown as ListItemsQuery;
+  const query = req.query as unknown as ListJobsQuery;
   const { items, nextCursor } = await listJobs(query);
 
   res.status(200).json(
@@ -32,7 +32,7 @@ export const listJobsHandler = async (req: Request, res: Response) => {
 
 export const listCustomerJobsHandler = async (req: Request, res: Response) => {
   const { id: customerId } = req.params as IdParams;
-  const query = req.query as unknown as ListItemsQuery;
+  const query = req.query as unknown as ListJobsQuery;
   const { items, nextCursor } = await listCustomerJobs(customerId, query);
 
   res.status(200).json(

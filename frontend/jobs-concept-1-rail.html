@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en" class="hig-light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Jobs — Concept 1 · The Rail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   HOLLYSEAMS JOBS — CONCEPT 1 · THE RAIL
+   Garments hang on rails by status. In-progress and Ready are
+   horizontal snap-scroll rails of garment cards (like clothes on
+   a rack); "All" is a grouped iOS list. Built on the Apple HIG
+   playbook: Inter, iOS surfaces, 8pt grid, one blue accent,
+   semantic status colours, light + dark, reduced-motion safe.
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F2F2F7; --card: #FFFFFF; --fill: #E9E9EB;
+  --label: #000000; --label-2: rgba(60,60,67,.60); --label-3: rgba(60,60,67,.30);
+  --sep: rgba(60,60,67,.12);
+  --accent: #007AFF; --accent-soft: rgba(0,122,255,.12); --accent-line: rgba(0,122,255,.35);
+  --bar: rgba(255,255,255,.74);
+  --ok: #34C759; --ok-tint: rgba(52,199,89,.14);
+  --warn: #FF9500; --warn-tint: rgba(255,149,0,.14);
+  --danger: #FF3B30; --danger-tint: rgba(255,59,48,.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+  --ease: cubic-bezier(.4,0,.2,1);
+}
+.hig-dark {
+  --bg: #000000; --card: #1C1C1E; --fill: #2C2C2E;
+  --label: #FFFFFF; --label-2: rgba(235,235,245,.60); --label-3: rgba(235,235,245,.30);
+  --sep: rgba(84,84,88,.50);
+  --accent: #0A84FF; --accent-soft: rgba(10,132,255,.20); --accent-line: rgba(10,132,255,.45);
+  --bar: rgba(22,22,24,.76);
+  --ok: #30D158; --ok-tint: rgba(48,209,88,.16);
+  --warn: #FF9F0A; --warn-tint: rgba(255,159,10,.16);
+  --danger: #FF453A; --danger-tint: rgba(255,69,58,.16);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.3); --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+}
+html, body { -webkit-font-smoothing: antialiased; }
+body {
+  min-height: 100vh; background: #D8D8DC;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--label); display: flex; align-items: stretch; justify-content: center;
+}
+.hig-dark body { background: #050505; }
+
+/* phone-width column */
+.phone { width: 100%; max-width: 430px; background: var(--bg); position: relative; overflow: hidden; transition: background .25s var(--ease); }
+.scroll { height: 100vh; overflow-y: auto; padding: 12px 20px 128px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 0; }
+.wordmark { font-size: 14px; font-weight: 600; letter-spacing: .01em; }
+.wordmark b { font-weight: 700; }
+.ghost {
+  width: 44px; height: 44px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--card); color: var(--label); box-shadow: var(--shadow-sm);
+  display: grid; place-items: center; font-size: 17px; transition: transform .15s var(--ease), background .25s var(--ease);
+}
+.ghost:active { transform: scale(.9); }
+.caption { margin-top: 18px; font-size: 13px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--label-2); }
+.title { margin-top: 2px; font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+.title em { font-style: normal; color: var(--accent); }
+.sub { margin-top: 6px; font-size: 15px; color: var(--label-2); }
+.sub b { font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; }
+
+/* segmented control */
+.seg {
+  margin-top: 20px; display: flex; position: relative; padding: 3px;
+  background: var(--fill); border-radius: 12px; width: fit-content;
+}
+.seg .thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3);
+  background: var(--card); border-radius: 9px; box-shadow: var(--shadow-sm);
+  transition: transform .28s var(--ease);
+}
+.seg button {
+  position: relative; z-index: 1; flex: 1; min-width: 72px; padding: 9px 14px;
+  border: 0; background: transparent; border-radius: 9px; cursor: pointer;
+  font: 600 13px "Inter", sans-serif; color: var(--label-2); transition: color .2s var(--ease);
+}
+.seg button.on { color: var(--label); }
+
+/* section headers */
+.railhead { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 0 10px; }
+.railhead h2 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
+.railhead h2 .n {
+  font-size: 11px; font-weight: 600; color: var(--label-2);
+  background: var(--fill); border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums;
+}
+.railhead .more { font-size: 13px; font-weight: 500; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 6px 0 6px 12px; }
+.railhead .more:active { opacity: .6; }
+
+/* rails */
+.rail {
+  display: flex; gap: 12px; overflow-x: auto; padding: 2px 20px 10px; margin: 0 -20px;
+  scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 20px, #000 calc(100% - 20px), transparent 100%);
+}
+.rail::-webkit-scrollbar { display: none; }
+.card {
+  scroll-snap-align: start; flex: 0 0 198px; background: var(--card);
+  border-radius: 20px; border: 1px solid var(--sep); padding: 14px;
+  position: relative; overflow: hidden; cursor: pointer;
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.card:active { transform: scale(.97); }
+.card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--hue, var(--accent)); opacity: .85;
+}
+.card .topline { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.dot { width: 9px; height: 9px; border-radius: 999px; background: var(--hue); box-shadow: 0 0 9px var(--hue-soft, transparent); flex-shrink: 0; }
+.card .subject { font-size: 11.5px; font-weight: 500; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .desc { margin-top: 8px; font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 38px; }
+.card .price { margin-top: 10px; font-size: 17px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.card .price small { font-size: 11px; font-weight: 500; color: var(--label-2); margin-right: 1px; }
+.card .due { margin-top: 3px; font-size: 12px; color: var(--label-2); }
+.card .due b { font-weight: 600; }
+.card .due.soon { color: var(--danger); }
+.card .due.soon b { color: var(--danger); }
+.card .chip {
+  position: absolute; right: 14px; bottom: 14px; font-size: 10.5px; font-weight: 600;
+  padding: 4px 9px; border-radius: 999px; letter-spacing: .02em;
+}
+.card .chip.ready { background: var(--ok-tint); color: var(--ok); }
+.card .chip.work { background: var(--warn-tint); color: var(--warn); }
+.card .chip.done { background: var(--fill); color: var(--label-2); }
+
+/* grouped list (All segment) */
+.group { background: var(--card); border-radius: 16px; overflow: hidden; border: 1px solid var(--sep); }
+.group .row {
+  display: flex; align-items: center; gap: 12px; padding: 13px 14px; cursor: pointer;
+  transition: background .15s var(--ease); position: relative;
+}
+.group .row:active { background: var(--fill); }
+.group .row + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: var(--sep); }
+.group .row .grow { flex: 1; min-width: 0; }
+.group .row .grow .desc { font-size: 15px; font-weight: 500; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group .row .grow .sub2 { margin-top: 3px; font-size: 12.5px; color: var(--label-2); display: flex; align-items: center; gap: 6px; }
+.group .row .grow .sub2 .sc {
+  background: var(--hue-soft, var(--accent-soft)); color: var(--hue, var(--accent));
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.group .row .right { text-align: right; flex-shrink: 0; }
+.group .row .right .price { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.group .row .right .pill { display: inline-block; margin-top: 5px; font-size: 10.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+.pill.work { background: var(--warn-tint); color: var(--warn); }
+.pill.ready { background: var(--ok-tint); color: var(--ok); }
+.pill.done { background: var(--fill); color: var(--label-2); }
+.pill.over { background: var(--danger-tint); color: var(--danger); }
+
+/* overdue banner card */
+.overdue {
+  margin-top: 22px; background: var(--danger-tint); border: 1px solid rgba(255,69,58,.25);
+  border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 11px;
+}
+.overdue .pulse { position: relative; width: 10px; height: 10px; flex-shrink: 0; }
+.overdue .pulse::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: var(--danger); }
+.overdue .pulse::after { content: ""; position: absolute; inset: -5px; border-radius: 999px; background: var(--danger); opacity: .25; animation: ping 2s var(--ease) infinite; }
+@keyframes ping { 0% { transform: scale(.6); opacity: .35; } 70% { transform: scale(1.25); opacity: 0; } 100% { opacity: 0; } }
+.overdue .txt { flex: 1; font-size: 12.5px; color: var(--danger); }
+.overdue .txt b { font-weight: 600; }
+.overdue .txt small { display: block; color: var(--label-2); font-size: 11.5px; margin-top: 1px; }
+
+/* tab bar */
+.tabbar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: var(--bar); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--sep); border-radius: 24px 24px 0 0;
+  display: flex; padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+}
+.tabbar button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border: 0; background: transparent; cursor: pointer; padding: 6px 0; border-radius: 12px;
+  font: 500 10px "Inter", sans-serif; color: var(--label-2); transition: color .2s var(--ease);
+}
+.tabbar button .ic { font-size: 19px; line-height: 1; }
+.tabbar button.on { color: var(--accent); background: var(--accent-soft); }
+
+/* entrances */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .3s var(--ease) both; }
+.d1 { animation-delay: .04s; } .d2 { animation-delay: .08s; } .d3 { animation-delay: .12s; }
+.d4 { animation-delay: .16s; } .d5 { animation-delay: .2s; } .d6 { animation-delay: .24s; }
+
+/* panel switching */
+.panel { display: none; }
+.panel.on { display: block; animation: rise .25s var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+    <!-- header -->
+    <header class="top rise">
+      <div class="wordmark">Holly<b>Seams</b></div>
+      <button class="ghost" id="themeBtn" aria-label="Toggle theme">🌙</button>
+    </header>
+    <p class="caption rise d1">Wednesday, September 9</p>
+    <h1 class="title rise d1">Jobs, <em>on the rack</em>.</h1>
+    <p class="sub rise d2"><b>8</b> on the bench · <b>2</b> ready to collect · <b id="outTotal">₦307,078</b> out</p>
+
+    <!-- segmented control -->
+    <nav class="seg rise d2" id="seg">
+      <span class="thumb" id="segThumb"></span>
+      <button class="on" data-panel="all">All</button>
+      <button data-panel="bench">Bench</button>
+      <button data-panel="ready">Ready</button>
+    </nav>
+
+    <!-- ── ALL: grouped list ─────────────────────────────── -->
+    <section class="panel on" id="panel-all">
+      <div class="overdue rise d2">
+        <span class="pulse"></span>
+        <div class="txt"><b>1 garment overdue</b><small>Kamsi's birthday dress — due Sep 5</small></div>
+      </div>
+
+      <div class="railhead rise d3"><h2>On the bench <span class="n">5</span></h2><button class="more">View all</button></div>
+      <div class="group rise d3">
+        <div class="row" style="--hue:#FF375F;--hue-soft:rgba(255,55,95,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Gown — purple lace, puff sleeves</div>
+            <div class="sub2"><span class="sc">Ike</span>due Oct 2</div>
+          </div>
+          <div class="right"><div class="price">₦45,000</div><span class="pill work">In progress</span></div>
+        </div>
+        <div class="row" style="--hue:#30D158;--hue-soft:rgba(48,209,88,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Birthday dress — Kamsi</div>
+            <div class="sub2"><span class="sc">Kamsi</span><b style="color:var(--danger)">overdue Sep 5</b></div>
+          </div>
+          <div class="right"><div class="price">₦38,000</div><span class="pill over">Overdue</span></div>
+        </div>
+        <div class="row" style="--hue:#30D158;--hue-soft:rgba(48,209,88,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Garment</div>
+            <div class="sub2"><span class="sc">OmoJesu</span>no due date</div>
+          </div>
+          <div class="right"><div class="price">₦30,000</div><span class="pill work">In progress</span></div>
+        </div>
+        <div class="row" style="--hue:#0A84FF;--hue-soft:rgba(10,132,255,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Senator wear</div>
+            <div class="sub2"><span class="sc">Tolu Bello</span>due Oct 5</div>
+          </div>
+          <div class="right"><div class="price">₦28,000</div><span class="pill work">In progress</span></div>
+        </div>
+        <div class="row" style="--hue:#40CBE0;--hue-soft:rgba(64,203,224,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Boubou</div>
+            <div class="sub2"><span class="sc">Ada Obi</span>no due date</div>
+          </div>
+          <div class="right"><div class="price">₦12,000</div><span class="pill work">In progress</span></div>
+        </div>
+      </div>
+
+      <div class="railhead rise d4"><h2>Ready to collect <span class="n">2</span></h2><button class="more">View all</button></div>
+      <div class="group rise d4">
+        <div class="row" style="--hue:#5E5CE6;--hue-soft:rgba(94,92,230,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Agbada set</div>
+            <div class="sub2"><span class="sc">Kamsi</span>due Sep 24</div>
+          </div>
+          <div class="right"><div class="price">₦70,000</div><span class="pill ready">Ready</span></div>
+        </div>
+        <div class="row" style="--hue:#BF5AF2;--hue-soft:rgba(191,90,242,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Two-piece set</div>
+            <div class="sub2"><span class="sc">Ini</span>due Sep 15</div>
+          </div>
+          <div class="right"><div class="price">₦55,000</div><span class="pill ready">Ready</span></div>
+        </div>
+      </div>
+
+      <div class="railhead rise d5"><h2>Delivered <span class="n">2</span></h2></div>
+      <div class="group rise d5">
+        <div class="row" style="--hue:#0A84FF;--hue-soft:rgba(10,132,255,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Kaftan</div>
+            <div class="sub2"><span class="sc">Tolu Bello</span>collected Sep 8</div>
+          </div>
+          <div class="right"><div class="price">₦20,000</div><span class="pill done">Delivered</span></div>
+        </div>
+        <div class="row" style="--hue:#5E5CE6;--hue-soft:rgba(94,92,230,.15)">
+          <span class="dot"></span>
+          <div class="grow">
+            <div class="desc">Native set</div>
+            <div class="sub2"><span class="sc">Mummy Ike</span>collected Sep 2</div>
+          </div>
+          <div class="right"><div class="price">₦150,000</div><span class="pill done">Delivered</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── BENCH: the rail ───────────────────────────────── -->
+    <section class="panel" id="panel-bench">
+      <div class="overdue rise d2">
+        <span class="pulse"></span>
+        <div class="txt"><b>1 garment overdue</b><small>Kamsi's birthday dress — due Sep 5</small></div>
+      </div>
+      <div class="railhead rise d3"><h2>In progress <span class="n">5</span></h2><button class="more">View all</button></div>
+      <div class="rail rise d3">
+        <div class="card" style="--hue:#FF375F;--hue-soft:rgba(255,55,95,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Ike · Mummy Ike</span></div>
+          <div class="desc">Gown — purple lace, puff sleeves</div>
+          <div class="price"><small>₦</small>45,000</div>
+          <div class="due">due <b>Oct 2</b></div>
+          <span class="chip work">In progress</span>
+        </div>
+        <div class="card" style="--hue:#30D158;--hue-soft:rgba(48,209,88,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Kamsi · Mummy Ike</span></div>
+          <div class="desc">Birthday dress</div>
+          <div class="price"><small>₦</small>38,000</div>
+          <div class="due soon">overdue <b>Sep 5</b></div>
+          <span class="chip work">Overdue</span>
+        </div>
+        <div class="card" style="--hue:#30D158;--hue-soft:rgba(48,209,88,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Self · OmoJesu</span></div>
+          <div class="desc">Garment</div>
+          <div class="price"><small>₦</small>30,000</div>
+          <div class="due">no due date</div>
+          <span class="chip work">In progress</span>
+        </div>
+        <div class="card" style="--hue:#0A84FF;--hue-soft:rgba(10,132,255,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Self · Tolu Bello</span></div>
+          <div class="desc">Senator wear</div>
+          <div class="price"><small>₦</small>28,000</div>
+          <div class="due">due <b>Oct 5</b></div>
+          <span class="chip work">In progress</span>
+        </div>
+        <div class="card" style="--hue:#40CBE0;--hue-soft:rgba(64,203,224,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Self · Ada Obi</span></div>
+          <div class="desc">Boubou</div>
+          <div class="price"><small>₦</small>12,000</div>
+          <div class="due">no due date</div>
+          <span class="chip work">In progress</span>
+        </div>
+      </div>
+      <div class="railhead rise d4"><h2>Ready <span class="n">2</span></h2><button class="more">View all</button></div>
+      <div class="rail rise d4">
+        <div class="card" style="--hue:#5E5CE6;--hue-soft:rgba(94,92,230,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Kamsi · Mummy Ike</span></div>
+          <div class="desc">Agbada set</div>
+          <div class="price"><small>₦</small>70,000</div>
+          <div class="due">due <b>Sep 24</b></div>
+          <span class="chip ready">Ready</span>
+        </div>
+        <div class="card" style="--hue:#BF5AF2;--hue-soft:rgba(191,90,242,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Ini</span></div>
+          <div class="desc">Two-piece set</div>
+          <div class="price"><small>₦</small>55,000</div>
+          <div class="due">due <b>Sep 15</b></div>
+          <span class="chip ready">Ready</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── READY: the rail ───────────────────────────────── -->
+    <section class="panel" id="panel-ready">
+      <div class="railhead rise d2" style="margin-top:22px"><h2>Ready to collect <span class="n">2</span></h2></div>
+      <div class="rail rise d2">
+        <div class="card" style="--hue:#5E5CE6;--hue-soft:rgba(94,92,230,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Kamsi · Mummy Ike</span></div>
+          <div class="desc">Agbada set</div>
+          <div class="price"><small>₦</small>70,000</div>
+          <div class="due">due <b>Sep 24</b></div>
+          <span class="chip ready">Ready</span>
+        </div>
+        <div class="card" style="--hue:#BF5AF2;--hue-soft:rgba(191,90,242,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Ini</span></div>
+          <div class="desc">Two-piece set</div>
+          <div class="price"><small>₦</small>55,000</div>
+          <div class="due">due <b>Sep 15</b></div>
+          <span class="chip ready">Ready</span>
+        </div>
+      </div>
+      <div class="railhead rise d3"><h2>Delivered <span class="n">2</span></h2></div>
+      <div class="rail rise d3">
+        <div class="card" style="--hue:#0A84FF;--hue-soft:rgba(10,132,255,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Tolu Bello</span></div>
+          <div class="desc">Kaftan</div>
+          <div class="price"><small>₦</small>20,000</div>
+          <div class="due">collected <b>Sep 8</b></div>
+          <span class="chip done">Delivered</span>
+        </div>
+        <div class="card" style="--hue:#5E5CE6;--hue-soft:rgba(94,92,230,.25)">
+          <div class="topline"><span class="dot"></span><span class="subject">Mummy Ike</span></div>
+          <div class="desc">Native set</div>
+          <div class="price"><small>₦</small>150,000</div>
+          <div class="due">collected <b>Sep 2</b></div>
+          <span class="chip done">Delivered</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- tab bar -->
+  <nav class="tabbar">
+    <button><span class="ic">◯</span>Overview</button>
+    <button class="on"><span class="ic">▤</span>Jobs</button>
+    <button><span class="ic">◉</span>Customers</button>
+    <button><span class="ic">▥</span>Reports</button>
+  </nav>
+</div>
+
+<script>
+// theme toggle — same class-driven approach as the app (localStorage + pre-paint)
+const root = document.documentElement;
+if (localStorage.getItem("hig-theme") === "dark") root.classList.replace("hig-light", "hig-dark");
+const themeBtn = document.getElementById("themeBtn");
+const syncTheme = () => {
+  const dark = root.classList.contains("hig-dark");
+  themeBtn.textContent = dark ? "☀️" : "🌙";
+};
+themeBtn.addEventListener("click", () => {
+  root.classList.toggle("hig-dark");
+  localStorage.setItem("hig-theme", root.classList.contains("hig-dark") ? "dark" : "light");
+  syncTheme();
+});
+syncTheme();
+
+// segmented control — sliding thumb + panel switching
+const seg = document.getElementById("seg");
+const thumb = document.getElementById("segThumb");
+const btns = [...seg.querySelectorAll("button")];
+const panels = ["all", "bench", "ready"].map((id) => document.getElementById("panel-" + id));
+function select(btn) {
+  btns.forEach((b) => b.classList.toggle("on", b === btn));
+  const i = btns.indexOf(btn);
+  thumb.style.transform = `translateX(${i * 100}%)`;
+  panels.forEach((p, j) => p.classList.toggle("on", j === i));
+  // restart entrance on the fresh panel
+  panels[i].querySelectorAll(".rise").forEach((el, k) => {
+    el.style.animation = "none";
+    void el.offsetWidth;
+    el.style.animation = "";
+  });
+}
+btns.forEach((b) => b.addEventListener("click", () => select(b)));
+select(btns[0]);
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { phoneNumberSchema } from "./customers.validation";
+import { JOB_STATUS_FILTERS } from "../utils/jobs-filter";
+import { listItemsQuerySchema, phoneNumberSchema } from "./customers.validation";
 
 const jobMeasurementsSchema = z
   .record(z.string(), z.coerce.number().finite().nonnegative().nullable())
@@ -117,6 +118,18 @@ export const createJobForSubjectSchema = z.strictObject({
   job: jobDataSchema,
 });
 
+/**
+ * Query params for the job list endpoints (GET /jobs, GET /customers/:id/jobs).
+ * Extends the shared pagination schema (limit + cursor) with an optional
+ * status filter. The values are the filter statuses, not raw row statuses:
+ * the service maps them to where clauses (e.g. "delivered" → completed with
+ * a delivered_at timestamp). Canceled jobs are not filterable and only show
+ * under "All" (no status param).
+ */
+export const listJobsQuerySchema = listItemsQuerySchema.extend({
+  status: z.enum(JOB_STATUS_FILTERS).optional(),
+});
+
 export type JobDataInput = z.infer<typeof jobDataSchema>;
 export type UpdateJobInput = z.infer<typeof updateJobSchema>;
 export type CreateJobNewCustomerInput = z.infer<
@@ -125,3 +138,4 @@ export type CreateJobNewCustomerInput = z.infer<
 export type CreateJobForSubjectInput = z.infer<
   typeof createJobForSubjectSchema
 >;
+export type ListJobsQuery = z.infer<typeof listJobsQuerySchema>;
