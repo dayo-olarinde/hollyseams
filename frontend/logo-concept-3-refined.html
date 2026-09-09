@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Logo — Concept 3 (Refined)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #141414;
+    --ink-soft: #6B6B6B;
+    --surface: #FFFFFF;
+    --surface-warm: #FAFAF8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background: var(--surface);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+  }
+
+  .concept-label {
+    position: fixed;
+    top: 32px;
+    left: 32px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .presentation {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    gap: 80px;
+  }
+
+  .logo-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    background: var(--surface-warm);
+    border-radius: 2px;
+  }
+
+  .logo-display.dark {
+    background: var(--ink);
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 40px;
+    text-align: center;
+  }
+
+  .logo-display.dark .section-title {
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* ===== REFINED CONCEPT 3 ===== */
+
+  .logo-mark {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Wordmark container — positions the thread line precisely */
+  .wordmark-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* The serif wordmark */
+  .wordmark {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    font-size: 68px;
+    color: var(--ink);
+    letter-spacing: -0.015em;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+  }
+
+  .logo-display.dark .wordmark {
+    color: #FFFFFF;
+  }
+
+  .wordmark .y-connector {
+    font-style: italic;
+  }
+
+  .wordmark .seams {
+    font-style: italic;
+  }
+
+  /*
+   * The thread line — a single, confident stroke that flows beneath
+   * the wordmark from left to right, suggesting a needle's path
+   * through fabric. Not decorative — it connects the brand name
+   * to the craft it represents.
+   */
+  .thread {
+    position: absolute;
+    bottom: 6px;
+    left: -4px;
+    right: -4px;
+    height: 12px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .thread svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  /* Tagline — refined, tracked, minimal */
+  .tagline {
+    margin-top: 28px;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 8.5px;
+    font-weight: 500;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    opacity: 0.6;
+  }
+
+  .logo-display.dark .tagline {
+    color: rgba(255,255,255,0.25);
+  }
+
+  /* Horizontal variant */
+  .logo-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .logo-horizontal .wordmark {
+    font-size: 28px;
+  }
+
+  .logo-horizontal .tagline {
+    display: none;
+  }
+
+  .logo-horizontal .thread {
+    display: none;
+  }
+
+  .logo-horizontal .divider {
+    width: 1px;
+    height: 24px;
+    background: var(--ink);
+    opacity: 0.12;
+  }
+
+  .logo-display.dark .logo-horizontal .divider {
+    background: #FFFFFF;
+    opacity: 0.15;
+  }
+
+  .logo-horizontal .tagline-h {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    opacity: 0.5;
+  }
+
+  .logo-display.dark .logo-horizontal .tagline-h {
+    color: rgba(255,255,255,0.25);
+  }
+
+  /* Small variant */
+  .wordmark-small {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+
+  .logo-display.dark .wordmark-small {
+    color: #FFFFFF;
+  }
+
+  .size-row {
+    display: flex;
+    align-items: center;
+    gap: 60px;
+  }
+
+  @media (max-width: 600px) {
+    .wordmark { font-size: 44px; }
+    .size-row { flex-direction: column; gap: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="concept-label">Concept 3 — Refined</div>
+
+<div class="presentation">
+
+  <!-- Primary — Light -->
+  <div>
+    <div class="section-title">Primary — Light Background</div>
+    <div class="logo-display">
+      <div class="logo-mark">
+        <div class="wordmark-container">
+          <div class="wordmark">
+            <span class="y-connector">Holl</span><span class="seams">ySeams</span>
+          </div>
+          <!-- Thread line — single confident stroke -->
+          <div class="thread">
+            <svg viewBox="0 0 320 12" fill="none" preserveAspectRatio="none">
+              <path
+                d="M0 6 C30 6 50 2 80 4 C110 6 130 10 160 6 C190 2 210 4 240 6 C270 8 290 6 320 6"
+                stroke="currentColor"
+                stroke-width="0.7"
+                fill="none"
+                opacity="0.18"
+              />
+              <!-- Needle point — tiny dot at the end -->
+              <circle cx="318" cy="6" r="1.2" fill="currentColor" opacity="0.18"/>
+            </svg>
+          </div>
+        </div>
+        <div class="tagline">Tailor Studio</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary — Dark -->
+  <div>
+    <div class="section-title">Primary — Dark Background</div>
+    <div class="logo-display dark">
+      <div class="logo-mark">
+        <div class="wordmark-container">
+          <div class="wordmark">
+            <span class="y-connector">Holl</span><span class="seams">ySeams</span>
+          </div>
+          <div class="thread">
+            <svg viewBox="0 0 320 12" fill="none" preserveAspectRatio="none">
+              <path
+                d="M0 6 C30 6 50 2 80 4 C110 6 130 10 160 6 C190 2 210 4 240 6 C270 8 290 6 320 6"
+                stroke="currentColor"
+                stroke-width="0.7"
+                fill="none"
+                opacity="0.15"
+              />
+              <circle cx="318" cy="6" r="1.2" fill="currentColor" opacity="0.15"/>
+            </svg>
+          </div>
+        </div>
+        <div class="tagline">Tailor Studio</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Horizontal -->
+  <div>
+    <div class="section-title">Horizontal Variant</div>
+    <div class="logo-display">
+      <div class="logo-horizontal">
+        <div class="wordmark">HollySeams</div>
+        <div class="divider"></div>
+        <div class="tagline-h">Tailor Studio</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scale -->
+  <div>
+    <div class="section-title">Scale Test</div>
+    <div class="logo-display">
+      <div class="size-row">
+        <div class="wordmark-small">HollySeams</div>
+        <div style="width: 1px; height: 20px; background: var(--ink); opacity: 0.1;"></div>
+        <div class="wordmark-small" style="font-size: 14px; opacity: 0.6;">HollySeams</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

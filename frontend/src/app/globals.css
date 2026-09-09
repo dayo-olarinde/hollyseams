@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/*
+ * Hollyseams Design System — Midnight Indigo
+ *
+ * Palette adopted from Overview Concept 3: the brand blue after dark.
+ * Typography: Fraunces (heading, serif) + Space Grotesk (body).
+ * Deliberately flat: solid colours, no gradients anywhere.
+ */
+
+@theme {
+  /* Brand — electric indigo */
+  --color-teal: #5B7CFA;
+  --color-teal-deep: #3E5CE8;
+  --color-teal-light: #9DB0FF;
+  --color-teal-border: rgba(155, 176, 255, 0.3);
+  --color-teal-tint: rgba(91, 124, 250, 0.14);
+
+  /* Neutrals — light-on-dark */
+  --color-ink: #E9EDFF;
+  --color-ink-soft: #8B95B8;
+  --color-stone: #5C6684;
+
+  /* Surfaces — deep indigo night */
+  --color-surface: #0A1122;
+  --color-surface-soft: #0D1428;
+  --color-surface-card: rgba(255, 255, 255, 0.05);
+
+  /* Semantic */
+  --color-error: #F4758A;
+  --color-success: #3ED598;
+  --color-mint: #3ED598;
+  --color-amber: #F5B85B;
+  --color-rose: #F4758A;
+
+  /* Fonts — set at runtime by next/font (see layout.tsx) */
+  --font-heading: var(--font-fraunces), Georgia, serif;
+  --font-body: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+
+  /* Animations */
+  --animate-blink: blink 2.2s ease-in-out infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-dot-pulse: needle-pulse 2.4s ease-in-out 1.6s infinite;
+  --animate-sheet-in: sheet-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.3s ease both;
+  --animate-toast-in: toast-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes needle-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.6); opacity: 0.55; }
+  }
+
+  /* Bottom sheet + scrim entrance */
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(14px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+}
+
+/*
+ * Custom animations — not available as Tailwind utilities out of the box.
+ * Only add animations that are actually used; remove when no longer needed.
+ */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+.animate-shake {
+  animation: shake 0.35s ease;
+}
+
+/*
+ * Base styles applied via Tailwind's @layer base.
+ */
+@layer base {
+  html {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-surface text-ink;
+    font-family: var(--font-body);
+  }
+
+  /* Accessible focus ring for keyboard navigation */
+  :focus-visible {
+    @apply outline-2 outline-teal outline-offset-2;
+  }
+
+  /* Respect reduced-motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

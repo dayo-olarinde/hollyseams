@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HollySeams Overview — Concept 3 · Midnight Indigo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400;1,9..144,500&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     HOLLYSEAMS OVERVIEW — CONCEPT 3 · MIDNIGHT INDIGO
+     The brand blue, after dark. Glass, glow, motion.
+     ============================================================ */
+  :root {
+    --bg0:       #060A15;
+    --bg1:       #0A1122;
+    --card:      rgba(255, 255, 255, 0.045);
+    --card-2:    rgba(255, 255, 255, 0.07);
+    --line:      rgba(255, 255, 255, 0.085);
+    --line-soft: rgba(255, 255, 255, 0.05);
+    --ink:       #E9EDFF;
+    --soft:      #8B95B8;
+    --dim:       #5C6684;
+    --indigo:    #5B7CFA;
+    --indigo-2:  #7C5CFF;
+    --indigo-wash: rgba(91, 124, 250, 0.14);
+    --mint:      #3ED598;
+    --amber:     #F5B85B;
+    --rose:      #F4758A;
+    --tnum: "tnum" 1, "lnum" 1;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(1100px 600px at 85% -10%, #131A33 0%, transparent 55%),
+      radial-gradient(900px 600px at -5% 110%, #10162B 0%, transparent 50%),
+      #070B16;
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px 40px;
+  }
+
+  /* ---------- presentation chrome ---------- */
+  .concept-label {
+    position: fixed;
+    top: 26px; left: 32px;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: #7C87A8;
+  }
+  .concept-label b { color: #9DB0FF; font-weight: 600; }
+
+  .switcher {
+    position: fixed; top: 24px; right: 28px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .switcher a {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 26px; padding: 0 12px;
+    border: 1px solid rgba(155, 176, 255, 0.3);
+    border-radius: 999px;
+    font-size: 9.5px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: #9DB0FF; text-decoration: none;
+    background: rgba(13, 20, 40, 0.6);
+    backdrop-filter: blur(8px);
+    transition: all 180ms ease;
+  }
+  .switcher a:hover { border-color: rgba(155, 176, 255, 0.7); background: rgba(91, 124, 250, 0.12); }
+  .switcher a.current {
+    background: linear-gradient(135deg, #5B7CFA, #7C5CFF);
+    border-color: transparent;
+    color: #FFF;
+    box-shadow: 0 8px 20px -8px rgba(91, 124, 250, 0.7);
+  }
+
+  .concept-caption {
+    position: fixed;
+    bottom: 18px; left: 0; right: 0;
+    text-align: center;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #5C6684;
+  }
+  .concept-caption i { font-style: normal; color: #7C87A8; }
+
+  /* ---------- device frame ---------- */
+  .device {
+    width: min(392px, 100vw);
+    height: min(848px, calc(100vh - 110px));
+    background: var(--bg1);
+    border-radius: 44px;
+    border: 1px solid rgba(120, 140, 200, 0.18);
+    box-shadow:
+      0 40px 90px -24px rgba(0, 0, 0, 0.75),
+      0 0 60px -30px rgba(91, 124, 250, 0.35),
+      inset 0 0 0 6px rgba(255, 255, 255, 0.035);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    border-radius: 38px;
+    overflow-y: auto; overflow-x: hidden;
+    background: var(--bg1);
+  }
+  .screen::-webkit-scrollbar { width: 0; }
+
+  /* ambient glow orbs */
+  .orbs { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.5;
+  }
+  .orb-a { width: 300px; height: 300px; top: -120px; right: -90px;
+           background: radial-gradient(circle, rgba(91, 124, 250, 0.5), transparent 70%);
+           animation: orb-drift 11s ease-in-out infinite alternate; }
+  .orb-b { width: 260px; height: 260px; bottom: -90px; left: -80px;
+           background: radial-gradient(circle, rgba(124, 92, 255, 0.4), transparent 70%);
+           animation: orb-drift 13s ease-in-out infinite alternate-reverse; }
+  @keyframes orb-drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to   { transform: translate3d(-24px, 18px, 0) scale(1.12); }
+  }
+
+  .screen-inner { padding: 26px 20px 130px; position: relative; z-index: 1; }
+
+  /* ============================================================
+     HEADER
+     ============================================================ */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 26px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 11px;
+    background: linear-gradient(135deg, var(--indigo-wash), rgba(124, 92, 255, 0.12));
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    color: #9DB0FF;
+  }
+  .brand-mark svg { width: 16px; height: 16px; }
+  .brand-name { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-name span { color: #9DB0FF; }
+  .brand-name em { font-style: italic; font-family: "Fraunces", serif; font-weight: 500; color: #C7D2FF; }
+
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #5B7CFA, #7C5CFF);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #FFF;
+    box-shadow: 0 6px 18px -6px rgba(91, 124, 250, 0.8);
+  }
+
+  /* ============================================================
+     GREETING
+     ============================================================ */
+  .greeting { margin-bottom: 22px; }
+  .greeting .date {
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 9px;
+  }
+  .greeting h1 {
+    font-size: 27px; font-weight: 600;
+    letter-spacing: -0.02em; line-height: 1.15;
+    margin-bottom: 8px;
+  }
+  .greeting h1 .grad {
+    background: linear-gradient(92deg, #A5B8FF 0%, #7C5CFF 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .greeting h1 em {
+    font-family: "Fraunces", serif; font-style: italic; font-weight: 400;
+    background: none; color: var(--ink);
+  }
+  .greeting p { font-size: 12px; font-weight: 300; color: var(--soft); line-height: 1.55; }
+  .greeting p b { color: var(--ink); font-weight: 500; }
+  .greeting p .mint { color: var(--mint); font-weight: 500; }
+
+  /* ============================================================
+     REVENUE CARD + AREA CHART
+     ============================================================ */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .revenue { padding: 18px 18px 8px; margin-bottom: 12px; position: relative; overflow: hidden; }
+  .revenue::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: radial-gradient(240px 130px at 88% -30px, rgba(91, 124, 250, 0.16), transparent 70%);
+    pointer-events: none;
+  }
+  .revenue-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 2px;
+    position: relative;
+  }
+  .revenue-label {
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--soft);
+  }
+  .revenue-label i {
+    display: inline-block; width: 6px; height: 6px; border-radius: 2px;
+    background: linear-gradient(135deg, #5B7CFA, #7C5CFF);
+    margin-right: 7px;
+    box-shadow: 0 0 10px rgba(91, 124, 250, 0.9);
+  }
+  .revenue-delta {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9.5px; font-weight: 600;
+    color: var(--mint);
+    background: rgba(62, 213, 152, 0.1);
+    border: 1px solid rgba(62, 213, 152, 0.2);
+    padding: 4px 9px; border-radius: 999px;
+    letter-spacing: 0.06em;
+  }
+  .revenue-value {
+    font-size: 38px; font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: var(--tnum);
+    line-height: 1.1;
+    margin-bottom: 2px;
+    position: relative;
+  }
+  .revenue-value small { font-size: 19px; font-weight: 500; color: #9DB0FF; }
+  .revenue-sub { font-size: 10.5px; color: var(--dim); position: relative; }
+
+  .chart { margin: 12px -4px 0; position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+  .chart-grid { stroke: rgba(255, 255, 255, 0.045); }
+  .chart-area { opacity: 0; transition: opacity 1000ms ease 800ms; }
+  .chart-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 1500ms cubic-bezier(0.65, 0, 0.2, 1) 300ms;
+  }
+  .device.ready .chart-line { stroke-dashoffset: 0; }
+  .device.ready .chart-area { opacity: 1; }
+  .chart-dot {
+    transform-box: fill-box; transform-origin: center;
+    opacity: 0; transition: opacity 400ms ease;
+  }
+  .device.ready .chart-dot { opacity: 1; }
+  .chart-dot.now {
+    animation: dot-glow 2.4s ease-in-out 1.6s infinite;
+  }
+  @keyframes dot-glow {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.6); }
+  }
+  .chart-labels {
+    display: flex; justify-content: space-between;
+    padding: 0 6px; margin-top: 4px;
+  }
+  .chart-labels span {
+    font-size: 8px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--dim);
+  }
+  .chart-labels span.now { color: #9DB0FF; }
+
+  /* ============================================================
+     MINI STATS
+     ============================================================ */
+  .minis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 26px; }
+  .mini { padding: 15px 16px; position: relative; overflow: hidden; }
+  .mini-label {
+    font-size: 8.5px; font-weight: 500;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--soft);
+    margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .mini-label .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 12px rgba(245, 184, 91, 0.9);
+    animation: blink 2.2s ease-in-out infinite;
+  }
+  .mini-label .pulse.rose { background: var(--rose); box-shadow: 0 0 12px rgba(244, 117, 138, 0.8); }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .mini-value {
+    font-size: 26px; font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: var(--tnum);
+    line-height: 1;
+  }
+  .mini-value small { font-size: 15px; font-weight: 500; color: #9DB0FF; }
+  .mini-note { margin-top: 8px; font-size: 10px; color: var(--dim); }
+  .mini-note b { color: var(--amber); font-weight: 500; }
+
+  /* ============================================================
+     SECTION HEADS
+     ============================================================ */
+  .section { margin-top: 26px; }
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 13px;
+  }
+  .section-title {
+    font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .section-title::before {
+    content: ""; width: 3px; height: 14px; border-radius: 2px;
+    background: linear-gradient(180deg, #5B7CFA, #7C5CFF);
+    box-shadow: 0 0 12px rgba(91, 124, 250, 0.7);
+  }
+  .section-link {
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: #9DB0FF; text-decoration: none;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    transition: all 180ms ease;
+  }
+  .section-link:hover { background: var(--card-2); border-color: rgba(155, 176, 255, 0.4); }
+
+  /* ============================================================
+     OUTSTANDING ROWS
+     ============================================================ */
+  .owe-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 13px;
+    margin-bottom: 9px;
+    transition: transform 200ms ease, border-color 200ms ease;
+  }
+  .owe-row:hover { transform: translateY(-1px); border-color: rgba(155, 176, 255, 0.3); }
+  .owe-mono {
+    width: 36px; height: 36px; border-radius: 12px;
+    background: var(--indigo-wash);
+    border: 1px solid rgba(91, 124, 250, 0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #A5B8FF;
+    flex-shrink: 0;
+  }
+  .owe-body { flex: 1; min-width: 0; }
+  .owe-name {
+    font-size: 12.5px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .owe-sub { font-size: 9.5px; color: var(--dim); margin-top: 1.5px; }
+  .owe-track {
+    margin-top: 7px;
+    height: 3px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+  }
+  .owe-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, #5B7CFA, #7C5CFF);
+    width: 0;
+    box-shadow: 0 0 8px rgba(91, 124, 250, 0.6);
+    transition: width 1100ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .device.ready .owe-fill { width: var(--pct); }
+  .owe-side { text-align: right; flex-shrink: 0; }
+  .owe-bal {
+    font-size: 14.5px; font-weight: 700;
+    font-variant-numeric: var(--tnum);
+    letter-spacing: -0.01em;
+    color: #FFD9A0;
+    line-height: 1;
+  }
+  .owe-bal small { font-size: 9.5px; font-weight: 500; color: var(--amber); }
+  .owe-due {
+    margin-top: 4px;
+    font-size: 8px; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--dim);
+  }
+  .owe-due b { color: var(--rose); font-weight: 600; }
+
+  /* ============================================================
+     TOP CLIENTS — horizontal scroll
+     ============================================================ */
+  .clients {
+    display: flex; gap: 10px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    margin: 0 -20px;
+    padding-left: 20px; padding-right: 20px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .clients::-webkit-scrollbar { display: none; }
+  .client-card {
+    flex: 0 0 148px;
+    scroll-snap-align: start;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 200ms ease, border-color 200ms ease;
+  }
+  .client-card:hover { transform: translateY(-2px); border-color: rgba(155, 176, 255, 0.3); }
+  .client-card::after {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, rgba(91, 124, 250, 0.7), transparent);
+    opacity: 0.6;
+  }
+  .client-rank {
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.16em;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+  .client-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, rgba(91, 124, 250, 0.3), rgba(124, 92, 255, 0.3));
+    border: 1px solid rgba(155, 176, 255, 0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-weight: 600; color: #C7D2FF;
+    margin-bottom: 10px;
+  }
+  .client-name {
+    font-size: 11.5px; font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .client-jobs { font-size: 9px; color: var(--dim); margin-top: 2px; }
+  .client-paid {
+    margin-top: 9px;
+    font-size: 16px; font-weight: 700;
+    font-variant-numeric: var(--tnum);
+    letter-spacing: -0.02em;
+  }
+  .client-paid small { font-size: 10px; font-weight: 500; color: #9DB0FF; }
+
+  /* ============================================================
+     RECENT JOBS
+     ============================================================ */
+  .job-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 13px;
+    margin-bottom: 9px;
+    transition: transform 200ms ease, border-color 200ms ease;
+  }
+  .job-row:hover { transform: translateY(-1px); border-color: rgba(155, 176, 255, 0.3); }
+  .job-state {
+    width: 9px; height: 9px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .job-state.sewing { background: var(--amber); box-shadow: 0 0 12px rgba(245, 184, 91, 0.8); }
+  .job-state.ready  { background: var(--mint);  box-shadow: 0 0 12px rgba(62, 213, 152, 0.7); }
+  .job-state.done   { background: var(--dim); }
+  .job-body { flex: 1; min-width: 0; }
+  .job-name {
+    font-size: 12.5px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .job-sub {
+    font-size: 9.5px; color: var(--dim); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .job-sub .for { color: var(--soft); }
+  .job-side { text-align: right; flex-shrink: 0; }
+  .job-price {
+    font-size: 13px; font-weight: 600;
+    font-variant-numeric: var(--tnum);
+    color: var(--ink);
+  }
+  .job-price small { font-size: 9px; color: #9DB0FF; font-weight: 500; }
+  .job-status {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 7px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 999px;
+  }
+  .job-status.sewing { color: var(--amber); background: rgba(245, 184, 91, 0.1); }
+  .job-status.ready  { color: var(--mint);  background: rgba(62, 213, 152, 0.1); }
+  .job-status.done   { color: var(--dim);   background: rgba(255, 255, 255, 0.05); }
+
+  /* ============================================================
+     FAB
+     ============================================================ */
+  .fab {
+    position: absolute;
+    right: 22px; bottom: 100px;
+    width: 54px; height: 54px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #5B7CFA, #7C5CFF);
+    color: #FFF;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+      0 14px 30px -10px rgba(91, 124, 250, 0.75),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fab svg { width: 22px; height: 22px; }
+  .fab:active { transform: scale(0.88); }
+  .fab:hover { transform: scale(1.06); box-shadow: 0 18px 36px -10px rgba(91, 124, 250, 0.9); }
+
+  /* ============================================================
+     TAB BAR
+     ============================================================ */
+  .tabbar {
+    position: absolute; left: 12px; right: 12px; bottom: 12px;
+    height: 74px;
+    background: rgba(9, 14, 28, 0.78);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    display: flex; align-items: center;
+    padding: 7px;
+    box-shadow: 0 24px 50px -18px rgba(0, 0, 0, 0.8);
+    z-index: 5;
+    gap: 3px;
+  }
+  .tab {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    height: 100%;
+    background: none; border: none;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 8px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--dim);
+    border-radius: 17px;
+    position: relative;
+    transition: color 240ms ease, background 240ms ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab svg { width: 18px; height: 18px; stroke-width: 1.5; }
+  .tab:active { transform: scale(0.93); }
+  .tab.active {
+    color: #FFF;
+    background: linear-gradient(135deg, rgba(91, 124, 250, 0.28), rgba(124, 92, 255, 0.2));
+    border: 1px solid rgba(155, 176, 255, 0.25);
+    box-shadow: 0 8px 24px -8px rgba(91, 124, 250, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    font-weight: 600;
+  }
+  .tab.active svg { stroke-width: 1.9; color: #A5B8FF; }
+
+  /* ============================================================
+     REVEAL
+     ============================================================ */
+  .reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .device.ready .reveal { opacity: 1; transform: translateY(0); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 440px) {
+    body { padding: 0; }
+    .device {
+      width: 100vw; height: 100dvh;
+      border-radius: 0; border: none; box-shadow: none;
+    }
+    .screen { border-radius: 0; }
+    .concept-label, .switcher, .concept-caption { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    .reveal { opacity: 1; transform: none; }
+    .chart-area { opacity: 1; }
+    .chart-dot { opacity: 1; }
+    .owe-fill { width: var(--pct); }
+  }
+</style>
+</head>
+<body>
+
+<div class="concept-label">HollySeams · Overview — <b>Concept 3</b> · Midnight Indigo</div>
+<nav class="switcher">
+  <a href="overview-concept-1-ivory-atelier.html">01</a>
+  <a href="overview-concept-2-heritage.html">02</a>
+  <a href="overview-concept-3-midnight.html" class="current">03</a>
+</nav>
+
+<div class="device" id="device">
+  <div class="screen">
+    <div class="orbs" aria-hidden="true">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+    </div>
+
+    <div class="screen-inner">
+      <!-- ================= HEADER ================= -->
+      <header class="header reveal">
+        <div class="brand">
+          <div class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8.5 12 3l9 5.5v8L12 22l-9-5.5Z"/>
+              <path d="M12 3v19"/>
+              <path d="M3 8.5l9 5.5 9-5.5"/>
+            </svg>
+          </div>
+          <div class="brand-name">Holly<span>seams</span> <em>atélier</em></div>
+        </div>
+        <div class="avatar">W</div>
+      </header>
+
+      <!-- ================= GREETING ================= -->
+      <section class="greeting reveal">
+        <div class="date">Tuesday · 9 September 2026</div>
+        <h1>Evening, <em>Wunmi</em> — <br /><span class="grad">September is flying.</span></h1>
+        <p><b>₦13,650</b> this month · <span class="mint">▲ 21%</span> over August. Four balances out for collection.</p>
+      </section>
+
+      <!-- ================= REVENUE CHART CARD ================= -->
+      <section class="card revenue reveal">
+        <div class="revenue-head">
+          <div class="revenue-label"><i></i>Revenue</div>
+          <span class="revenue-delta">▲ 21%</span>
+        </div>
+        <div class="revenue-value"><small>₦</small>13,650</div>
+        <div class="revenue-sub">September to date · 6-month trend</div>
+        <div class="chart">
+          <svg id="chartSvg" viewBox="0 0 340 140" fill="none" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#5B7CFA"/>
+                <stop offset="100%" stop-color="#A78BFA"/>
+              </linearGradient>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#5B7CFA" stop-opacity="0.32"/>
+                <stop offset="100%" stop-color="#5B7CFA" stop-opacity="0"/>
+              </linearGradient>
+              <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="3" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <!-- grid -->
+            <line class="chart-grid" x1="10" y1="34" x2="330" y2="34"/>
+            <line class="chart-grid" x1="10" y1="66" x2="330" y2="66"/>
+            <line class="chart-grid" x1="10" y1="98" x2="330" y2="98"/>
+            <!-- area -->
+            <path id="areaPath" class="chart-area" fill="url(#areaGrad)"/>
+            <!-- line -->
+            <path id="linePath" class="chart-line" stroke="url(#lineGrad)" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1" pathLength="1" filter="url(#glow)"/>
+          </svg>
+          <div class="chart-labels" id="chartLabels"></div>
+        </div>
+      </section>
+
+      <!-- ================= MINI STATS ================= -->
+      <section class="minis reveal">
+        <div class="card mini">
+          <div class="mini-label">To collect <span class="pulse"></span></div>
+          <div class="mini-value"><small>₦</small>9,300</div>
+          <div class="mini-note"><b>4 garments</b> · largest ₦3,800</div>
+        </div>
+        <div class="card mini">
+          <div class="mini-label">On the bench <span class="pulse rose"></span></div>
+          <div class="mini-value">3</div>
+          <div class="mini-note">in progress · <b>1 ready</b> to pick up</div>
+        </div>
+      </section>
+
+      <!-- ================= OUTSTANDING ================= -->
+      <section class="section reveal">
+        <div class="section-head">
+          <span class="section-title">Balances to collect</span>
+          <a class="section-link" href="#">4 open</a>
+        </div>
+        <div id="oweList"></div>
+      </section>
+
+      <!-- ================= TOP CLIENTS ================= -->
+      <section class="section reveal">
+        <div class="section-head">
+          <span class="section-title">Top clients</span>
+          <a class="section-link" href="#">This year</a>
+        </div>
+        <div class="clients" id="clientList"></div>
+      </section>
+
+      <!-- ================= RECENT JOBS ================= -->
+      <section class="section reveal">
+        <div class="section-head">
+          <span class="section-title">Latest work</span>
+          <a class="section-link" href="#">View all</a>
+        </div>
+        <div id="jobList"></div>
+      </section>
+
+    </div>
+
+    <!-- ================= FAB ================= -->
+    <button class="fab" aria-label="New job">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="M12 5v14"/><path d="M5 12h14"/>
+      </svg>
+    </button>
+
+    <!-- ================= TAB BAR ================= -->
+    <nav class="tabbar">
+      <button class="tab active" aria-label="Overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19Z"/>
+          <path d="M9.5 20.5v-5.5h5v5.5"/>
+        </svg>
+        Overview
+      </button>
+      <button class="tab" aria-label="Jobs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="2.6"/>
+          <circle cx="6" cy="18" r="2.6"/>
+          <path d="M20 4 8.4 15.6"/>
+          <path d="m14.2 14.2 5.8 5.8"/>
+          <path d="m8.4 8.4 3.4 3.4"/>
+        </svg>
+        Jobs
+      </button>
+      <button class="tab" aria-label="Customers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="7.5" r="3.5"/>
+          <path d="M3 20.5v-1a6 6 0 0 1 12 0v1"/>
+          <path d="M16 4.6a3.5 3.5 0 0 1 0 6.5"/>
+          <path d="M17.5 14.6a6 6 0 0 1 3.5 5.4v.5"/>
+        </svg>
+        Customers
+      </button>
+      <button class="tab" aria-label="Reports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+          <path d="M8 17v-4"/>
+          <path d="M13 17V7"/>
+          <path d="M18 17v-7"/>
+        </svg>
+        Reports
+      </button>
+    </nav>
+  </div>
+</div>
+
+<p class="concept-caption">Concept 03 · <i>Midnight Indigo</i> — brand blue after dark, glass &amp; glow</p>
+
+<script>
+  // ============================================================
+  // Mock data — shaped exactly like the HollySeams API contract
+  // ============================================================
+  const monthlyRevenue = [
+    { monthKey: "2026-04", month: "Apr",  revenue: 7850  },
+    { monthKey: "2026-05", month: "May",  revenue: 6400  },
+    { monthKey: "2026-06", month: "Jun",  revenue: 9300  },
+    { monthKey: "2026-07", month: "Jul",  revenue: 8150  },
+    { monthKey: "2026-08", month: "Aug",  revenue: 11200 },
+    { monthKey: "2026-09", month: "Sep",  revenue: 13650 },
+  ];
+
+  const topCustomers = [
+    { name: "Mrs. Folake Adeyemi", totalPaid: 8450, jobCount: 4 },
+    { name: "Chiamaka Okafor",     totalPaid: 6900, jobCount: 3 },
+    { name: "Bisi Ajayi",          totalPaid: 4200, jobCount: 2 },
+    { name: "Halima Suleiman",     totalPaid: 2850, jobCount: 2 },
+    { name: "Ngozi Eze",           totalPaid: 1950, jobCount: 1 },
+  ];
+
+  const outstandingPayments = [
+    { customer: { name: "Halima Suleiman" },     subjectName: "husband",  agreedPrice: 6800, totalPaid: 3000, dueDate: "12 Sep" },
+    { customer: { name: "Mrs. Folake Adeyemi" }, subjectName: "herself",  agreedPrice: 3500, totalPaid: 1000, dueDate: "20 Sep" },
+    { customer: { name: "Mrs. Folake Adeyemi" }, subjectName: "daughter", agreedPrice: 2400, totalPaid: 1200, dueDate: "25 Sep" },
+    { customer: { name: "Chiamaka Okafor" },     subjectName: "son",      agreedPrice: 1800, totalPaid: 0,    dueDate: "2 Oct" },
+  ];
+
+  const recentJobs = [
+    { description: "Agbada set",        subjectName: "Halima Suleiman",     for: "her husband",  agreedPrice: 6800, status: "pending",   note: "due 12 Sep" },
+    { description: "Aso-Ebi gown",      subjectName: "Mrs. Folake Adeyemi", for: "herself",      agreedPrice: 3500, status: "pending",   note: "due 20 Sep" },
+    { description: "Boubou",            subjectName: "Mrs. Folake Adeyemi", for: "her daughter", agreedPrice: 2400, status: "completed", note: "ready · 30 Aug" },
+    { description: "Kaftan & trousers", subjectName: "Chiamaka Okafor",     for: "her son",      agreedPrice: 1800, status: "pending",   note: "due 2 Oct" },
+    { description: "Ankara midi dress", subjectName: "Bisi Ajayi",          for: "herself",      agreedPrice: 2600, status: "completed", note: "collected 3 Sep" },
+  ];
+
+  const fmt = (n) => "₦" + Number(n).toLocaleString("en-US");
+
+  // ---------- chart ----------
+  const W = 340, H = 140, padX = 10, padTop = 34, bottom = 112;
+  const max = Math.max(...monthlyRevenue.map((m) => m.revenue));
+  const pts = monthlyRevenue.map((m, i) => {
+    const x = padX + (i * (W - padX * 2)) / (monthlyRevenue.length - 1);
+    const y = bottom - ((m.revenue - 0) / max) * (bottom - padTop);
+    return { x, y, m };
+  });
+
+  function smoothPath(points) {
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+      d += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)} ${(p1.y + (p2.y - p0.y) / 6).toFixed(1)}, ` +
+           `${(p2.x - (p3.x - p1.x) / 6).toFixed(1)} ${(p2.y - (p3.y - p1.y) / 6).toFixed(1)}, ` +
+           `${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  const lineD = smoothPath(pts);
+  const linePath = document.getElementById("linePath");
+  linePath.setAttribute("d", lineD);
+  document.getElementById("areaPath").setAttribute(
+    "d", `${lineD} L ${pts[pts.length - 1].x} ${bottom} L ${pts[0].x} ${bottom} Z`,
+  );
+
+  // data dots
+  const dotsNS = "http://www.w3.org/2000/svg";
+  pts.forEach((p, i) => {
+    const dot = document.createElementNS(dotsNS, "circle");
+    dot.setAttribute("cx", p.x);
+    dot.setAttribute("cy", p.y);
+    dot.setAttribute("r", i === pts.length - 1 ? 3.4 : 2.2);
+    dot.setAttribute("fill", i === pts.length - 1 ? "#A78BFA" : "#5B7CFA");
+    dot.setAttribute("class", "chart-dot" + (i === pts.length - 1 ? " now" : ""));
+    document.getElementById("chartSvg").appendChild(dot);
+  });
+
+  document.getElementById("chartLabels").innerHTML = monthlyRevenue
+    .map((m, i) => `<span class="${i === monthlyRevenue.length - 1 ? "now" : ""}">${m.month}</span>`)
+    .join("");
+
+  // ---------- outstanding ----------
+  document.getElementById("oweList").innerHTML = outstandingPayments
+    .map((o) => {
+      const balance = o.agreedPrice - o.totalPaid;
+      const pct = Math.round((o.totalPaid / o.agreedPrice) * 100);
+      const initials = o.customer.name.replace("Mrs. ", "").split(" ").map((w) => w[0]).slice(0, 2).join("");
+      return `
+        <div class="owe-row">
+          <div class="owe-mono">${initials}</div>
+          <div class="owe-body">
+            <div class="owe-name">${o.customer.name} <span style="color:var(--dim);font-weight:400;">· ${o.subjectName}</span></div>
+            <div class="owe-sub">${fmt(o.agreedPrice)} agreed · ${fmt(o.totalPaid)} paid</div>
+            <div class="owe-track"><div class="owe-fill" style="--pct:${pct}%"></div></div>
+          </div>
+          <div class="owe-side">
+            <div class="owe-bal"><small>₦</small>${balance.toLocaleString("en-US")}</div>
+            <div class="owe-due">due <b>${o.dueDate}</b></div>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  // ---------- top clients ----------
+  document.getElementById("clientList").innerHTML = topCustomers
+    .map((c, i) => {
+      const initials = c.name.replace("Mrs. ", "").split(" ").map((w) => w[0]).slice(0, 2).join("");
+      return `
+        <div class="client-card">
+          <div class="client-rank">NO. ${String(i + 1).padStart(2, "0")}</div>
+          <div class="client-avatar">${initials}</div>
+          <div class="client-name">${c.name}</div>
+          <div class="client-jobs">${c.jobCount} ${c.jobCount === 1 ? "job" : "jobs"} this year</div>
+          <div class="client-paid"><small>₦</small>${c.totalPaid.toLocaleString("en-US")}</div>
+        </div>`;
+    })
+    .join("");
+
+  // ---------- recent jobs ----------
+  const statusMeta = {
+    pending:   { label: "In progress", cls: "sewing" },
+    completed: { label: "Ready",       cls: "ready" },
+    delivered: { label: "Delivered",   cls: "done" },
+  };
+  document.getElementById("jobList").innerHTML = recentJobs
+    .map((j) => {
+      const st = statusMeta[j.status];
+      return `
+        <div class="job-row">
+          <div class="job-state ${st.cls}"></div>
+          <div class="job-body">
+            <div class="job-name">${j.description}</div>
+            <div class="job-sub"><span class="for">${j.subjectName}</span> · for ${j.for} · ${j.note}</div>
+          </div>
+          <div class="job-side">
+            <div class="job-price"><small>₦</small>${j.agreedPrice.toLocaleString("en-US")}</div>
+            <span class="job-status ${st.cls}">${st.label}</span>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  // ============================================================
+  // Animation
+  // ============================================================
+  const device = document.getElementById("device");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => device.classList.add("ready"));
+  });
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.querySelectorAll(".reveal").forEach((el, i) => {
+    el.style.transitionDelay = reduceMotion ? "0ms" : `${Math.min(i * 90, 540)}ms`;
+  });
+</script>
+</body>
+</html>

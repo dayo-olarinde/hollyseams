@@ -1,0 +1,38 @@
+import {
+  date,
+  index,
+  jsonb,
+  pgTable,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { subjectsTable } from "./subjects";
+
+export const measurementsTable = pgTable(
+  "measurements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subjectId: uuid("subject_id")
+      .references(() => subjectsTable.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
+    measurements: jsonb("measurements").notNull(),
+    date: date("date", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdateFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("measurements_subject_id_idx").on(t.subjectId),
+    index("measurements_subject_date_id_idx").on(
+      t.subjectId,
+      t.date.desc(),
+      t.id.desc(),
+    ),
+  ],
+);
