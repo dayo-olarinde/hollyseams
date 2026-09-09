@@ -191,7 +191,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   /* ---------- 02 · fitting ---------- */
   const [subjects, setSubjects] = useState<ModalSubject[]>([]);
   const [activeKey, setActiveKey] = useState("new");
-  const [styles, setStyles] = useState<Record<string, string>>({});
   const [meas, setMeas] = useState<Record<string, Record<string, number | null>>>({});
   const [dirtyMeas, setDirtyMeas] = useState<Set<string>>(new Set()); // subject keys touched → new measurement row
   const [composer, setComposer] = useState("");
@@ -237,7 +236,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setPhone("");
     setSubjects([{ key: "new", relationship: "self", name: "", loaded: true }]);
     setActiveKey("new");
-    setStyles({});
     setMeas({});
     setDirtyMeas(new Set());
     setComposer("");
@@ -513,13 +511,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
 
     // Shared job payload — status omitted → backend defaults to "pending".
     // dueDate sent as the explicit "YYYY-MM-DD" from the native picker.
-    // The fitting style is folded into `description` ("gown · purple lace")
-    // because that's the only free-text column on the job — the overview's
-    // "Latest work" row shows it instead of a generic "Garment".
-    const style = styles[activeKey]?.trim() ?? "";
-    const description = [style, desc.trim()].filter(Boolean).join(" · ");
+    // The garment style has no column of its own, so the tailor types it
+    // straight into `description` ("Gown — purple lace, puff sleeves") and
+    // the overview's "Latest work" row shows it as-is.
     const jobPayload = {
-      description,
+      description: desc.trim(),
       agreedPrice: priceNum,
       ...(dueDate ? { dueDate } : {}),
     };
@@ -750,7 +746,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           <Fold
             num={2}
             name="The fitting"
-            summary={activeSubject ? `${subjectLabel(activeSubject)}${styles[activeKey] ? " · " + styles[activeKey] : ""}` : "Who is it for?"}
+            summary={activeSubject ? subjectLabel(activeSubject) : "Who is it for?"}
             open={fold === 2}
             onToggle={() => setFold(fold === 2 ? 3 : 2)}
           >
@@ -840,14 +836,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 )}
               </div>
             )}
-
-            <div className={miniLabelClass}>Style</div>
-            <input
-              className={inputClass}
-              placeholder="e.g. gown, maxi, blouse"
-              value={styles[activeKey] ?? ""}
-              onChange={(e) => setStyles((prev) => ({ ...prev, [activeKey]: e.target.value }))}
-            />
 
             <div className={miniLabelClass}>
               Measurements <span className="font-normal normal-case tracking-[0.04em] text-stone">· cm</span>
@@ -997,7 +985,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           >
             <input
               className={inputClass}
-              placeholder="Description — e.g. purple lace, puff sleeves"
+              placeholder="e.g. Gown — purple lace, puff sleeves"
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
             />
@@ -1108,11 +1096,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               Cut and <em className="italic text-mint">pinned</em>.
             </h3>
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-soft">
-              {styles[activeKey] || "Garment"} for {subjectLabel(activeSubject!)} — {naira.format(created.agreedPrice)}.
+              {created.description || "Garment"} for {subjectLabel(activeSubject!)} — {naira.format(created.agreedPrice)}.
             </p>
             <div className="mt-3.5 w-full rounded-[13px] border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left">
               <div className="flex items-baseline justify-between text-[13px] font-semibold">
-                <span className="truncate">{clientLabel} · {subjectLabel(activeSubject!)} · {styles[activeKey] || "—"}</span>
+                <span className="truncate">{clientLabel} · {subjectLabel(activeSubject!)} · {created.description || "—"}</span>
                 <span className="ml-3 flex-shrink-0 text-teal-light">{naira.format(created.agreedPrice)}</span>
               </div>
               <div className="mt-1 text-[9.5px] text-stone">
@@ -1127,7 +1115,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   // confirmation alive over the overview.
                   toast.show({
                     title: "Cut and pinned.",
-                    detail: `${clientLabel} · ${styles[activeKey] || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
+                    detail: `${clientLabel} · ${created.description || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
                   });
                   onClose();
                 }}
@@ -1140,7 +1128,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 onClick={() => {
                   toast.show({
                     title: "Cut and pinned.",
-                    detail: `${clientLabel} · ${styles[activeKey] || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
+                    detail: `${clientLabel} · ${created.description || "garment"} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
                   });
                   onClose();
                 }}
