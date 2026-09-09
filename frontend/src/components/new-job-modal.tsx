@@ -81,8 +81,11 @@ import {
   type Customer,
   type Job,
   type Measurement,
-  type Subject,
-} from "@/lib/api-client";
+  type Subject,} from "@/lib/api-client";
+import { avatarColor, avatarTint, tintOf } from "@/lib/avatar-colors";
+
+
+
 
 /* ------------------------------ helpers ------------------------------ */
 
@@ -160,17 +163,26 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const inputClass =
   "w-full rounded-xl border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-4 py-3 text-[13px] text-[var(--hig-label)] outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-[var(--hig-label-tertiary)] focus:border-[var(--hig-accent)] focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]";
 
+/* Borderless pills: the fill/tint alone shapes the chip (subject chips keep
+   their gray fill when idle, tint when selected). Only the "+ Add subject"
+   action keeps a dashed border so it still reads as a button. */
 const chipClass =
-  "inline-flex items-center gap-2 rounded-full border border-[var(--hig-separator)] bg-[var(--hig-fill)] px-3 py-2 text-[11px] font-medium text-[var(--hig-label-secondary)] transition-all active:scale-95";
+  "inline-flex items-center gap-2 rounded-full bg-[var(--hig-fill)] px-3 py-2 text-[11px] font-medium text-[var(--hig-label-secondary)] transition-all active:scale-95";
 
-const chipOnClass =
-  "border-[var(--hig-accent)] bg-[var(--hig-accent-tint)] text-[var(--hig-label)]";
+/* Selected-chip state: text lifts to label colour. The background + border
+   come from INLINE style (see the subject chips) so each subject's selected
+   chip glows in a light tint of THEIR OWN avatar hue — inline styles beat
+   chipClass's base fill without any important-flag fight. */
+const chipOnClass = "!text-[var(--hig-label)]";
+
 
 const chipAddClass =
-  "border-dashed border-[var(--hig-accent-line)] bg-transparent text-[var(--hig-accent)]";
+  "border border-dashed border-[var(--hig-accent-line)] bg-transparent text-[var(--hig-accent)]";
 
+/* Avatar chips: layout only — the hue comes inline from avatarColor so each
+   subject keeps their own colour (border uses the hue at 30% alpha). */
 const monoClass =
-  "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] text-[11px] font-semibold text-[var(--hig-accent)]";
+  "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold";
 
 // Section titles need clear air above them — a uniform mt-6 (24px) keeps
 // every title in the folds from feeling glued to the block above it.
@@ -565,9 +577,14 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         })).data!;
       }
       setCreated(job);
-      // The overview's "Latest work" reads query key ["jobs"] — refresh it
-      // so the new job appears without a manual reload.
+      // The overview reads three query keys; refresh ALL of them so the new
+      // job shows up everywhere without a manual reload:
+      //   ["jobs"]                     → Latest work + bench counts
+      //   ["reports","outstanding-payments"] → Balances to collect
+      //   ["reports","monthly-revenue"]     → revenue card (harmless refetch)
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["reports", "outstanding-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["reports", "monthly-revenue"] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the job. Try again.");
     } finally {
@@ -592,6 +609,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     s.relationship === "self"
       ? client?.name ?? "Self"
       : s.name || "Subject";
+
+  // Self subjects carry the client's name, so their hue matches the client's
+  // avatar elsewhere (balances, Latest-work dots) — one person, one colour.
+  const subjectHue = (s: ModalSubject) =>
+    avatarColor(s.relationship === "self" ? (client?.name ?? "") : s.name);
 
   // "no due date" stands alone — never rendered as "due no date" in the ticket.
   const dueLabel = dueDate ? fmtDate(dueDate) : null;
@@ -723,7 +745,16 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                           onClick={() => pickClient(c)}
                           className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-[var(--hig-accent-tint)]"
                         >
-                          <span className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] text-[11px] font-semibold text-[var(--hig-accent)]">
+                          {/* avatar tinted from the customer's name — same hue
+                              as their balances avatar and self-subject dots */}
+                          <span
+                            className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold"
+                            style={{
+                              backgroundColor: avatarTint(c.name),
+                              color: avatarColor(c.name),
+                              borderColor: avatarColor(c.name) + "4D",
+                            }}
+                          >
                             {initials(c.name)}
                           </span>
                           <span className="min-w-0 flex-1">
@@ -771,23 +802,46 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           >
             <div className={miniLabelClass}>For whom</div>
             <div className="flex flex-wrap gap-2 pt-2">
-              {subjects.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => selectSubject(s)}
-                  className={`${chipClass} ${activeKey === s.key ? chipOnClass : ""}`}
-                >
-                  <span className={monoClass}>{initials(subjectLabel(s))}</span>
-                  {subjectLabel(s)}
-                  {s.relationship !== "self" && (
-                    <span className="text-[11px] text-[var(--hig-label-tertiary)]">{s.relationship}</span>
-                  )}
-                  {s.loaded && s.latestMeasId && (
-                    <span className="text-[11px] text-[var(--hig-label-tertiary)]">· fitted</span>
-                  )}
-                </button>
-              ))}
+              {subjects.map((s) => {
+                const hue = subjectHue(s);
+                const active = activeKey === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => selectSubject(s)}
+                    className={`${chipClass} ${active ? chipOnClass : ""}`}
+                    style={
+                      active
+                        ? {
+                            // selected → bg is a ~10% wash of the subject's
+                            // avatar hue; borderless, so the wash alone
+                            // marks the selection
+                            backgroundColor: hue + "1A",
+                          }
+                        : undefined
+                    }
+                  >
+                    <span
+                      className={monoClass}
+                      style={{
+                        backgroundColor: tintOf(hue),
+                        color: hue,
+                        borderColor: hue + "4D",
+                      }}
+                    >
+                      {initials(subjectLabel(s))}
+                    </span>
+                    {subjectLabel(s)}
+                    {s.relationship !== "self" && (
+                      <span className="text-[11px] text-[var(--hig-label-tertiary)]">{s.relationship}</span>
+                    )}
+                    {s.loaded && s.latestMeasId && (
+                      <span className="text-[11px] text-[var(--hig-label-tertiary)]">· fitted</span>
+                    )}
+                  </button>
+                );
+              })}
               {!addingSubject && (
                 <button type="button" onClick={startAddSubject} className={`${chipClass} ${chipAddClass}`}>
                   + Add subject
@@ -860,10 +914,19 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               Measurements <span className="font-normal normal-case tracking-[0.04em] text-stone">· cm</span>
             </div>
             <div className="flex flex-wrap gap-2 pt-2">
-              {Object.entries(currentMeas()).map(([key, value]) =>
-                editingMeas === key ? (
-                  <div key={key} className="flex items-center gap-2 rounded-full border border-[var(--hig-accent-line)] bg-[var(--hig-accent-tint)] py-2 pl-3 pr-2">
-                    <span className="text-[11px] font-medium text-[var(--hig-accent)]">{key}</span>
+              {Object.entries(currentMeas()).map(([key, value]) => {
+                // One hue per measurement type — same colour language as the
+                // subject chips (keyed on the camelCase jsonb key, e.g. bust,
+                // gownLength). The key text pops in its hue; the VALUE stays
+                // label-black so the number is always the most readable thing.
+                const hue = avatarColor(key);
+                return editingMeas === key ? (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 rounded-full border py-2 pl-3 pr-2"
+                    style={{ backgroundColor: tintOf(hue), borderColor: hue + "4D" }}
+                  >
+                    <span className="text-[11px] font-semibold" style={{ color: hue }}>{key}</span>
                     <input
                       id="editVal"
                       className="w-[52px] rounded-lg border border-[var(--hig-separator)] bg-[var(--hig-fill)] py-1 text-center text-[12px] font-medium text-[var(--hig-label)] outline-none"
@@ -891,11 +954,12 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     type="button"
                     title="Tap to update"
                     onClick={() => setEditingMeas(key)}
-                    className={`${chipClass} ${chipOnClass} !px-3 !py-2`}
+                    className={`${chipClass} !px-3 !py-2`}
+                    style={{ backgroundColor: tintOf(hue) }}
                   >
-                    <span className={monoClass}>{key.slice(0, 2).toUpperCase()}</span>
-                    {key} <b className="font-medium text-[var(--hig-label)]">{value}</b>
-                    <span className="text-[10px] text-[var(--hig-label-tertiary)]">cm</span>
+                    <b className="font-semibold" style={{ color: hue }}>{key}</b>{" "}
+                    <b className="font-medium text-[var(--hig-label)]">{value}</b>
+                    <span className="text-[10px] text-[var(--hig-label-secondary)]">cm</span>
                     <span
                       aria-label={`Remove ${key}`}
                       onClick={(e) => {
@@ -909,8 +973,8 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                       ✕
                     </span>
                   </button>
-                ),
-              )}
+                );
+              })}
             </div>
 
             {/* composer: type → suggestion → just the value */}

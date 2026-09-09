@@ -109,11 +109,15 @@ All animations are killed under `prefers-reduced-motion` (global rule in
 - **Grouped lists** — one card per section, hairline `divide-y` separators,
   uppercase 13px section headers with blue "View all".
 - **Status** — pill carries meaning (tinted orange/green/gray); the dot is
-  purely decorative: stable per-job colour hashed from the job id across an
-  iOS palette (blue/purple/pink/teal/orange/green/indigo) + soft glow.
-- **Balances rows** — accent-tinted initials avatar, name + subject chip
-  ("Self" for self-subjects), agreed/paid line (paid in green), blue progress
-  bar, bold balance + due date (red when overdue).
+  purely decorative: hashed from the SUBJECT's name (`avatarColor`) across an
+  iOS palette (blue/purple/pink/teal/orange/green/indigo) + soft glow, so a
+  job's dot always matches that subject's avatar hue.
+- **Balances rows** — initials avatar tinted from the customer's name
+  (`avatarColor`/`avatarTint` in `src/lib/avatar-colors.ts` — one person,
+  one colour everywhere: balances, Latest-work dots, client search, fitting
+  chips), name + subject chip ("Self" for self-subjects), agreed/paid line
+  (paid in green), blue progress bar, bold balance + due date (red when
+  overdue).
 - **Tab bar** — full-bleed material (`--hig-bar` + `backdrop-blur(20px)`
   `saturate(150%)`), rounded top 24px, active tab = accent-tint pill.
 - **FAB** — 56px accent circle, white plus, flush right edge, floats above the

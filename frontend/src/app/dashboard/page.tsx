@@ -37,6 +37,7 @@ import {
   type MonthlyRevenue,
   type OutstandingPayment,
 } from "@/lib/api-client";
+import { avatarColor, avatarTint } from "@/lib/avatar-colors";
 
 /* ---------------------------------- helpers ---------------------------------- */
 
@@ -661,9 +662,16 @@ export default function DashboardPage() {
                   key={o.jobId}
                   className="flex items-center gap-3 px-4 py-3"
                 >
-                  {/* initials avatar — soft blue fill, the one accent */}
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-[var(--hig-accent-tint)] text-[13px] font-semibold text-[var(--hig-accent)]">
-                    {initials(o.customer?.name ?? o.customerName ?? "")}
+                  {/* initials avatar — tinted from the customer's name so each
+                      client keeps one colour across every screen (avatarColor) */}
+                  <div
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
+                    style={{
+                      backgroundColor: avatarTint(customerName),
+                      color: avatarColor(customerName),
+                    }}
+                  >
+                    {initials(customerName)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
@@ -795,9 +803,9 @@ export default function DashboardPage() {
  * Status → HIG semantic colors (green = ready, orange = in progress,
  * gray = neutral/canceled/delivered). Dots are static — no blinking.
  */
-/* Status pills carry the meaning; the dots are purely decorative. Each job
-   gets a stable colour from the iOS palette, hashed from its id, so a garment
-   keeps the same dot across renders without repeating neighbours. */
+/* Status pills carry the meaning; the dots are purely decorative. Each job's
+   dot is hashed from the SUBJECT's name (avatarColor), so it matches the
+   subject's avatar hue everywhere in the app. */
 const statusMeta: Record<Job["status"], { chip: string }> = {
   pending: {
     chip: "bg-[var(--hig-warning-tint)] text-[var(--hig-warning)]",
@@ -810,21 +818,7 @@ const statusMeta: Record<Job["status"], { chip: string }> = {
   },
 };
 
-const DOT_COLORS = [
-  "#0A84FF", // blue
-  "#BF5AF2", // purple
-  "#FF375F", // pink
-  "#40CBE0", // teal
-  "#FF9F0A", // orange
-  "#30D158", // green
-  "#5E5CE6", // indigo
-] as const;
 
-function dotColorFor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return DOT_COLORS[h % DOT_COLORS.length]!;
-}
 
 function JobRow({ job }: { job: Job }) {
   const delivered = job.deliveredAt !== null;
@@ -847,12 +841,15 @@ function JobRow({ job }: { job: Job }) {
         : "no due date";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">      {/* decorative glowing dot — stable per-job colour (see dotColorFor) */}
+    <div className="flex items-center gap-3 px-4 py-3">
+      {/* decorative glowing dot — keyed to the SUBJECT's name (avatarColor),
+          so a job's dot always matches that subject's avatar hue; self
+          subjects carry the customer's name, matching their avatar too */}
       <span
         className="h-[9px] w-[9px] flex-shrink-0 rounded-full"
         style={{
-          backgroundColor: dotColorFor(job.id),
-          boxShadow: `0 0 10px ${dotColorFor(job.id)}80`,
+          backgroundColor: avatarColor(job.subjectName ?? ""),
+          boxShadow: `0 0 10px ${avatarColor(job.subjectName ?? "")}80`,
         }}
         aria-hidden="true"
       />
