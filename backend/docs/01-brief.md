@@ -23,6 +23,9 @@ She can:
 ## Out of scope for v1
 - Bulk-importing her existing notebook of customers.
 - Multi-user/multi-tenant support.
+- **Offline capture** — asked for in NFR1, deliberately deferred to v2 rather than cut. See
+the "Deferred to v2" note in `02-requirements.md` for the rationale and what building it
+requires.
 
 ## Photos
 Stored in Cloudinary, referenced as arrays on the `jobs` table (style-reference photos, finished-job photos). Uploaded whenever she has a good connection, not necessarily at time of capture.

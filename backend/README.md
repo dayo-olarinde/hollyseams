@@ -10,8 +10,10 @@ Express 5 + Bun + TypeScript API server for the Hollyseams tailor app
   promises are forwarded to the error middleware natively
 - **Database:** PostgreSQL 16, Drizzle ORM (`drizzle-orm/postgres-js`)
 - **Cache / sessions:** Redis 7 via ioredis (opaque session ids → user, TTL)
-- **Auth:** single-user PIN (Argon2id + server-side pepper, timing-equalized
-  for the no-user path)
+- **Auth:** single-user PIN (Argon2id + server-side pepper). `utils/hash.util.ts` also
+  carries a `dummyVerify` helper for timing-equalizing the no-user path; it is deliberately
+  left unwired, because with one seeded user that branch is unreachable and the extra Argon2
+  work would be paid on every failed login (ADR-006).
 - **Photos:** Cloudinary — browsers upload directly with server-issued
   signatures; the DB only ever stores server-verified URLs
 - **Validation:** zod schemas in `src/validations/` double as the type

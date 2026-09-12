@@ -20,9 +20,7 @@ Themes are **class-driven**, not OS-driven:
   `hig-light` or `hig-dark` to `<html>` **before first paint** (from
   `localStorage("hig-theme")`, falling back to `prefers-color-scheme`).
 - All colours are CSS custom properties scoped under `.hig` and switched by
-  `html.hig-light .hig` / `html.hig-dark .hig` in `globals.css`.
-- The toggle (`components/theme-toggle.tsx`, top-right of the dashboard) flips
-  the class and persists the choice; login and dashboard always agree.
+  `html.hig-light .hig` / `html.hig-dark .hig` in `globals.css`.- The toggle (`components/ui/theme-toggle.tsx`, top-right of the dashboard) flips the class and persists the choice; login and dashboard always agree.
 - `<html suppressHydrationWarning>` silences the intentional pre-hydration
   class change.
 
@@ -137,13 +135,24 @@ All animations are killed under `prefers-reduced-motion` (global rule in
 | File | Role |
 | --- | --- |
 | `frontend/src/app/globals.css` | `.hig` tokens (light/dark), keyframes, reduced-motion rule |
-| `frontend/src/app/layout.tsx` | Inter via `next/font`, theme-init inline script |
-| `frontend/src/components/theme-toggle.tsx` | dark/light toggle |
+| `frontend/src/app/layout.tsx` | Inter via `next/font`, theme-init inline script, providers |
+| `frontend/src/components/ui/theme-toggle.tsx` | dark/light toggle |
+| `frontend/src/components/ui/toast.tsx` | toast surface + `useToast` |
+| `frontend/src/components/ui/tab-bar.tsx` | shared bottom tab bar + per-screen FAB slot |
+| `frontend/src/components/jobs/new-job-modal.tsx` | new-job sheet — also the only path that creates a client |
 | `frontend/src/app/dashboard/page.tsx` | HIG overview (all tokens consumed here) |
 | `frontend/src/app/(auth)/login/page.tsx` | HIG PIN login (keypad, dots, error) |
 
+Screens read data through `frontend/src/hooks/*` and never build API URLs themselves; the
+layers are `lib/api` (transport + endpoints) → `hooks` (query keys, caching) → screens.
+
 ## Conversion status
 
+Every screen is on the HIG theme:
+
 - ✅ Login, dashboard overview, theme system
-- ⏳ **New-job modal + toast** — still Midnight Indigo; next to convert
-- ✅ Rollback points in git history for every Midnight Indigo screen
+- ✅ New-job sheet + toasts
+- ✅ Jobs list, job detail, customers list, customer file, reports
+
+The heritage Midnight Indigo theme is preserved at commit `b1fa5cc` — see the rollback note at
+the top of this document.

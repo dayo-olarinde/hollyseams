@@ -39,6 +39,12 @@
 **Context:** Jobs are linked to customers, and deleting a customer would break job/payment history and reports.
 **Decision:** No delete endpoint for customers; the database also blocks it (`onDelete: restrict`).
 **Consequences:** Customer records can't be cleaned up later without extra work, but history and reports stay accurate.
+**Update (v1 code):** the `restrict` that actually protects a customer with history is
+`jobs.customerId → customers.id`. `subjects.customerId` and `measurements.subjectId` are
+`onDelete: cascade` instead, so a customer row with subjects but no jobs would take its
+subjects and their measurements with it if it were ever deleted. That is unreachable today
+(there is no delete endpoint), but if a delete is ever added, those cascades have to be
+reconsidered first.
 
 ## ADR-008: Separate "who pays" (Customer) from "who it's for" (Subject); measurements stored as jsonb
 **Context:** A customer sometimes brings work for family members (e.g. herself, her daughters, her mother), not just herself. Measurements and job history need to persist per person even though only the customer pays and appears in revenue reports. Separately, required measurement fields vary by garment type (shirt vs trousers), so a fixed set of columns doesn't fit every row.

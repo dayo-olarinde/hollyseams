@@ -18,3 +18,31 @@
 3. **Durability** — photos must not be lost after upload (Cloudinary).
 4. **Usability** — the UI is easy to navigate, with clear error messages, since the user is not technical.
 5. **Security** — PIN-based login (Argon2 + pepper) with Redis-backed, rate-limited sessions. Chosen over email/password, OAuth, or JWT because the app is single-user and the real threat is casual access (e.g. phone picked up by someone else), not a sophisticated attacker.
+
+---
+
+## Deferred to v2 — offline capture (NFR1)
+
+**Status:** not implemented in v1. Recording a job assumes a connection at the moment it is
+saved.
+
+**Why deferred:** the app is used at the studio bench, where a connection exists. Offline
+capture is a feature in its own right — a local draft store, a retry queue, conflict handling
+and a sync UI — so it is worth building once the tailor is actually observed recording work
+while offline, not before.
+
+**What already exists to build on:** the browser uploads photos straight to Cloudinary with a
+server-issued signature (ADR-004a), so image bytes never flow through the API.
+
+**What it needs:**
+
+1. Persist an in-progress job locally (draft fields + the picked photo files) so the sheet
+   survives a reload or the app being killed.
+2. Queue the save and retry it when connectivity returns, with backoff.
+3. Upload before submitting: ADR-004a requires the server to resolve every `public_id` against
+   Cloudinary before the job is persisted, so the queue holds "draft + uploads pending",
+   not just "request pending".
+4. Show a visible "waiting to sync" state per draft. A draft that is still local must never
+   look saved — silent loss is the failure mode that matters here.
+5. Give each queued create an idempotency key, so a retry after a lost response cannot create
+   the same job twice.
