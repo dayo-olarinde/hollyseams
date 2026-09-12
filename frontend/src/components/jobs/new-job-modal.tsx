@@ -41,19 +41,14 @@ function initials(name: string): string {
   );
 }
 
-/**
- * Common measurements — the tailor will provide her own list later; this
- * generic set keeps the composer useful until then.
- */
 const COMMON_MEASUREMENTS = [
-  "Bust", "Waist", "Hip", "Chest", "Shoulder", "Neck", "Armhole", "Biceps",
-  "Wrist", "Sleeve length", "Dress length", "Gown length", "Blouse length",
-  "Kaftan length", "Agbada length", "Boubou length", "Wrapper length",
-  "Trouser waist", "Trouser length", "Inseam", "Thigh", "Calf", "Ankle",
-  "Back length", "Full length", "Head",
+  "Hip", "Knee", "Bust", "Neck", "Thigh", "Ankle", "Chest", "Waist", "Length",
+  "Sleeve", "Across back", "Knee length", "Calf length", "Full length",
+  "Half length", "Skirt length", "Dress length", "Waist to Hip", "Waist to Knee",
+  "Nipple to Nipple", "Round under Bust", "Shoulder to Nipple",
+  "Shoulder to Under Bust",
 ];
 
-/** "Sleeve length" → "sleeveLength" — the camelCase key the jsonb stores. */
 function toKey(name: string): string {
   return name
     .toLowerCase()
@@ -61,22 +56,28 @@ function toKey(name: string): string {
     .replace(/[^a-zA-Z0-9]/g, "");
 }
 
-/* Regexes mirror the backend zod schemas (customers.validation.ts). */
+function emptyFitting(): Record<string, number | null> {
+  return Object.fromEntries(COMMON_MEASUREMENTS.map((name) => [toKey(name), null]));
+}
+
+function filledFitting(
+  meas: Record<string, number | null>,
+): Record<string, number | null> {
+  return Object.fromEntries(Object.entries(meas).filter(([, value]) => value !== null));
+}
+
 const NAME_RE = /^[a-zA-Z]+(?:[ '-][a-zA-Z]+)*$/;
 const PHONE_RE = /^\+?[0-9]{7,15}$/;
 
-/** One entry in the "For whom" chip row. */
 interface ModalSubject {
-  key: string;                 // "new" / "new-<rand>" for brand-new clients, subject.id otherwise
-  subjectId?: string;          // set for subjects already in the database
-  relationship: string;        // "self" | "daughter" | ... (backend defaults to "self")
-  name: string;                // person's name (self subjects use the client's name)
-  loaded: boolean;             // whether saved measurements were fetched for this subject
-  latestMeasId?: string;       // id of the newest saved fitting — reused when untouched
+  key: string;
+  subjectId?: string;
+  relationship: string;
+  name: string;
+  loaded: boolean;
+  latestMeasId?: string;
 }
 
-/** One tile in the style-reference strip. The file is kept so a failed
-    upload can retry without re-picking; publicId arrives from Cloudinary. */
 interface WizardPhoto {
   file: File;
   previewUrl: string;
@@ -86,93 +87,62 @@ interface WizardPhoto {
   error?: string;
 }
 
-const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // mirrors backend cloudinary.service.ts
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
-/** One style-reference photo per job.
-    Mirrors MAX_IMAGES_PER_ARRAY in backend jobs.validation.ts — the backend
-    rejects a second image, so picking more than one here would fail at
-    submit. The pick input is single (`multiple` removed below); the slice in
-    onFiles is the second guard. */
 const MAX_PHOTOS = 1;
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-/* ----------------------------- shared styles ----------------------------- */
-
-/* Shared input/chip styles — Apple HIG: iOS fill surfaces, system separators,
-   accent focus ring (all via --hig-* vars so light/dark come free). */
 const inputClass =
   "w-full rounded-xl border border-(--hig-separator) bg-(--hig-fill) px-4 py-3 text-[13px] text-(--hig-label) outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-(--hig-label-tertiary) focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]";
 
-/* Borderless pills: the fill/tint alone shapes the chip (subject chips keep
-   their gray fill when idle, tint when selected). Only the "+ Add subject"
-   action keeps a dashed border so it still reads as a button. */
 const chipClass =
   "inline-flex items-center gap-2 rounded-full bg-(--hig-fill) px-3 py-2 text-[11px] font-medium text-(--hig-label-secondary) transition-all active:scale-95";
 
-/* Selected-chip state: text lifts to label colour. The background + border
-   come from INLINE style (see the subject chips) so each subject's selected
-   chip glows in a light tint of THEIR OWN avatar hue — inline styles beat
-   chipClass's base fill without any important-flag fight. */
 const chipOnClass = "!text-(--hig-label)";
 
 const chipAddClass =
   "border border-dashed border-(--hig-accent-line) bg-transparent text-(--hig-accent)";
 
-/* Avatar chips: layout only — the hue comes inline from avatarColor so each
-   subject keeps their own colour (border uses the hue at 30% alpha). */
 const monoClass =
   "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold";
 
-// Section titles need clear air above them — a uniform mt-6 (24px) keeps
-// every title in the folds from feeling glued to the block above it.
 const miniLabelClass =
   "mt-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-(--hig-label-secondary)";
 
-/* --------------------------------- UI --------------------------------- */
-
 export default function NewJobModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  /* This wizard writes in steps and needs each result before the next call
-     (add subject → save fitting → create job → upload photos), so it is not a
-     set of independent mutations. It calls the api functions directly and
-     invalidates once at the end through the shared policy. */
+
   const invalidateJobWrites = useInvalidateJobWrites();
   const toast = useToast();
   const router = useRouter();
 
-  /* ---------- 01 · client ---------- */
   const [customers, setCustomers] = useState<Customer[] | null>(null);
   const [query, setQuery] = useState("");
   const [ddOpen, setDdOpen] = useState(false);
-  const [client, setClient] = useState<Customer | null>(null); // returning client or null = new
+  const [client, setClient] = useState<Customer | null>(null);
   const [phone, setPhone] = useState("");
 
-  /* ---------- 02 · fitting ---------- */
   const [subjects, setSubjects] = useState<ModalSubject[]>([]);
   const [activeKey, setActiveKey] = useState("new");
   const [meas, setMeas] = useState<Record<string, Record<string, number | null>>>({});
-  const [dirtyMeas, setDirtyMeas] = useState<Set<string>>(new Set()); // subject keys touched → new measurement row
+  const [dirtyMeas, setDirtyMeas] = useState<Set<string>>(new Set());
   const [composer, setComposer] = useState("");
   const [pendingMeas, setPendingMeas] = useState<{ key: string; name: string } | null>(null);
   const [editingMeas, setEditingMeas] = useState<string | null>(null);
-  const [addingSubject, setAddingSubject] = useState(false); // inline add-subject form visible
+  const [addingSubject, setAddingSubject] = useState(false);
   const [subjectSaving, setSubjectSaving] = useState(false);
   const [subjectError, setSubjectError] = useState<string | null>(null);
 
-  /* ---------- 03 · job ---------- */
   const [desc, setDesc] = useState("");
   const [price, setPrice] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [photos, setPhotos] = useState<WizardPhoto[]>([]);
 
-  /* ---------- sheet state ---------- */
   const [fold, setFold] = useState<1 | 2 | 3>(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Job | null>(null);
 
-  // Dropdowns are portaled to <body> so the fold's overflow-hidden never
-  // clips them; the rect is measured from the triggering input on open.
   const ddWrapRef = useRef<HTMLDivElement>(null);
   const ddRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -185,17 +155,16 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   const fileRef = useRef<HTMLInputElement>(null);
   const activeSubject = subjects.find((s) => s.key === activeKey) ?? null;
 
-  /* ---------- open: fetch the client list once ---------- */
   useEffect(() => {
     if (!open) return;
-    // Reset to a fresh "new client" sheet every time it opens.
+
     setCustomers(null);
     setQuery("");
     setClient(null);
     setPhone("");
     setSubjects([{ key: "new", relationship: "self", name: "", loaded: true }]);
     setActiveKey("new");
-    setMeas({});
+    setMeas({ new: emptyFitting() });
     setDirtyMeas(new Set());
     setComposer("");
     setPendingMeas(null);
@@ -210,21 +179,16 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setError(null);
     setCreated(null);
 
-    // Step 1 of the data flow: GET /customers (cap 100) once, filter in
-    // memory — the API has no search parameter (see file header comment).
     listCustomers({ limit: 100 })
       .then((res) => setCustomers(res.data ?? []))
-      .catch(() => setCustomers([])); // search area shows a hint; new-client flow still works
+      .catch(() => setCustomers([]));
 
-    // Lock page scroll while the sheet is up.
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
   }, [open]);
 
-  /* Escape closes the sheet; click-outside closes the dropdowns. The
-     portaled dropdowns live outside their wrappers, so both refs count. */
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -248,8 +212,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     return (customers ?? []).filter((c) => c.name.toLowerCase().includes(q));
   }, [customers, query]);
 
-  /* ---------- client handlers ---------- */
-
   function clearClient() {
     setClient(null);
     setQuery("");
@@ -259,7 +221,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setPhone("");
     setSubjects([{ key: "new", relationship: "self", name: "", loaded: true }]);
     setActiveKey("new");
-    setMeas({});
+    setMeas({ new: emptyFitting() });
     setDirtyMeas(new Set());
   }
 
@@ -270,8 +232,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setAddingSubject(false);
     setSubjectError(null);
     setPhone("");
-    // "For whom" is scoped to this client: GET /customers/:id/subjects,
-    // Self first, then the rest in the API's newest-first order.
+
     const res = await listSubjects(c.id, { limit: 100 });
     const rows = (res.data ?? []).slice().sort((a, b) =>
       a.relationship === "self" ? -1 : b.relationship === "self" ? 1 : 0,
@@ -281,32 +242,26 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       subjectId: s.id,
       relationship: s.relationship ?? "self",
       name: s.name,
-      loaded: false, // saved measurements load lazily on first selection
+      loaded: false,
     }));
     setSubjects(mapped);
     const first = mapped[0];
     setActiveKey(first?.key ?? "");
     setMeas({});
     setDirtyMeas(new Set());
-    // Load the initially-selected (Self) subject's fitting too — it is
-    // active without a click, so selectSubject() must be called directly.
+
     if (first) await selectSubject(first);
   }
 
-  /* ---------- subject handlers ---------- */
-
   function startAddSubject() {
-    // A pending subject (key "new-<rand>") is added for BOTH new and
-    // returning clients. New clients keep it local — the backend creates
-    // the row inside the /jobs/new-customer transaction. Returning clients
-    // persist it on confirm via POST /customers/:id/subjects so the job
-    // can link to a real subject id.
+
     const key = "new-" + Math.random().toString(36).slice(2, 7);
     setSubjects((prev) => [
-      ...prev.filter((x) => !x.key.startsWith("new-")), // drop stale pending rows
+      ...prev.filter((x) => !x.key.startsWith("new-")),
       { key, relationship: "daughter", name: "", loaded: true },
     ]);
     setActiveKey(key);
+    setMeas((prev) => ({ ...prev, [key]: prev[key] ?? emptyFitting() }));
     setAddingSubject(true);
     setSubjectError(null);
   }
@@ -322,8 +277,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setSubjectSaving(true);
     try {
       if (client) {
-        // Returning client → create-subject API now, so submit step 4 can
-        // use createJobForSubject(subjectId) with the real subject id.
+
         const res = await addSubject(client.id, {
           name,
           relationship: subj.relationship,
@@ -337,11 +291,25 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                   subjectId: created.id,
                   relationship: created.relationship ?? subj.relationship,
                   name: created.name,
-                  loaded: true, // brand-new subject → no saved fitting to fetch
+                  loaded: true,
                 }
               : x,
           ),
         );
+        setMeas((prev) => {
+          const carried = prev[subj.key];
+          const next = { ...prev };
+          delete next[subj.key];
+          next[created.id] = carried ?? emptyFitting();
+          return next;
+        });
+        setDirtyMeas((prev) => {
+          if (!prev.has(subj.key)) return prev;
+          const next = new Set(prev);
+          next.delete(subj.key);
+          next.add(created.id);
+          return next;
+        });
         setActiveKey(created.id);
       }
       setAddingSubject(false);
@@ -365,10 +333,10 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setPendingMeas(null);
     setEditingMeas(null);
 
-    // Returning subjects load their saved fitting lazily (step 3 of the
-    // data flow): GET /subjects/:id/measurements, newest first, and the
-    // latest record pre-fills the chips.
-    if (!subj.subjectId || subj.loaded) return;
+    if (!subj.subjectId || subj.loaded) {
+      setMeas((prev) => (prev[subj.key] ? prev : { ...prev, [subj.key]: emptyFitting() }));
+      return;
+    }
     const res = await listMeasurements(subj.subjectId, { limit: 1 });
     const latest: Measurement | undefined = res.data?.[0];
     setSubjects((prev) =>
@@ -380,16 +348,15 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     );
     if (latest) {
       setMeas((prev) => ({ ...prev, [subj.key]: { ...latest.measurements } }));
+    } else {
+      setMeas((prev) => (prev[subj.key] ? prev : { ...prev, [subj.key]: emptyFitting() }));
     }
   }
-
-  /* ---------- measurement helpers ---------- */
 
   const currentMeas = () => meas[activeKey] ?? {};
 
   function touchMeas(next: Record<string, number | null>) {
-    // Marking the subject dirty means "write a NEW measurements row on
-    // submit" — history is append-only (measurements table, see header).
+
     setMeas((prev) => ({ ...prev, [activeKey]: next }));
     setDirtyMeas((prev) => new Set(prev).add(activeKey));
   }
@@ -411,21 +378,16 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setEditingMeas(null);
   }
 
-  /* ---------- photos: signed direct upload (see header step 5) ---------- */
-
   function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])];
     e.target.value = "";
-    // Never queue more than the remaining room (currently room for one).
-    // At the cap the tile's ✕ must be tapped first — see the picker UI.
+
     const batch = files.slice(0, Math.max(0, MAX_PHOTOS - photos.length));
     if (batch.length === 0) return;
 
-    // One signature per pick batch (15-min expiry) — it signs the folder +
-    // timestamp, not the file contents, so all files share it.
     const sigPromise = getUploadSignature();
     for (const file of batch) {
-      // "IMG_2042.jpg" → "Style reference — IMG 2042" (≤ 200, backend cap).
+
       const stem = file.name
         .replace(/\.[a-z0-9]+$/i, "")
         .replace(/[_-]+/g, " ")
@@ -509,7 +471,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       setFold(2);
       return;
     }
-    const measEntries = currentMeas();
+    const measEntries = filledFitting(currentMeas());
     if (Object.keys(measEntries).length === 0) {
       setError("Add at least one measurement for the fitting.");
       setFold(2);
@@ -549,8 +511,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     try {
       let job: Job;
       if (!client) {
-        // NEW CLIENT → POST /jobs/new-customer: customer + subject +
-        // measurement + job created atomically by the backend.
+
         job = (await createJob({
           customer: {
             name,
@@ -559,8 +520,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           subjects: [
             {
               relationship: activeSubject!.relationship,
-              // The backend derives a "self" subject's name from the
-              // customer; other relationships need the person's name.
+
               ...(activeSubject!.relationship !== "self"
                 ? { name: activeSubject!.name.trim() }
                 : {}),
@@ -570,12 +530,10 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           job: jobPayload,
         })).data!;
       } else {
-        // RETURNING CLIENT → POST /jobs/:subjectId (never /jobs/new-customer,
-        // which would INSERT a duplicate customer row — see header step 4).
+
         let measurementId = activeSubject?.latestMeasId;
         if (!measurementId || dirtyMeas.has(activeKey)) {
-          // Measurements were touched (or none on file): persist a NEW
-          // fitting row first, then link the job to it.
+
           const res = await createMeasurement(activeSubject!.subjectId!, {
             measurements: measEntries,
             date: todayISO(),
@@ -588,10 +546,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         })).data!;
       }
       setCreated(job);
-      // Refresh everything a new job touches, so it shows up everywhere without
-      // a manual reload: the job collection (Latest work + bench counts), the
-      // outstanding balances, and the revenue card. No job id is passed because
-      // this creates a job rather than changing one — there is no detail key yet.
+
       invalidateJobWrites();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the job. Try again.");
@@ -599,8 +554,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       setSubmitting(false);
     }
   }
-
-  /* ---------- derived UI bits ---------- */
 
   const suggestions = useMemo(() => {
     const q = composer.trim().toLowerCase();
@@ -618,19 +571,14 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       ? client?.name ?? "Self"
       : s.name || "Subject";
 
-  // Self subjects carry the client's name, so their hue matches the client's
-  // avatar elsewhere (balances, Latest-work dots) — one person, one colour.
   const subjectHue = (s: ModalSubject) =>
     avatarColor(s.relationship === "self" ? (client?.name ?? "") : s.name);
 
-  // "no due date" stands alone — never rendered as "due no date" in the ticket.
   const dueLabel = dueDate ? fmtDate(dueDate) : null;
   const clientLabel = (client?.name ?? query.trim()) || "no client yet";
   const priceNum = Number(price.replace(/[^\d.]/g, "")) || 0;
-  const measCount = Object.keys(currentMeas()).length;
+  const measCount = Object.keys(filledFitting(currentMeas())).length;
 
-  // One confirmation voice for Done / View job: the toast repeats the overlay
-  // headline's phrasing (what · for whom · price · due), never its own format.
   const confirmCreated = () => {
     if (!created) return;
     toast.show({
@@ -784,7 +732,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             )}
           </Fold>
 
-          {/* ================= 02 · THE FITTING ================= */}
+          {}
           <Fold
             num={2}
             name="The fitting"
@@ -806,9 +754,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     style={
                       active
                         ? {
-                            // selected → bg is a ~10% wash of the subject's
-                            // avatar hue; borderless, so the wash alone
-                            // marks the selection
+
                             backgroundColor: hue + "1A",
                           }
                         : undefined
@@ -841,8 +787,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               )}
             </div>
 
-            {/* add-subject inline form — new clients keep it local, returning
-                clients persist via POST /customers/:id/subjects on ✓ */}
+            {}
             {addingSubject && activeSubject?.key.startsWith("new-") && (
               <div className="mt-3 animate-fade-in">
                 <div className="flex items-center gap-2">
@@ -907,10 +852,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             </div>
             <div className="flex flex-wrap gap-2 pt-2">
               {Object.entries(currentMeas()).map(([key, value]) => {
-                // One hue per measurement type — same colour language as the
-                // subject chips (keyed on the camelCase jsonb key, e.g. bust,
-                // gownLength). The key text pops in its hue; the VALUE stays
-                // label-black so the number is always the most readable thing.
+
                 const hue = avatarColor(key);
                 return editingMeas === key ? (
                   <div
@@ -950,7 +892,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     style={{ backgroundColor: tintOf(hue) }}
                   >
                     <b className="font-semibold" style={{ color: hue }}>{key}</b>{" "}
-                    <b className="font-medium text-(--hig-label)">{value}</b>
+                    <b className="font-medium text-(--hig-label)">{value ?? "\u2014"}</b>
                     <span className="text-[10px] text-(--hig-label-secondary)">cm</span>
                     <span
                       aria-label={`Remove ${key}`}
@@ -969,7 +911,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               })}
             </div>
 
-            {/* composer: type → suggestion → just the value */}
+            {}
             <div ref={compWrapRef} className="relative mt-3">
               <input
                 ref={compInputRef}
@@ -979,7 +921,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 onChange={(e) => {
                   setComposer(e.target.value);
                   setPendingMeas(null);
-                  // Suggestions only appear after typing (portaled, see below).
+
                   if (e.target.value.trim()) {
                     const r = compInputRef.current?.getBoundingClientRect();
                     if (r) setCompRect({ top: r.bottom, left: r.left, width: r.width });
@@ -1001,7 +943,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                       key={s.key + (s.custom ? "-c" : "")}
                       type="button"
                       onClick={() => {
-                        // Already present → jump straight into editing it.
+
                         if (Object.prototype.hasOwnProperty.call(currentMeas(), s.key)) {
                           setEditingMeas(s.key);
                         } else {
@@ -1023,7 +965,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               )}
             </div>
 
-            {/* pending value entry for a tapped suggestion */}
+            {}
             {pendingMeas && (
               <div className="mt-2 flex animate-fade-in items-center gap-2 rounded-xl border border-(--hig-accent-line) bg-(--hig-accent-tint) p-2">
                 <span className="shrink-0 text-[11px] font-semibold text-(--hig-accent)">{pendingMeas.name}</span>
@@ -1045,12 +987,10 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               </div>
             )}
 
-            {/* The measurements are grouped into the camelCase key-value
-                jsonb object internally (see `touchMeas` + the header data
-                flow) — no need to show that to the tailor. */}
+            {}
           </Fold>
 
-          {/* ================= 03 · THE JOB ================= */}
+          {}
           <Fold
             num={3}
             name="The job"
@@ -1128,9 +1068,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     type="button"
                     aria-label="Remove photo"
                     onClick={() => {
-                      // Uploaded-but-removed photos were never persisted, so
-                      // they become Cloudinary orphans — accepted at this
-                      // scale (cleanup sweep idea in the ADR).
+
                       URL.revokeObjectURL(p.previewUrl);
                       setPhotos((prev) => prev.filter((_, j) => j !== i));
                     }}
@@ -1162,19 +1100,19 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                     ? "Uploaded — ready to create."
                     : "Add a style-reference photo."}
             </div>
-            {/* one image only → no `multiple` on the picker (MAX_PHOTOS) */}
+            {}
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFiles} />
           </Fold>
         </div>
 
-        {/* error line */}
+        {}
         {error && (
           <div className="shrink-0 px-4 pb-2">
             <p className="animate-shake rounded-xl bg-(--hig-danger-tint) px-4 py-3 text-[13px] leading-snug text-(--hig-danger)">{error}</p>
           </div>
         )}
 
-        {/* live ticket footer */}
+        {}
         <div className="flex shrink-0 items-center gap-3 border-t border-(--hig-separator) bg-(--hig-card) px-4 pb-4 pt-3">
           <div className="min-w-0 flex-1">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-(--hig-label-tertiary)">Ticket</div>
@@ -1210,7 +1148,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           </button>
         </div>
 
-        {/* success overlay */}
+        {}
         {created && (
           <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center rounded-t-[26px] bg-(--hig-card) px-8 text-center">
             <div className="mb-4 flex h-15.5 w-15.5 items-center justify-center rounded-full border border-(--hig-success) bg-(--hig-success-tint) shadow-[0_0_30px_-8px_rgba(48,209,88,0.45)]">
@@ -1224,8 +1162,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
             <p className="mt-3 text-[16px] leading-snug text-(--hig-label)">
               {created.description || "Garment"} for {subjectLabel(activeSubject!)} — {naira.format(created.agreedPrice)}.
             </p>
-            {/* One quiet meta line — the headline above already says what,
-                for whom, and the price, so nothing repeats. */}
+            {}
             <p className="mt-2 text-[13.5px] text-(--hig-label-secondary)">
               {created.dueDate ? `due ${fmtDate(created.dueDate)}` : "no due date"} · {measCount} measurement{measCount === 1 ? "" : "s"} saved
             </p>
@@ -1241,8 +1178,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
                 type="button"
                 onClick={() => {
                   if (!created) return;
-                  // Close the sheet, then go straight to the job's
-                  // Inspection screen — the page owns its own loading state.
+
                   onClose();
                   router.push(`/jobs/${created.id}`);
                 }}
@@ -1257,8 +1193,6 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     </div>
   );
 }
-
-/* ------------------------------- pieces ------------------------------- */
 
 function Fold({
   num,
@@ -1289,7 +1223,7 @@ function Fold({
           </svg>
         </span>
       </button>
-      {/* grid-rows trick gives a smooth height collapse without measuring */}
+      {}
       <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
         <div className="min-h-0 overflow-hidden">
           <div className="px-4 pb-4 pt-1">{children}</div>
