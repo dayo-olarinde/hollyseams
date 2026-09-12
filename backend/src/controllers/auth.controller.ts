@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { env } from "../config/env";
-import { loginUser, logoutUser } from "../services/auth.service";
 import { resetLoginLimiterKey } from "../middleware/rateLimiter.middleware";
+import { loginUser, logoutUser } from "../services/auth.service";
 import { ApiResponse } from "../utils/apiResponse";
 
 export const loginUserHandler = async (req: Request, res: Response) => {

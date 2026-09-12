@@ -14,6 +14,9 @@ import { idParamsSchema } from "../validations/params.validation";
 import { createMeasurementSchema } from "../validations/subjects.validation";
 import { listItemsQuerySchema } from "../validations/customers.validation";
 
+// Subjects are reachable directly by id AND nested under customers
+// (customers.routes.ts mounts the same controllers). Measurements live
+// beneath subjects: history is append-only per person.
 const router = Router();
 
 router.get(

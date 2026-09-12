@@ -10,7 +10,7 @@ export const monthlyRevenue = async () => {
   const rows = (await pg`
     with monthly_revenue as (
       select
-        date_trunc('month', paid_at) as month,
+        date_trunc('month', paid_at) as month,   
         sum(amount) as revenue
       from payments
       group by month
@@ -55,8 +55,8 @@ export const topCustomers = async (limit: number) => {
       sum(p.amount) as total_paid,
       count(distinct p.job_id) as job_count
     from payments p
-    join jobs j on j.id = p.job_id
-    join customers c on c.id = j.customer_id
+    join jobs j on j.id = p.job_id     
+    join customers c on c.id = j.customer_id  
     group by c.id
     order by total_paid desc
     limit ${limit}
@@ -100,10 +100,10 @@ export const outstandingPayments = async () => {
     from jobs j
     join customers c on c.id = j.customer_id
     join subjects s on s.id = j.subject_id
-    left join payments p on p.job_id = j.id
+    left join payments p on p.job_id = j.id  
     group by j.id, c.id, s.id
     having j.agreed_price - coalesce(sum(p.amount), 0) > 0
-    order by balance_due desc
+    order by balance_due desc  
   `) as OutstandingPaymentRow[];
 
   return rows.map((row) => ({

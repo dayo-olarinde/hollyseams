@@ -1,10 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import type { ZodTypeAny } from "zod";
 import { ApiError } from "../utils/apiResponse";
-import { asyncHandler } from "../utils/asyncHandler";
 
-export const validateInput = <T extends ZodTypeAny>(schema: T) =>
-  asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+export const validateInput =
+  <T extends ZodTypeAny>(schema: T) =>
+  async (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
       throw new ApiError(
@@ -18,10 +18,11 @@ export const validateInput = <T extends ZodTypeAny>(schema: T) =>
     }
     req.body = result.data;
     next();
-  });
+  };
 
-export const validateParams = <T extends ZodTypeAny>(schema: T) =>
-  asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+export const validateParams =
+  <T extends ZodTypeAny>(schema: T) =>
+  async (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.params);
     if (!result.success) {
       throw new ApiError(
@@ -33,12 +34,14 @@ export const validateParams = <T extends ZodTypeAny>(schema: T) =>
         })),
       );
     }
+
     req.params = result.data as Record<string, string>;
     next();
-  });
+  };
 
-export const validateQuery = <T extends ZodTypeAny>(schema: T) =>
-  asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+export const validateQuery =
+  <T extends ZodTypeAny>(schema: T) =>
+  async (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.query);
     if (!result.success) {
       throw new ApiError(
@@ -58,4 +61,4 @@ export const validateQuery = <T extends ZodTypeAny>(schema: T) =>
       configurable: true,
     });
     next();
-  });
+  };

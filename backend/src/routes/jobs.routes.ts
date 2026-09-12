@@ -27,6 +27,9 @@ import {
   jobIdParamsSchema,
 } from "../validations/params.validation";
 
+// Every route runs the same chain: requireAuth → validate (body/params/
+// query) → handler. Validation runs BEFORE the handler so services always
+// receive clean, typed data.
 const router = Router();
 
 router.get(

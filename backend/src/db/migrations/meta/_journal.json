@@ -57,6 +57,13 @@
       "when": 1788904675304,
       "tag": "0007_fancy_centurions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788989534200,
+      "tag": "0008_damp_pretty_boy",
+      "breakpoints": true
     }
   ]
 }

@@ -3,8 +3,6 @@ import { closeDb, pingDb } from "./config/db";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { redis } from "./config/redis";
-import { closeQueueWorkers } from "./queues/example.queue";
-import { registerJobs } from "./jobs";
 
 const waitForDependencies = async (): Promise<void> => {
   const retries = 10;
@@ -27,7 +25,6 @@ const waitForDependencies = async (): Promise<void> => {
 
 const start = async () => {
   await waitForDependencies();
-  registerJobs();
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server listening on port ${env.PORT}`);
@@ -37,7 +34,6 @@ const start = async () => {
     logger.info(`${signal} received, shutting down gracefully`);
     server.close(async () => {
       try {
-        await closeQueueWorkers();
         await redis.quit();
         await closeDb();
         logger.info("Server closed");

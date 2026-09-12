@@ -7,7 +7,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { jobsTable } from "./jobs";
-import { sql } from "drizzle-orm";
 
 export const paymentsTable = pgTable(
   "payments",
@@ -32,10 +31,5 @@ export const paymentsTable = pgTable(
       .$onUpdateFn(() => new Date())
       .notNull(),
   },
-  (t) => [
-    index("payments_job_id_created_at_idx").on(t.jobId, t.paidAt),
-    index("payments_paid_at_month_idx").on(
-      sql`date_trunc("month"), ${t.paidAt}`,
-    ),
-  ],
+  (t) => [index("payments_job_id_created_at_idx").on(t.jobId, t.paidAt)],
 );

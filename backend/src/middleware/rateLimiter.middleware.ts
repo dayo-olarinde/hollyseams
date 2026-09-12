@@ -58,6 +58,7 @@ export const createLimiter = ({
       standardHeaders: "draft-8",
       legacyHeaders: false,
       store,
+
       keyGenerator: (req) =>
         keyGenerator(req) ?? ipKeyGenerator(req.ip ?? "127.0.0.1"),
       handler: limitExceededHandler(message ?? TOO_MANY_REQUESTS_MESSAGE),

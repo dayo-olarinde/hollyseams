@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import * as schema from "../db/index";
 import { env } from "./env";
 import { logger } from "./logger";
-import * as schema from "../db/index";
 
 const queryClient = postgres(env.DATABASE_URL, {
   max: env.DATABASE_MAX_CONNECTIONS,

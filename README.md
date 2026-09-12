@@ -20,7 +20,6 @@ See [backend/README.md](backend/README.md) for full documentation.
 - **Database:** PostgreSQL 16 via Drizzle ORM
 - **Auth:** PIN-based (Argon2 + pepper), Redis-backed sessions
 - **Cache:** Redis 7 (ioredis)
-- **Queues:** BullMQ
 
 ## Frontend
 

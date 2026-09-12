@@ -17,6 +17,12 @@ import subjectsRouter from "./routes/subjects.routes";
 
 export const app = express();
 
+/**
+ * Middleware ORDER matters in Express: each layer wraps the ones after it.
+ * Security/parsing middleware goes first so every request (including ones
+ * that end in 404) is covered; the routers come last, then the two
+ * terminal middlewares (404 + error) that no route can fall past.
+ */
 app.use(helmet());
 app.use(compression());
 app.use(

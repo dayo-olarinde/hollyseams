@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-export const measurementDataSchema = z.record(
-  z.string(),
-  z.coerce.number().finite().nonnegative(),
-);
-
 export const createSubjectSchema = z
   .strictObject({
     name: z
@@ -29,6 +24,11 @@ export const createSubjectSchema = z
       });
     }
   });
+
+export const measurementDataSchema = z.record(
+  z.string(),
+  z.coerce.number().finite().nonnegative(),
+);
 
 export const createMeasurementSchema = z.strictObject({
   measurements: measurementDataSchema.refine(

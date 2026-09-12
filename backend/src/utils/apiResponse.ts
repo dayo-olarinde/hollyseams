@@ -26,6 +26,7 @@ export class ApiError extends Error {
     public readonly errors?: FieldError[],
   ) {
     super(message);
+
     Error.captureStackTrace(this, this.constructor);
   }
 }

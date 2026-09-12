@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../config/db";
 import { customersTable, measurementsTable, subjectsTable } from "../db";
 import { ApiError } from "../utils/apiResponse";
-import { keysetCondition } from "../utils/cursor";
+import { keysetCondition, pageRows } from "../utils/cursor";
 import type { ListItemsQuery } from "../validations/customers.validation";
 import type {
   CreateMeasurementInput,
@@ -32,9 +32,7 @@ export const listSubjects = async (
     .orderBy(desc(subjectsTable.createdAt), desc(subjectsTable.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const { items, hasMore, last } = pageRows(rows, limit);
 
   return {
     items,
@@ -94,7 +92,7 @@ export const createMeasurement = async (
 
 export const listMeasurements = async (
   subjectId: string,
-  { cursor, limit }: ListItemsQuery = { limit: 10 },
+  { cursor, limit }: ListItemsQuery = { limit: 5 },
 ) => {
   const rows = await db
     .select({
@@ -120,9 +118,7 @@ export const listMeasurements = async (
     .orderBy(desc(measurementsTable.date), desc(measurementsTable.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const { items, hasMore, last } = pageRows(rows, limit);
 
   const toCursorDate = (value: unknown): string => {
     if (value instanceof Date) return value.toISOString().slice(0, 10);

@@ -53,3 +53,12 @@ export const keysetCondition = (
 
   return sql`(${sortColumn}, ${idColumn}) ${sql.raw(direction)} (${valueExpr}, ${id})`;
 };
+
+export const pageRows = <T>(
+  rows: T[],
+  limit: number,
+): { items: T[]; hasMore: boolean; last: T | undefined } => {
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return { items, hasMore, last: items[items.length - 1] };
+};

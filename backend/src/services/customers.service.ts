@@ -2,16 +2,14 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "../config/db";
 import { customersTable } from "../db";
 import { ApiError } from "../utils/apiResponse";
-import { keysetCondition } from "../utils/cursor";
+import { keysetCondition, pageRows } from "../utils/cursor";
 import type {
   CreateCustomerInput,
   ListItemsQuery,
   UpdateCustomerInput,
 } from "../validations/customers.validation";
 
-export const listCustomers = async (
-  { cursor, limit }: ListItemsQuery = { limit: 20 },
-) => {
+export const listCustomers = async ({ cursor, limit }: ListItemsQuery) => {
   const rows = await db
     .select({
       id: customersTable.id,
@@ -33,9 +31,7 @@ export const listCustomers = async (
     .orderBy(asc(customersTable.name), asc(customersTable.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const { items, hasMore, last } = pageRows(rows, limit);
 
   return {
     items,

@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { JOB_STATUS_FILTERS } from "../utils/jobs-filter";
-import { listItemsQuerySchema, phoneNumberSchema } from "./customers.validation";
+import {
+  listItemsQuerySchema,
+  phoneNumberSchema,
+} from "./customers.validation";
 
 const jobMeasurementsSchema = z
   .record(z.string(), z.coerce.number().finite().nonnegative().nullable())
@@ -8,10 +11,6 @@ const jobMeasurementsSchema = z
     message: "Provide at least one measurement",
   });
 
-// Clients reference uploaded photos by the public_id Cloudinary returned at
-// upload time — never by a client-supplied URL. The service resolves each
-// public_id against Cloudinary and derives the stored URL server-side, so a
-// forged URL can never reach the database.
 const imageSchema = z.strictObject({
   publicId: z
     .string()
@@ -31,25 +30,41 @@ const jobPriceSchema = z.coerce
   .nonnegative("Agreed price cannot be negative")
   .max(9999999999.99, "Agreed price must be at most 9999999999.99");
 
+/**
+ * Product rule: a job carries at most ONE style-reference image and ONE
+ * finished-work image.
+ *
+ * The columns are jsonb ARRAYS — the storage shape supports many, and
+ * jobs.service.ts derives each job's list cover from element [0] — but the
+ * API contract exposes a single element per type. Raising this cap needs no
+ * migration and no service change: only this number and the frontend's
+ * MAX_PHOTOS (new-job-modal.tsx) move together.
+ */
+const MAX_IMAGES_PER_ARRAY = 1;
+
+/** Error text for the cap above — kept next to it so the two never drift. */
+const TOO_MANY_IMAGES =
+  MAX_IMAGES_PER_ARRAY === 1
+    ? "Only one image is allowed for this type"
+    : `At most ${MAX_IMAGES_PER_ARRAY} images are allowed for this type`;
+
+/** A photo list: an array holding at most the capped number of entries. */
+const imageListSchema = z
+  .array(imageSchema)
+  .max(MAX_IMAGES_PER_ARRAY, TOO_MANY_IMAGES);
+
 const jobStatusSchema = z.enum(["pending", "completed", "canceled"]);
 const jobDescriptionSchema = z
   .string()
   .trim()
   .max(2000, "Description must be at most 2000 characters");
 
-// New jobs may omit a description, but PATCH requests must remain truly
-// partial so an empty update cannot be accepted through a default value.
 const createJobDescriptionSchema = jobDescriptionSchema.default("");
 
 export const jobDataSchema = z.strictObject({
-  styleRef: z
-    .array(imageSchema)
-    .max(10, "At most 10 style reference images")
-    .default([]),
-  finishedJob: z
-    .array(imageSchema)
-    .max(10, "At most 10 finished job images")
-    .default([]),
+  // Omitting either list is fine on create — it defaults to empty.
+  styleRef: imageListSchema.default([]),
+  finishedJob: imageListSchema.default([]),
   description: createJobDescriptionSchema,
   agreedPrice: jobPriceSchema,
   status: jobStatusSchema.default("pending"),
@@ -58,14 +73,11 @@ export const jobDataSchema = z.strictObject({
 
 export const updateJobSchema = z
   .strictObject({
-    styleRef: z
-      .array(imageSchema)
-      .max(10, "At most 10 style reference images")
-      .optional(),
-    finishedJob: z
-      .array(imageSchema)
-      .max(10, "At most 10 finished job images")
-      .optional(),
+    // Optional, and an ABSENT list means "leave these photos alone" rather
+    // than "remove them" — the service treats `[]` the same way, so the two
+    // can never disagree about whether the old images should be released.
+    styleRef: imageListSchema.optional(),
+    finishedJob: imageListSchema.optional(),
     description: jobDescriptionSchema.optional(),
     agreedPrice: jobPriceSchema.optional(),
     status: jobStatusSchema.optional(),
@@ -92,6 +104,7 @@ const jobSubjectSchema = z
       .optional(),
     measurements: jobMeasurementsSchema,
   })
+
   .superRefine((subject, ctx) => {
     if (subject.relationship !== "self" && !subject.name) {
       ctx.addIssue({
@@ -126,14 +139,6 @@ export const createJobForSubjectSchema = z.strictObject({
   job: jobDataSchema,
 });
 
-/**
- * Query params for the job list endpoints (GET /jobs, GET /customers/:id/jobs).
- * Extends the shared pagination schema (limit + cursor) with an optional
- * status filter. The values are the filter statuses, not raw row statuses:
- * the service maps them to where clauses (e.g. "delivered" → completed with
- * a delivered_at timestamp). Canceled jobs are not filterable and only show
- * under "All" (no status param).
- */
 export const listJobsQuerySchema = listItemsQuerySchema.extend({
   status: z.enum(JOB_STATUS_FILTERS).optional(),
 });

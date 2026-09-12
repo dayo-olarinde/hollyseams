@@ -8,67 +8,61 @@ import {
   subjectsTable,
 } from "../db";
 import { ApiError } from "../utils/apiResponse";
-import { keysetCondition } from "../utils/cursor";
+import { keysetCondition, pageRows } from "../utils/cursor";
 import { jobStatusFilterCondition } from "../utils/jobs-filter";
-import type { ListJobsQuery } from "../validations/jobs.validation";
 import type {
   CreateJobForSubjectInput,
   CreateJobNewCustomerInput,
   JobDataInput,
+  ListJobsQuery,
   UpdateJobInput,
 } from "../validations/jobs.validation";
 import type { CreatePaymentInput } from "../validations/payments.validation";
-import type { ResolvedPhoto } from "./cloudinary.service";
+import {
+  destroyPhotos,
+  verifyAndResolvePhotos,
+  type ResolvedPhoto,
+} from "./cloudinary.service";
 
-// The service layer only ever persists photos that have already been verified
-// against Cloudinary (server-derived URL + publicId). The wire schemas carry
-// the unverified {publicId, alt} shape; controllers resolve them before
-// reaching these types.
 type PersistedJobData = Omit<JobDataInput, "styleRef" | "finishedJob"> & {
   styleRef: ResolvedPhoto[];
   finishedJob: ResolvedPhoto[];
 };
-type PersistedUpdateData = Omit<
-  UpdateJobInput,
-  "styleRef" | "finishedJob"
-> & {
+type PersistedUpdateData = Omit<UpdateJobInput, "styleRef" | "finishedJob"> & {
   styleRef?: ResolvedPhoto[];
   finishedJob?: ResolvedPhoto[];
+};
+
+const jobListSelect = {
+  id: jobsTable.id,
+  subjectId: jobsTable.subjectId,
+  subjectName: subjectsTable.name,
+  measurementId: jobsTable.measurementId,
+  coverUrl: sql<string | null>`
+    case
+      when jsonb_array_length(${jobsTable.finishedJob}) > 0
+        then nullif(${jobsTable.finishedJob}[0] ->> 'url', '')
+      when jsonb_array_length(${jobsTable.styleRef}) > 0
+        then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
+      else null
+    end`,
+  photoCount: sql<number>`
+    jsonb_array_length(${jobsTable.finishedJob}) + jsonb_array_length(${jobsTable.styleRef})`,
+  description: jobsTable.description,
+  agreedPrice: jobsTable.agreedPrice,
+  status: jobsTable.status,
+  dueDate: jobsTable.dueDate,
+  deliveredAt: jobsTable.deliveredAt,
+  createdAt: jobsTable.createdAt,
 };
 
 export const listJobs = async (
   { cursor, limit, status }: ListJobsQuery = { limit: 10 },
 ) => {
   const rows = await db
-    .select({
-      id: jobsTable.id,
-      subjectId: jobsTable.subjectId,
-      subjectName: subjectsTable.name,
-      measurementId: jobsTable.measurementId,
-      /* list payloads stay lean — the full photo arrays ship only on
-         GET /jobs/:id; list cards need exactly one cover URL + a count,
-         computed here in SQL from the jsonb arrays (finished wins). */
-      coverUrl: sql<string | null>`
-        case
-          when jsonb_array_length(${jobsTable.finishedJob}) > 0
-            then nullif(${jobsTable.finishedJob}[0] ->> 'url', '')
-          when jsonb_array_length(${jobsTable.styleRef}) > 0
-            then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
-          else null
-        end`,
-      photoCount: sql<number>`
-        jsonb_array_length(${jobsTable.finishedJob}) + jsonb_array_length(${jobsTable.styleRef})`,
-      description: jobsTable.description,
-      agreedPrice: jobsTable.agreedPrice,
-      status: jobsTable.status,
-      dueDate: jobsTable.dueDate,
-      deliveredAt: jobsTable.deliveredAt,
-      createdAt: jobsTable.createdAt,
-    })
+    .select(jobListSelect)
     .from(jobsTable)
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
-    // Status filters scope the keyset pagination to a subset of jobs; the
-    // cursor still walks created_at/id within that subset, newest first.
     .where(
       and(
         jobStatusFilterCondition(status),
@@ -80,9 +74,7 @@ export const listJobs = async (
     .orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const { items, hasMore, last } = pageRows(rows, limit);
 
   return {
     items,
@@ -98,30 +90,7 @@ export const listCustomerJobs = async (
   const { cursor, limit, status } = query;
 
   const rows = await db
-    .select({
-      id: jobsTable.id,
-      subjectId: jobsTable.subjectId,
-      subjectName: subjectsTable.name,
-      measurementId: jobsTable.measurementId,
-      /* list payloads stay lean — one cover URL + photo count in SQL (see
-         listJobs above); the full arrays ship only on GET /jobs/:id. */
-      coverUrl: sql<string | null>`
-        case
-          when jsonb_array_length(${jobsTable.finishedJob}) > 0
-            then nullif(${jobsTable.finishedJob}[0] ->> 'url', '')
-          when jsonb_array_length(${jobsTable.styleRef}) > 0
-            then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
-          else null
-        end`,
-      photoCount: sql<number>`
-        jsonb_array_length(${jobsTable.finishedJob}) + jsonb_array_length(${jobsTable.styleRef})`,
-      description: jobsTable.description,
-      agreedPrice: jobsTable.agreedPrice,
-      status: jobsTable.status,
-      dueDate: jobsTable.dueDate,
-      deliveredAt: jobsTable.deliveredAt,
-      createdAt: jobsTable.createdAt,
-    })
+    .select(jobListSelect)
     .from(jobsTable)
     .innerJoin(subjectsTable, eq(jobsTable.subjectId, subjectsTable.id))
     .where(
@@ -136,9 +105,7 @@ export const listCustomerJobs = async (
     .orderBy(desc(jobsTable.createdAt), desc(jobsTable.id))
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const last = items[items.length - 1];
+  const { items, hasMore, last } = pageRows(rows, limit);
 
   return {
     items,
@@ -191,8 +158,6 @@ export const getJob = async (id: string) => {
       .orderBy(desc(paymentsTable.paidAt)),
   ]);
 
-  // `rows` is the array returned by the query — destructure its first row.
-  // (Previously the array itself was spread, wrapping the job under a "0" key.)
   const job = rows[0];
   if (!job) throw new ApiError(404, "Job not found");
 
@@ -307,7 +272,7 @@ export const createJobForSubject = async (
   return job;
 };
 
-export const updateJob = async (id: string, jobData: PersistedUpdateData) => {
+const writeJobUpdate = async (id: string, jobData: PersistedUpdateData) => {
   if (Object.keys(jobData).length === 0) {
     throw new ApiError(400, "No fields to update");
   }
@@ -323,7 +288,53 @@ export const updateJob = async (id: string, jobData: PersistedUpdateData) => {
   return job;
 };
 
+export const updateJob = async (id: string, input: UpdateJobInput) => {
+  const { styleRef, finishedJob, ...scalars } = input;
+
+  const next = {
+    styleRef: styleRef?.length ? styleRef : undefined,
+    finishedJob: finishedJob?.length ? finishedJob : undefined,
+  };
+
+  if (!next.styleRef && !next.finishedJob) {
+    return writeJobUpdate(id, scalars);
+  }
+
+  const current = await getJob(id);
+
+  const [resolvedStyleRef, resolvedFinishedJob] = await Promise.all([
+    next.styleRef ? verifyAndResolvePhotos(next.styleRef) : undefined,
+    next.finishedJob ? verifyAndResolvePhotos(next.finishedJob) : undefined,
+  ]);
+
+  const job = await writeJobUpdate(id, {
+    ...scalars,
+    ...(resolvedStyleRef && { styleRef: resolvedStyleRef }),
+    ...(resolvedFinishedJob && { finishedJob: resolvedFinishedJob }),
+  });
+
+  const removed: string[] = [];
+  for (const [incoming, previous] of [
+    [next.styleRef, current.styleRef],
+    [next.finishedJob, current.finishedJob],
+  ] as const) {
+    if (!incoming) continue;
+    const kept = new Set(incoming.map((photo) => photo.publicId));
+    for (const photo of previous ?? []) {
+      if (photo.publicId && !kept.has(photo.publicId)) {
+        removed.push(photo.publicId);
+      }
+    }
+  }
+  await destroyPhotos(removed);
+
+  return job;
+};
+
 export const deleteJob = async (id: string) => {
+  // need their publicIds to release the assets afterwards.
+  const current = await getJob(id);
+
   const job = await db.transaction(async (tx) => {
     const [payment] = await tx
       .select({ id: paymentsTable.id })
@@ -344,6 +355,12 @@ export const deleteJob = async (id: string) => {
   });
 
   if (!job) throw new ApiError(404, "Job not found");
+
+  const publicIds = [
+    ...(current.styleRef ?? []),
+    ...(current.finishedJob ?? []),
+  ].flatMap((photo) => (photo.publicId ? [photo.publicId] : []));
+  await destroyPhotos(publicIds);
 
   return job;
 };

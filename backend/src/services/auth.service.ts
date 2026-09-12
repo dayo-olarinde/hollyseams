@@ -4,7 +4,7 @@ import { env } from "../config/env";
 import { redis, sessionKey } from "../config/redis";
 import { userTable } from "../db";
 import { ApiError } from "../utils/apiResponse";
-import { dummyVerify, verifyPin } from "../utils/hash.util";
+import { verifyPin } from "../utils/hash.util";
 import { sessionSchema } from "../validations/session.validation";
 
 export const loginUser = async (pin: string): Promise<string> => {
@@ -13,7 +13,6 @@ export const loginUser = async (pin: string): Promise<string> => {
     .from(userTable);
 
   if (!user) {
-    await dummyVerify();
     throw new ApiError(401, "Incorrect PIN. Try again.");
   }
 
@@ -21,7 +20,6 @@ export const loginUser = async (pin: string): Promise<string> => {
   if (!validPin) throw new ApiError(401, "Incorrect PIN. Try again.");
 
   const sessionId = randomUUID();
-
   const sessionPayload = sessionSchema.parse({ id: user.id });
 
   await redis.set(

@@ -25,6 +25,8 @@ import { idParamsSchema } from "../validations/params.validation";
 import { createSubjectSchema } from "../validations/subjects.validation";
 import { listJobsQuerySchema } from "../validations/jobs.validation";
 
+// Customers own the sub-resources beneath them: subjects (who garments are
+// for) and the customer's jobs. All routes are auth'd + validated.
 const router = Router();
 
 router.get(
