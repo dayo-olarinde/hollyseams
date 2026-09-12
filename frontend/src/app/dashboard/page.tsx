@@ -162,8 +162,6 @@ function Skeleton({ className = "" }: { className?: string }) {
   );
 }
 
-/* ------------------------------- revenue chart ------------------------------- */
-
 function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
   const W = 340;
   const H = 140;
@@ -172,7 +170,6 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
   const bottom = 112;
   const max = Math.max(...data.map((m) => m.revenue), 1);
 
-  // Single-month data pins the point to the horizontal centre of the card.
   const pts = useMemo(() => {
     if (data.length === 1) {
       return [
@@ -190,7 +187,6 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
     }));
   }, [data, max]);
 
-  // Catmull-Rom → cubic Bézier smoothing for the seam-curve line.
   const lineD = useMemo(() => {
     if (pts.length < 2) return `M ${pts[0]?.x ?? W / 2} ${pts[0]?.y ?? bottom}`;
     let d = `M ${pts[0]!.x} ${pts[0]!.y}`;
@@ -217,19 +213,19 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
         fill="none"
         aria-hidden="true"
       >
-        {/* faint horizontal gridlines + a baseline that grounds a single point */}
+        {}
         <line x1="10" y1="34" x2="330" y2="34" stroke="var(--hig-grid)" />
         <line x1="10" y1="66" x2="330" y2="66" stroke="var(--hig-grid)" />
         <line x1="10" y1="98" x2="330" y2="98" stroke="var(--hig-grid)" />
         <line x1="10" y1="112" x2="330" y2="112" stroke="var(--hig-grid)" />
-        {/* flat area wash under the line (no gradient) */}
+        {}
         {pts.length >= 2 && (
           <path
             d={`${lineD} L ${pts[pts.length - 1]!.x} ${bottom} L ${pts[0]!.x} ${bottom} Z`}
             fill="var(--hig-accent-tint)"
           />
         )}
-        {/* the line — system Blue, crisp, no glow */}
+        {}
         {pts.length >= 2 && (
           <path
             d={lineD}
@@ -239,7 +235,7 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
             strokeLinejoin="round"
           />
         )}
-        {/* data dots; the latest one gets a soft halo + pulse to mark "now" */}
+        {}
         {pts.map((p, i) => (
           <g key={i}>
             {i === pts.length - 1 && (
@@ -284,19 +280,14 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
   );
 }
 
-/* ---------------------------------- page ---------------------------------- */
-
 export default function DashboardPage() {
   const router = useRouter();
   const [newJobOpen, setNewJobOpen] = useState(false);
   const revenueQ = useMonthlyRevenue();
   const outstandingQ = useOutstandingPayments();
-  /* The SAME 100-job read the jobs screen makes. Keyed as ["jobs","counts"]
-     rather than the old ["jobs"], so both screens hit one cache entry instead
-     of fetching an identical payload twice when navigating between them. */
+
   const jobsQ = useJobsCounts();
 
-  /* Each hook's `select` has already unwrapped the API envelope. */
   const months = revenueQ.data ?? [];
   const outstanding = outstandingQ.data ?? [];
   const jobs = jobsQ.data ?? [];
@@ -332,11 +323,9 @@ export default function DashboardPage() {
 
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
-      {/* Mobile-only: the whole app keeps a fixed phone width, centred on larger screens.
-          Full-bleed — no side padding; only cards pad their own content. */}
-      <div className="relative mx-auto w-full max-w-107.5">        {/* ---------- chrome ---------- */}
-        {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
-            Jobs and Customers, so the brand row is identical on every tab. */}
+      {}
+      <div className="relative mx-auto w-full max-w-107.5">        {}
+        {}
         <header
           className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
           style={{ animationDelay: "0ms" }}
@@ -344,17 +333,16 @@ export default function DashboardPage() {
           <p className="text-[20px] font-medium tracking-[-0.02em]">
             Holly<span className="text-(--hig-accent)">Seams</span>
           </p>
-          {/* Dark/light toggle — persists in localStorage; see theme-toggle.tsx */}
+          {}
           <ThemeToggle />
         </header>
 
-        {/* ---------- hero ---------- */}
+        {}
         <div className="hig-rise mb-8 px-5 pt-3" style={{ animationDelay: "40ms" }}>
-          {/* Greeting card — the page hero: accent-tinted surface, live studio
-              pulse by the date, stitched seam at the foot (the tailoring motif). */}
+          {}
           <div className="relative mt-3 rounded-3xl bg-(--hig-accent-tint) px-5 pb-3.5 pt-4">
             <div className="flex items-center gap-2">
-              {/* live studio pulse — soft expanding halo + core dot */}
+              {}
               <span className="relative flex h-2 w-2" aria-hidden="true">
                 <span className="hig-ping absolute inset-0 rounded-full bg-(--hig-accent)" />
                 <span className="relative h-2 w-2 rounded-full bg-(--hig-accent)" />
@@ -369,12 +357,10 @@ export default function DashboardPage() {
             </div>
             <h1 className="mt-2 text-[34px] font-medium leading-10.25 tracking-[-0.02em]">
               {greeting}, Wunmi —{" "}
-              {/* Personality line in the accent, like the original Midnight greeting.
-                  Name is hardcoded — the backend user table has no endpoint exposing it yet. */}
+              {}
               <span className="text-(--hig-accent)">{monthName} is flying.</span>
             </h1>
-            {/* Creative studio line — scissors glyph + rhythmic tailor copy;
-                adjectives in the label colour so the phrase reads with a beat. */}
+            {}
             <p className="mt-1.5 flex items-center gap-1.5 text-[14px] font-medium text-(--hig-label-secondary)">
               <span className="h-3.5 w-3.5 text-(--hig-accent)" aria-hidden="true">
                 <IconScissors />
@@ -382,7 +368,7 @@ export default function DashboardPage() {
               Needles <span className="text-(--hig-label)">busy</span>. Threads{" "}
               <span className="text-(--hig-label)">tight</span>.
             </p>
-            {/* stitched seam — dashed accent hairline, the sewing signature */}
+            {}
             <div
               className="mt-3.5 border-t border-dashed border-(--hig-accent-line)"
               aria-hidden="true"
@@ -390,7 +376,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ---------- error banner ---------- */}
+        {}
         {anyError && (
           <div className="mb-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3">
             <p className="text-[15px] text-(--hig-danger)">
@@ -406,7 +392,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ---------- revenue card ---------- */}
+        {}
         <section
           className={`${cardClass} hig-rise mb-3 px-4 pb-4 pt-4`}
           style={{ animationDelay: "60ms" }}
@@ -425,7 +411,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* skeleton mirrors the real card: amount, caption, chart block */}
+          {}
           {loading ? (
             <div className="py-2">
               <Skeleton className="h-9 w-36" />
@@ -475,7 +461,7 @@ export default function DashboardPage() {
                   <CountUp value={totalOutstanding} />
                 </>
               )}
-            </div>            {/* One-line footer (12px) so both cards stay visually even */}
+            </div>            {}
             <p className="mt-2 truncate text-[12px] leading-4 text-(--hig-label-secondary)">
               {outstanding.length > 0 ? (
                 <>
@@ -504,14 +490,14 @@ export default function DashboardPage() {
                 <CountUp value={pendingCount} />
               )}
             </div>
-            {/* One-line footer (12px) — the headline already says the total on the bench */}
+            {}
             <p className="mt-2 truncate text-[12px] leading-4 text-(--hig-label-secondary)">
               <b className="font-medium text-(--hig-label)">{readyCount} ready</b> to pick up
             </p>
           </div>
         </section>
 
-        {/* ---------- latest work ---------- */}
+        {}
         <GroupHeader title="Latest Work" link="View all" linkHref="/jobs" className="mt-8" delay={180} />
         {loading ? (
           <div className="space-y-2">
@@ -535,7 +521,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ---------- balances to collect ---------- */}
+        {}
         <GroupHeader
           title="Balances to Collect"
           link={
@@ -573,9 +559,7 @@ export default function DashboardPage() {
                 !!o.dueDate &&
                 new Date(o.dueDate + "T00:00:00").getTime() <
                   new Date(new Date().toDateString()).getTime();
-              // Self subjects carry the customer's own name in the DB — show
-              // "Self" instead of repeating the name next to it.
-              // (customer is always present on the feed — see types/report.ts.)
+
               const customerName = o.customer.name;
               const isSelf =
                 !!o.subjectName &&
@@ -596,8 +580,7 @@ export default function DashboardPage() {
                   }}
                   className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-(--hig-fill) focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
                 >
-                  {/* initials avatar — tinted from the customer's name so each
-                      client keeps one colour across every screen (avatarColor) */}
+                  {}
                   <div
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
                     style={{
@@ -612,14 +595,14 @@ export default function DashboardPage() {
                       <span className="truncate text-[15px] font-medium leading-5">
                         {customerName || "Client"}
                       </span>
-                      {/* subject chip — "Self" instead of repeating the customer name */}
+                      {}
                       {o.subjectName && (
                         <span className="shrink-0 rounded-full bg-(--hig-accent-tint) px-2 py-0.75 text-[10px] font-medium text-(--hig-accent)">
                           {isSelf ? "Self" : o.subjectName}
                         </span>
                       )}
                     </div>
-                    {/* agreed/paid line — amounts pop: agreed in label, paid in green */}
+                    {}
                     <div className="mt-1 text-[12px] leading-4 text-(--hig-label-secondary) [font-variant-numeric:tabular-nums]">
                       <b className="font-medium text-(--hig-label)">
                         {naira.format(o.agreedPrice)}
@@ -636,7 +619,7 @@ export default function DashboardPage() {
                       </b>{" "}
                       paid
                     </div>
-                    {/* paid progress — gray track, blue fill */}
+                    {}
                     <div className="mt-2 h-0.75 overflow-hidden rounded-full bg-(--hig-separator)">
                       <div
                         className="h-full rounded-full bg-(--hig-accent) transition-[width] duration-600 ease-out"
@@ -669,7 +652,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ---------- FAB + tab bar (anchored to the phone-width column, full-bleed) ---------- */}
+      {}
       <TabBar
         active="overview"
         fab={
@@ -697,21 +680,12 @@ export default function DashboardPage() {
         }
       />
 
-      {/* The Cutting Table — new job sheet (Concept 2, wired to the API) */}
+      {}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />
     </main>
   );
 }
 
-/* ------------------------------- job row ------------------------------- */
-
-/**
- * Status → HIG semantic colors (green = ready, orange = in progress,
- * gray = neutral/canceled/delivered). Dots are static — no blinking.
- */
-/* Status pills carry the meaning; the dots are purely decorative. Each job's
-   dot is hashed from the SUBJECT's name (avatarColor), so it matches the
-   subject's avatar hue everywhere in the app. */
 const statusMeta: Record<Job["status"], { chip: string }> = {
   pending: {
     chip: "bg-(--hig-warning-tint) text-(--hig-warning)",
@@ -759,9 +733,7 @@ function JobRow({ job }: { job: Job }) {
       }}
       className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-(--hig-fill) focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
     >
-      {/* decorative glowing dot — keyed to the SUBJECT's name (avatarColor),
-          so a job's dot always matches that subject's avatar hue; self
-          subjects carry the customer's name, matching their avatar too */}
+      {}
       <span
         className="h-2.25 w-2.25 shrink-0 rounded-full"
         style={{

@@ -77,8 +77,6 @@ function HouseholdCard({ customer }: { customer: Customer }) {
   );
 }
 
-/** Household card skeleton — mirrors the real card (44px avatar, name,
-    phone line, chevron) so loading doesn't shift the list. */
 function CardSkeleton() {
   const bar = "animate-pulse rounded bg-(--hig-separator)";
   return (
@@ -93,8 +91,6 @@ function CardSkeleton() {
   );
 }
 
-/** Filmstrip card skeleton — mirrors the real Top-clients card anatomy:
-    rank, avatar, name, job count, amount, "paid" caption. */
 function FilmstripCardSkeleton() {
   const bar = "animate-pulse rounded bg-(--hig-separator)";
   return (
@@ -109,32 +105,22 @@ function FilmstripCardSkeleton() {
   );
 }
 
-/* ---------------------------------- page ---------------------------------- */
-
 export default function CustomersPage() {
   const [newJobOpen, setNewJobOpen] = useState(false);
 
-  /* Four reads, one hook each — the query functions, their cache keys and the
-     envelope unwrapping all live in src/hooks/. Each already returns the
-     payload, so there is no `.data?.data` at this level. */
   const listQ = useCustomersList();
   const countsQ = useCustomersCounts();
   const outstandingQ = useOutstandingPayments();
   const topQ = useTopCustomers(5);
 
-  /* `useCustomersList` selects the flattened pages, so `data` is already the
-     A→Z array rather than the infinite-query envelope. */
   const customers = listQ.data ?? [];
 
-  /* screen-level money — the outstanding feed sums the stat strip; the
-     per-card amounts were removed per the user's call (they live in the
-     customer file now) */
   const households = countsQ.data?.length ?? customers.length;
   const totals = useMemo(() => {
     let due = 0;
     let over = 0;
     for (const o of outstandingQ.data ?? []) {
-      const bal = o.balanceDue; // always present on the feed — see types/report.ts
+      const bal = o.balanceDue;
       due += bal;
       const pastDue =
         o.status === "pending" &&
@@ -158,7 +144,7 @@ export default function CustomersPage() {
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full max-w-107.5">
-        {/* ---------- chrome ---------- */}
+        {}
         <header className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150" style={{ animationDelay: "0ms" }}>
           <p className="text-[20px] font-medium tracking-[-0.02em]">
             Holly<span className="text-(--hig-accent)">Seams</span>
@@ -166,7 +152,7 @@ export default function CustomersPage() {
           <ThemeToggle />
         </header>
 
-        {/* ---------- head ---------- */}
+        {}
         <div className="hig-rise px-5 pt-3" style={{ animationDelay: "40ms" }}>
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
             {new Date().toLocaleDateString("en-US", {
@@ -183,7 +169,7 @@ export default function CustomersPage() {
           </p>
         </div>
 
-        {/* ---------- stat strip (from the outstanding feed) ---------- */}
+        {}
         <div className="hig-rise mt-5 grid grid-cols-3 gap-2.5 px-5" style={{ animationDelay: "80ms" }}>
           <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             <p className="text-[17px] font-medium leading-tight text-(--hig-warning) [font-variant-numeric:tabular-nums]">
@@ -211,7 +197,7 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        {/* ---------- Top clients filmstrip (kept per the user's request) ---------- */}
+        {}
         <div className="hig-rise mt-5" style={{ animationDelay: "120ms" }}>
           <div className="flex items-baseline justify-between px-5">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
@@ -269,7 +255,7 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        {/* ---------- error banner ---------- */}
+        {}
         {anyError && (
           <div className="mx-5 mt-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3">
             <p className="text-[15px] text-(--hig-danger)">
@@ -285,10 +271,10 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {/* ---------- results line ---------- */}
+        {}
         {!anyError && (
           <div className="mt-5 flex items-baseline justify-between px-5 text-[12px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
-            {/* stat strip above already surfaces to-collect — no need to repeat it here */}
+            {}
             <span>
               <b className="font-medium text-(--hig-label-secondary)">
                 {countsQ.data ? households : customers.length}
@@ -298,7 +284,7 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {/* ---------- household cards ---------- */}
+        {}
         {loading ? (
           <div className="mt-3 space-y-3 px-5">
             {[0, 1, 2].map((i) => (
@@ -354,7 +340,7 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* ---------- FAB + tab bar (anchored to the phone-width column) ---------- */}
+      {}
       <TabBar
         active="customers"
         fab={
@@ -373,7 +359,7 @@ export default function CustomersPage() {
         }
       />
 
-      {/* New job sheet — the same modal as jobs/dashboard (new-client flow) */}
+      {}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />
     </main>
   );

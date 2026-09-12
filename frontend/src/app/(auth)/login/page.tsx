@@ -109,7 +109,7 @@ export default function LoginPage() {
         ))}
       </div>
 
-      {/* Error / loading slot — fixed height so nothing jumps */}
+      {}
       <div
         className="hig-rise mt-6 flex h-5 items-center justify-center"
         style={{ animationDelay: "80ms" }}
@@ -132,7 +132,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Keypad — 80px circular keys, 12px gaps; press state is the accent */}
+      {}
       <div
         className="hig-rise mx-auto mt-6 grid w-full max-w-66 grid-cols-3 gap-3"
         style={{ animationDelay: "120ms" }}
@@ -171,7 +171,7 @@ export default function LoginPage() {
           disabled={isLoading}
           className="flex aspect-square items-center justify-center rounded-full text-(--hig-label-tertiary) transition-all duration-100 active:scale-95 active:opacity-60 disabled:opacity-30"
           aria-label="Delete last digit"
-        >          {/* Back-delete chevron only — no ×, so it reads as a single glyph */}
+        >          {}
           <svg
             viewBox="0 0 24 24"
             className="h-6 w-6"

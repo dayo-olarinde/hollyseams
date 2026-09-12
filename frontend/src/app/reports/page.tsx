@@ -25,7 +25,6 @@ function fmtDay(value: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
 }
 
-/** "2026-09" → "September 2026" — monthKey fallback when the API's `month` is missing. */
 function fmtMonth(monthKey: string, fallback?: string): string {
   if (fallback) return fallback;
   const m = /^(\d{4})-(\d{2})/.exec(monthKey);
@@ -33,7 +32,6 @@ function fmtMonth(monthKey: string, fallback?: string): string {
   return `${MONTHS[+m[2]! - 1]} ${m[1]}`;
 }
 
-/** "2026-09-24T00:00:00.000Z" → local midnight ms — the app-wide date parser (overdue-safe). */
 function parseDay(value: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
@@ -42,28 +40,20 @@ function parseDay(value: string): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-/* ---------------------------------- atoms ---------------------------------- */
-
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-xl bg-(--hig-separator) ${className}`} />;
 }
 
-/* ---------------------------------- page ---------------------------------- */
-
 export default function ReportsPage() {
-  /* The keys live in use-reports.ts, so the payment sheet and the create-job
-     wizard can invalidate these three without retyping their key strings. */
+
   const revenueQ = useMonthlyRevenue();
   const outstandingQ = useOutstandingPayments();
   const topQ = useTopCustomers(5);
 
-  /* `select` in the hooks has already unwrapped the API envelope — `data` is
-     the array itself, not `{ success, data, meta }`. */
   const months = revenueQ.data ?? [];
   const outstanding = outstandingQ.data ?? [];
   const topCustomers = topQ.data ?? [];
 
-  /* cover — collected / to collect / overdue / studio balance */
   const collectedToDate = useMemo(() => {
     if (months.length === 0) return 0;
     const last = months.at(-1);
@@ -72,7 +62,7 @@ export default function ReportsPage() {
   }, [months]);
 
   const toCollect = useMemo(
-    // balanceDue is always present on the feed — see types/report.ts
+
     () => outstanding.reduce((s, o) => s + o.balanceDue, 0),
     [outstanding],
   );
@@ -81,7 +71,7 @@ export default function ReportsPage() {
     let sum = 0;
     const today = new Date(new Date().toDateString()).getTime();
     for (const o of outstanding) {
-      const bal = o.balanceDue; // always present on the feed — see types/report.ts
+      const bal = o.balanceDue;
       const overdue =
         o.status === "pending" &&
         !!o.dueDate &&
@@ -102,7 +92,6 @@ export default function ReportsPage() {
     topQ.refetch();
   };
 
-  /* best clients footer — sum of the displayed rows */
   const topPaidSum = useMemo(
     () => topCustomers.reduce((s, t) => s + (t.totalPaid ?? 0), 0),
     [topCustomers],
@@ -113,7 +102,7 @@ export default function ReportsPage() {
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full max-w-107.5">
-        {/* ---------- chrome ---------- */}
+        {}
         <header
           className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
           style={{ animationDelay: "0ms" }}
@@ -124,7 +113,7 @@ export default function ReportsPage() {
           <ThemeToggle />
         </header>
 
-        {/* ---------- head ---------- */}
+        {}
         <div className="hig-rise px-5 pt-3" style={{ animationDelay: "40ms" }}>
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
             {new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" })}
@@ -137,7 +126,7 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        {/* ---------- error banner ---------- */}
+        {}
         {anyError && (
           <div className="mx-5 mt-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3">
             <p className="text-[15px] text-(--hig-danger)">Couldn&apos;t reach the books. Check your connection.</p>
@@ -147,10 +136,10 @@ export default function ReportsPage() {
           </div>
         )}
 
-        {/* ---------- the cover: balance summary ---------- */}
+        {}
         <div className="hig-rise mx-5 mt-5 rounded-3xl bg-(--hig-card) px-5 pb-3 pt-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]" style={{ animationDelay: "80ms" }}>
           {loading ? (
-            /* four ruled rows — same py/separators as the real cover */
+
             <div className="py-1">
               {[0, 1, 2].map((i) => (
                 <div key={i} className={`flex items-center justify-between py-1.75 ${i !== 0 ? "border-t border-dashed border-(--hig-separator)" : ""}`}>
@@ -185,22 +174,21 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* ---------- Statement · collected ---------- */}
+        {}
         <section className="hig-rise mx-5 mt-6" style={{ animationDelay: "120ms" }}>
           <div className="mb-2.5 flex items-baseline justify-between px-1">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">Statement · collected</h2>
             <span className="text-[12px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">{months.length === 0 ? "monthly revenue" : `${months.length} ${months.length === 1 ? "month" : "months"}`}</span>
           </div>
           <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-            {/* column header — the ruled line that makes it a statement */}
+            {}
             <div className="flex gap-2.5 px-4 pb-2 pt-3.5 text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
               <span className="flex-1">Month</span>
               <span className="w-21.5 shrink-0 text-right">Revenue</span>
               <span className="w-23 shrink-0 text-right">Running</span>
             </div>
             <div className="border-t border-dashed border-(--hig-separator)">
-              {/* skeleton mirrors the two-line month row (title + caption,
-                  tabular amounts) so loading doesn't shift the layout */}
+              {}
               {revenueQ.isPending ? (
                 <div className="p-2">
                   {[0,1,2].map((i)=>(
@@ -218,7 +206,7 @@ export default function ReportsPage() {
                 <p className="px-4 py-10 text-center text-[13px] leading-5 text-(--hig-label-secondary)">No revenue yet — payments will appear here, month by month.</p>
               ) : (
                 <>
-                  {/* newest month first — like a statement (the API is asc) */}
+                  {}
                   {[...months].reverse().map((m, idx) => {
                     const isThisMonth = idx === 0;
                     return (
@@ -250,7 +238,7 @@ export default function ReportsPage() {
           </div>
         </section>
 
-        {/* ---------- Statement · outstanding ---------- */}
+        {}
         <section className="hig-rise mx-5 mt-6" style={{ animationDelay: "160ms" }}>
           <div className="mb-2.5 flex items-baseline justify-between px-1">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">Statement · outstanding</h2>
@@ -260,8 +248,7 @@ export default function ReportsPage() {
           </div>
           <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
             <div className="border-t border-dashed border-(--hig-separator)">
-              {/* skeleton mirrors the three-line outstanding row (title,
-                  customer, money row) — the real row is ~92px tall */}
+              {}
               {outstandingQ.isPending ? (
                 <div className="p-2">
                   {[0,1,2].map((i)=>(
@@ -279,7 +266,7 @@ export default function ReportsPage() {
                 <p className="px-4 py-10 text-center text-[13px] leading-5 text-(--hig-label-secondary)">All settled — no outstanding balances right now.</p>
               ) : (
                 outstanding.map((o, idx) => {
-                  const bal = o.balanceDue; // always present — see types/report.ts
+                  const bal = o.balanceDue;
                   const today = new Date(new Date().toDateString()).getTime();
                   const overdue =
                     o.status === "pending" &&
@@ -291,12 +278,12 @@ export default function ReportsPage() {
                   const paid = o.totalPaid;
                   return (
                     <div key={o.jobId} className={`px-4 py-3.5 ${idx !== 0 ? "border-t border-dashed border-(--hig-separator)" : ""} ${overdue ? "bg-(--hig-danger-tint)" : ""}`}>
-                      {/* title row — full description, wraps; customer on its own line so neither truncates the other */}
+                      {}
                       <p className="text-[14px] font-medium leading-snug wrap-anywhere">{title}</p>
                       {customerName ? (
                         <p className="mt-0.5 text-[12px] font-medium text-(--hig-label-secondary) wrap-anywhere">{customerName}</p>
                       ) : null}
-                      {/* money row — tabular numerals, overdue-aware */}
+                      {}
                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px] [font-variant-numeric:tabular-nums]">
                         <span className={overdue ? "font-semibold text-(--hig-danger)" : "text-(--hig-label-secondary)"}>
                           {overdue ? `overdue · due ${o.dueDate ? fmtDay(String(o.dueDate)) : "—"}` : o.dueDate ? `due ${fmtDay(String(o.dueDate))}` : "no due date"} · {naira.format(paid)} paid
@@ -318,11 +305,11 @@ export default function ReportsPage() {
               </div>
             )}
           </div>
-          {/* stitched seam under the outstanding statement — the receipt edge from the concept */}
+          {}
           <div className="mx-4 mt-0 border-t border-dashed border-(--hig-accent-line)" aria-hidden="true" />
         </section>
 
-        {/* ---------- Statement · best clients ---------- */}
+        {}
         <section className="hig-rise mx-5 mt-6" style={{ animationDelay: "200ms" }}>
           <div className="mb-2.5 flex items-baseline justify-between px-1">
             <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">Statement · best clients</h2>
@@ -335,8 +322,7 @@ export default function ReportsPage() {
               <span className="w-23 shrink-0 text-right">Paid</span>
             </div>
             <div className="border-t border-dashed border-(--hig-separator)">
-              {/* skeleton mirrors the two-line client row (rank + name,
-                  job count) with the Jobs/Paid columns */}
+              {}
               {topQ.isPending ? (
                 <div className="p-2">
                   {[0,1,2].map((i)=>(
@@ -355,7 +341,7 @@ export default function ReportsPage() {
               ) : (
                 topCustomers.map((t, idx) => {
                   const rank = String(idx + 1).padStart(2, "0");
-                  const name = t.name; // always present — see types/report.ts
+                  const name = t.name;
                   return (
                     <div key={t.id} className={`flex items-center gap-2.5 px-4 py-3 ${idx !== 0 ? "border-t border-dashed border-(--hig-separator)" : ""}`}>
                       <div className="min-w-0 flex-1">
@@ -383,13 +369,13 @@ export default function ReportsPage() {
           </div>
         </section>
 
-        {/* closing line — like the html's balance footer */}
+        {}
         <p className="mx-5 mt-6 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
           {`Collected ${naira.format(collectedToDate)} · owing ${naira.format(outstandingTotal)} · the books balance.`}
         </p>
       </div>
 
-      {/* ---------- tab bar ---------- */}
+      {}
       <TabBar active="reports" />
     </main>
   );

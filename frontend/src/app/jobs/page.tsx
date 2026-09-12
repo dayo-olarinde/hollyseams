@@ -107,8 +107,7 @@ function JobCard({ job }: { job: Job }) {
       ? `ready · due ${formatDueDate(job.dueDate)}`
       : "ready for pickup";
   } else if (delivered) {
-    // accent blue — "done" reads distinctly from Ready's green and keeps the
-    // one-accent rule; gray is reserved for canceled.
+
     pill = "bg-(--hig-accent-tint) text-(--hig-accent)";
     label = "Delivered";
     note = `collected ${formatDueDate(job.deliveredAt)}`;
@@ -118,14 +117,9 @@ function JobCard({ job }: { job: Job }) {
     note = "canceled";
   }
 
-  /* photo strip — the list query ships exactly one cover URL (finished
-     wins) plus the photo count, so no array plucking is needed here; the
-     full photo arrays stay on GET /jobs/:id. A quiet placeholder marks
-     the slot when the job has no pictures at all. */
   const cover = job.coverUrl;
   const photoCount = job.photoCount ?? 0;
 
-  /* the whole card is the tap target → /jobs/:id (the Inspection screen) */
   return (
     <div
       role="button"
@@ -140,12 +134,11 @@ function JobCard({ job }: { job: Job }) {
       }}
       className="flex cursor-pointer overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)] transition-transform duration-200 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
     >
-      {/* photo strip — flush with the card's left edge, spans the full height */}
+      {}
       <div className="relative w-1/3 min-h-28 shrink-0 self-stretch overflow-hidden bg-(--hig-fill)">
         {cover ? (
           <img
-            /* thumbnail derivative (~20 KB) — the full-res original stays
-               on the detail page; see lib/cloudinary.ts */
+
             src={cloudinaryThumb(cover)}
             alt={job.description || "Garment"}
             loading="lazy"
@@ -163,11 +156,10 @@ function JobCard({ job }: { job: Job }) {
           </span>
         )}
       </div>
-      {/* info — fills the remaining two thirds */}
+      {}
       <div className="flex min-w-0 flex-1 flex-col px-4 py-3.5">
         <div className="flex items-baseline justify-between gap-2">
-          {/* names and amounts read at 500 per the design system; 600 is
-              reserved for tiny labels and pills */}
+          {}
           <p className="truncate text-[16px] font-medium tracking-[-0.01em]">
             {job.subjectName ?? "Client"}
           </p>
@@ -203,9 +195,6 @@ function JobCard({ job }: { job: Job }) {
   );
 }
 
-/* Skeleton bars mirror the card's anatomy: the flush photo strip on the
-   left, then the subject line, two description lines, and the price + pill
-   row at the foot — so loading doesn't shift the layout. */
 function JobCardSkeleton() {
   const bar = "animate-pulse rounded bg-(--hig-separator)";
   return (
@@ -226,8 +215,6 @@ function JobCardSkeleton() {
     </div>
   );
 }
-
-/* ---------------------------------- page ---------------------------------- */
 
 const EMPTY_COPY: Record<JobFilter, { big: string; small: string }> = {
   all: {
@@ -252,13 +239,8 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<JobFilter>("all");
   const [newJobOpen, setNewJobOpen] = useState(false);
 
-  /* The list — the query function, its per-filter cache key and the cursor
-     handling all live in use-jobs.ts. `data` is already the flattened Job[]. */
   const listQ = useJobsList(filter);
 
-  /* Whole-collection read: the filter labels and the overdue banner need the
-     full set, not just the loaded page. Shared with the dashboard, which asks
-     for exactly the same 100 jobs — one cache entry, not two. */
   const countsQ = useJobsCounts();
 
   const jobs = listQ.data ?? [];
@@ -273,7 +255,6 @@ export default function JobsPage() {
     };
   }, [countsQ.data]);
 
-  /* overdue banner — derived from the full counts feed, not just page one */
   const overdueJobs = useMemo(
     () => (countsQ.data ?? []).filter(isOverdue),
     [countsQ.data],
@@ -288,10 +269,6 @@ export default function JobsPage() {
     countsQ.refetch();
   };
 
-  /* results line: while pages are still loading show "N of total" from the
-     counts feed; once the loaded count reaches the total, collapse to a
-     flat number ("3 jobs" / "2 matching"). Falls back to "N loaded" if
-     the counts feed hasn't returned yet. */
   const metaCount =
     !countsQ.data && listQ.data
       ? `${jobs.length} loaded`
@@ -309,9 +286,8 @@ export default function JobsPage() {
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full max-w-107.5">
-        {/* ---------- chrome ---------- */}
-        {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
-            Overview and Customers, so the brand row is identical on every tab. */}
+        {}
+        {}
         <header
           className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
           style={{ animationDelay: "0ms" }}
@@ -322,7 +298,7 @@ export default function JobsPage() {
           <ThemeToggle />
         </header>
 
-        {/* ---------- head ---------- */}
+        {}
         <div className="hig-rise px-5 pt-3" style={{ animationDelay: "40ms" }}>
           <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
             {new Date().toLocaleDateString("en-US", {
@@ -336,13 +312,13 @@ export default function JobsPage() {
           </h1>
         </div>
 
-        {/* ---------- status filter (counts in labels) ---------- */}
-        {/* 24px section gap (8pt grid) between the header and the filter */}
+        {}
+        {}
         <div
           className="hig-rise relative mt-6 flex rounded-[14px] bg-(--hig-card) p-0.75 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]"
           style={{ animationDelay: "40ms" }}
         >
-          {/* sliding thumb — one quarter per segment */}
+          {}
           <span
             aria-hidden="true"
             className="absolute bottom-0.75 left-0.75 top-0.75 w-[calc((100%-6px)/4)] rounded-[11px] bg-(--hig-fill) transition-transform duration-300 ease-out"
@@ -374,7 +350,7 @@ export default function JobsPage() {
           ))}
         </div>
 
-        {/* ---------- results line ---------- */}
+        {}
         <div
           className="hig-rise mt-4 flex items-baseline justify-between text-[12px] text-(--hig-label-secondary) [font-variant-numeric:tabular-nums]"
           style={{ animationDelay: "80ms" }}
@@ -386,7 +362,7 @@ export default function JobsPage() {
           </span>
         </div>
 
-        {/* ---------- error banner ---------- */}
+        {}
         {anyError && (
           <div
             className="mt-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3"
@@ -405,7 +381,7 @@ export default function JobsPage() {
           </div>
         )}
 
-        {/* ---------- overdue banner ---------- */}
+        {}
         {showBanner && !anyError && (
           <div
             className="hig-rise mt-4 flex items-center gap-2.5 rounded-2xl bg-(--hig-danger-tint) px-4 py-3"
@@ -428,7 +404,7 @@ export default function JobsPage() {
           </div>
         )}
 
-        {/* ---------- the list ---------- */}
+        {}
         {loading ? (
           <div className="mt-4 space-y-4">
             {[0, 1, 2, 3].map((i) => (
@@ -461,7 +437,7 @@ export default function JobsPage() {
               <JobCard key={j.id} job={j} />
             ))}
 
-            {/* show more — only while a next cursor exists */}
+            {}
             {listQ.hasNextPage && (
               <button
                 type="button"
@@ -494,7 +470,7 @@ export default function JobsPage() {
         )}
       </div>
 
-      {/* ---------- FAB + tab bar (anchored to the phone-width column) ---------- */}
+      {}
       <TabBar
         active="jobs"
         fab={
@@ -522,7 +498,7 @@ export default function JobsPage() {
         }
       />
 
-      {/* New job — same sheet as the dashboard, wired to the API */}
+      {}
       <NewJobModal open={newJobOpen} onClose={() => setNewJobOpen(false)} />
     </main>
   );

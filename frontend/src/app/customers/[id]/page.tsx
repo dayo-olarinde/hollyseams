@@ -32,7 +32,6 @@ function fmtDay(value: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
 }
 
-/** ISO timestamp → "24 Sep". */
 function fmtISO(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
@@ -64,8 +63,6 @@ function initials(name: string): string {
   );
 }
 
-/* status pill — same mapping as the jobs list (delivered = completed +
-   deliveredAt; overdue = pending + past due) */
 function jobPill(j: Job): { label: string; cls: string } {
   if (isOverdue(j)) return { label: "Overdue", cls: "bg-(--hig-danger-tint) text-(--hig-danger)" };
   if (j.status === "pending") return { label: "In progress", cls: "bg-(--hig-warning-tint) text-(--hig-warning)" };
@@ -74,9 +71,6 @@ function jobPill(j: Job): { label: string; cls: string } {
   return { label: "Canceled", cls: "bg-(--hig-separator) text-(--hig-label-secondary)" };
 }
 
-/* ---------------------------------- subject row + accordion ---------------------------------- */
-
-/** One subject row; expands in place (accordion — one at a time). */
 function SubjectRow({
   subject,
   jobs,
@@ -89,12 +83,9 @@ function SubjectRow({
   onToggle: () => void;
 }) {
   const router = useRouter();
-  /* which fitting's measurements grid is expanded inside this subject's
-     panel — one at a time within the subject, mirroring the outer rule */
+
   const [openFitting, setOpenFitting] = useState<string | null>(null);
 
-  /* FULL fitting history — newest first (the API's order). The row note
-     uses the newest; the panel walks the whole history. */
   const fittingQ = useSubjectMeasurements(subject.id);
   const fittings = fittingQ.data ?? [];
   const latest = fittings[0];
@@ -145,11 +136,10 @@ function SubjectRow({
         </span>
       </button>
 
-      {/* expanded panel — the subject's info, one at a time */}
+      {}
       {open && (
         <div className="animate-fade-in px-4 pb-4">
-          {/* fittings history — every saved fitting, newest first, each
-              expandable to its tape grid (measurements change over time) */}
+          {}
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
             Fittings{fittingQ.isLoading ? " · loading…" : ` · ${fittings.length} on file`}
           </p>
@@ -179,7 +169,7 @@ function SubjectRow({
                     </span>
                   </button>
                   {openFitting === f.id && (
-                    /* the tape — 2-col stitched grid, same DNA as the job detail */
+
                     <div className="animate-fade-in grid grid-cols-2 border-t border-dashed border-(--hig-separator) px-3.5 pb-1 pt-0.5">
                       {Object.entries(f.measurements).map(([key, value], i) => (
                         <div
@@ -215,7 +205,7 @@ function SubjectRow({
             </div>
           )}
 
-          {/* their jobs — filtered from the customer feed by subjectId */}
+          {}
           <p className="mt-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
             Their jobs{totalBal > 0 ? ` · ${naira.format(totalBal)} to collect` : ""}
           </p>
@@ -261,11 +251,7 @@ function SubjectRow({
   );
 }
 
-/* balancesByJob is populated by the page before subjects render — a module
-   slot keeps the mapping readable without prop-drilling every job row. */
 const balancesByJob = new Map<string, number>();
-
-/* ---------------------------------- skeleton ---------------------------------- */
 
 function FileSkeleton() {
   const bar = "animate-pulse rounded bg-(--hig-separator)";
@@ -288,31 +274,24 @@ function FileSkeleton() {
   );
 }
 
-/* ---------------------------------- page ---------------------------------- */
-
 export default function CustomerFilePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [openSubject, setOpenSubject] = useState<string | null>(null);
 
-  /* Three reads of THIS customer's file — all keyed under ["customer", id] in
-     use-customers.ts, so one invalidation refreshes the header, the subjects
-     and the job list together. Each hook returns the unwrapped payload. */
   const customerQ = useCustomer(id);
   const subjectsQ = useCustomerSubjects(id);
   const jobsQ = useCustomerJobs(id);
-  /* Live balances are app-wide, not per-customer: the same feed the dashboard
-     and the statement screen read, so it is shared rather than re-fetched. */
+
   const outstandingQ = useOutstandingPayments();
 
-  /* key balances by jobId once, before subjects render their rows */
   const jobs = jobsQ.data ?? [];
   useMemo(() => {
     balancesByJob.clear();
     for (const o of outstandingQ.data ?? []) {
       if (o.customer.id === id) {
-        // balanceDue is always present on the feed — see types/report.ts
+
         balancesByJob.set(o.jobId, o.balanceDue);
       }
     }
@@ -334,7 +313,7 @@ export default function CustomerFilePage() {
 
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-16 text-(--hig-label) transition-colors duration-300">
-      {/* ---------- chrome ---------- */}
+      {}
       <header className="sticky top-0 z-30 border-b border-(--hig-separator) bg-(--hig-bar)/80 backdrop-blur-[20px] backdrop-saturate-150">
         <div className="mx-auto flex w-full max-w-107.5 items-center justify-between px-4 py-1.5">
           <button
@@ -351,7 +330,7 @@ export default function CustomerFilePage() {
       </header>
 
       {anyError ? (
-        /* ---------- error state ---------- */
+
         <div className="mx-auto mt-24 w-full max-w-107.5 px-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-6 w-6" aria-hidden="true">
@@ -378,7 +357,7 @@ export default function CustomerFilePage() {
         <FileSkeleton />
       ) : (
         <>
-          {/* ---------- header: who they are ---------- */}
+          {}
           <div className="mx-auto w-full max-w-107.5 px-4 pt-6">
             <div className="flex items-center gap-3">
               <span
@@ -413,7 +392,7 @@ export default function CustomerFilePage() {
               )}
             </div>
 
-            {/* ---------- stat strip: money + jobs at a glance ---------- */}
+            {}
             <div className="mt-5 grid grid-cols-3 gap-2.5">
               <div className="rounded-2xl bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
                 <p className="text-[15px] font-medium leading-tight text-(--hig-warning) [font-variant-numeric:tabular-nums]">
@@ -442,7 +421,7 @@ export default function CustomerFilePage() {
             </div>
           </div>
 
-          {/* ---------- the family: accordion, one subject at a time ---------- */}
+          {}
           <section className="mx-auto mt-7 w-full max-w-107.5 px-4">
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
               <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">

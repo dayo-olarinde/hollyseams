@@ -25,19 +25,12 @@ function fmtDay(value: string): string {
   return `${+m[3]!} ${MONTHS[+m[2]! - 1]}`;
 }
 
-/** ISO timestamp → "24 Sep" (UTC parts — the DB stores UTC). */
 function fmtISO(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
 }
 
-/**
- * "YYYY-MM-DD" or an ISO date column ("2026-09-24T00:00:00.000Z" — how the
- * API serializes the pg `date` type) → local midnight in ms. Appending
- * "T00:00:00" to an ISO string yields Invalid Date, so this must parse
- * both shapes or overdue never fires on real API data.
- */
 function parseDay(value: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
@@ -46,7 +39,6 @@ function parseDay(value: string): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
-/** Pending + due date before today — the app-wide overdue derivation. */
 function isOverdue(j: Job): boolean {
   if (j.status !== "pending" || !j.dueDate) return false;
   const due = parseDay(j.dueDate);
@@ -64,8 +56,6 @@ function initials(name: string): string {
       .join("") || "•"
   );
 }
-
-/* ---------------------------------- icons ---------------------------------- */
 
 function IconPhoto({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -86,16 +76,13 @@ function IconPhoto({ className = "h-6 w-6" }: { className?: string }) {
   );
 }
 
-/* ---------------------------------- the rail ---------------------------------- */
-
 interface Milestone {
   label: string;
   sub: string;
   state: "done" | "now" | "future" | "over";
-  tag?: string; // trailing hint ("now" / "past due" / "canceled")
+  tag?: string;
 }
 
-/** Life of a job as milestones — derived from the same fields as the list. */
 function milestones(j: Job): Milestone[] {
   const ready = j.status === "completed" && !j.deliveredAt;
   const delivered = !!j.deliveredAt;
@@ -117,9 +104,7 @@ function milestones(j: Job): Milestone[] {
   } else {
     ms.push({ label: "On the bench", sub: "in progress", state: "now", tag: "now" });
   }
-  /* "Ready to collect" is the derived state the whole app shares:
-     completed + no deliveredAt. Its date sub-line shows the delivery
-     date once set; until then the milestone itself is the "now" node. */
+
   ms.push({
     label: "Ready to collect",
     sub: delivered ? fmtISO(j.deliveredAt!) : "—",
@@ -134,9 +119,6 @@ function milestones(j: Job): Milestone[] {
   return ms;
 }
 
-/* ---------------------------------- the tape (Concept 1's stitched grid) ---------------------------------- */
-
-/** Two-column stitched grid — the anatomy the user picked from Concept 1. */
 function Tape({ job }: { job: Job }) {
   const entries = Object.entries(job.measurements ?? {});
   if (entries.length === 0) {
@@ -178,8 +160,6 @@ function Tape({ job }: { job: Job }) {
   );
 }
 
-/* ---------------------------------- the money (Concept 1's card) ---------------------------------- */
-
 function Money({
   job,
   onRecord,
@@ -194,9 +174,9 @@ function Money({
     job.agreedPrice > 0 ? Math.min(100, (paid / job.agreedPrice) * 100) : 0;
 
   return (
-    /* 16px inner padding per the design system's card spec */
+
     <div className="rounded-[20px] bg-(--hig-card) px-4 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-      {/* agreed / paid / balance — amounts at 500 (content type per HIG) */}
+      {}
       <div className="flex items-baseline justify-between">
         <p className="text-[12px] text-(--hig-label-secondary)">Agreed</p>
         <p className="text-[15px] font-medium [font-variant-numeric:tabular-nums]">
@@ -222,7 +202,7 @@ function Money({
         </p>
       </div>
 
-      {/* progress — the collection story at a glance */}
+      {}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-(--hig-fill)">
         <div
           className="h-full rounded-full bg-(--hig-accent) transition-[width] duration-500"
@@ -230,7 +210,7 @@ function Money({
         />
       </div>
 
-      {/* payment history, newest first (the API orders by paidAt desc) */}
+      {}
       <div className="mt-2">
         {payments.map((p) => (
           <div
@@ -259,7 +239,7 @@ function Money({
         )}
       </div>
 
-      {/* record a payment — Concept 1's inline action, now wired to the API */}
+      {}
       <button
         type="button"
         onClick={onRecord}
@@ -270,8 +250,6 @@ function Money({
     </div>
   );
 }
-
-/* ---------------------------------- payment sheet ---------------------------------- */
 
 function PaymentSheet({
   job,
@@ -292,17 +270,12 @@ function PaymentSheet({
 
   const pay = useCreatePayment();
 
-  /* One submit path shared by the Enter key and the button. The hook owns the
-     request AND the cache invalidation (see src/hooks/use-jobs.ts — the
-     "what is stale after money moves" rule lives there once, not here); this
-     screen owns only the UI consequence. React Query runs both the hook-level
-     and the call-level callbacks. */
   const submitPayment = () =>
     pay.mutate(
       {
         jobId: job.id,
         amount: amountNum,
-        // the backend z.coerce.date() accepts the "YYYY-MM-DD" from the picker
+
         paidAt: date ? new Date(date + "T12:00:00").toISOString() : undefined,
       },
       {
@@ -320,12 +293,6 @@ function PaymentSheet({
       },
     );
 
-  /* Reset-on-open WITHOUT useEffect — a deliberately subtle pattern:
-     this block runs DURING render (not after paint), so the sheet always
-     opens with a clean amount/date BEFORE the slide-up animation shows,
-     with zero flicker of stale values. `wasOpen` remembers the previous
-     open state across renders; the scroll lock pairs with it so closing
-     always restores page scrolling exactly once. */
   const [wasOpen, setWasOpen] = useState(false);
   if (open && !wasOpen) {
     setWasOpen(true);
@@ -376,7 +343,7 @@ function PaymentSheet({
           </b>
         </p>
 
-        {/* amount — naira-prefixed, numeric keypad */}
+        {}
         <div className="relative mt-4">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[17px] font-medium text-(--hig-accent)">
             ₦
@@ -397,7 +364,7 @@ function PaymentSheet({
           />
         </div>
 
-        {/* date — defaults to today, the common case */}
+        {}
         <div className="relative mt-3">
           <svg
             viewBox="0 0 24 24"
@@ -446,18 +413,14 @@ function PaymentSheet({
   );
 }
 
-/* ---------------------------------- action bar ---------------------------------- */
-
 function ActionBar({ job }: { job: Job }) {
   const toast = useToast();
-  /* first tap arms the confirmation; a second tap (or Cancel) resolves it.
-     Reset whenever the job or its status changes so a fresh screen always
-     starts in the calm, single-button state. */
+
   const [confirming, setConfirming] = useState(false);
   useEffect(() => setConfirming(false), [job.id, job.status]);
 
   const ready = job.status === "completed" && !job.deliveredAt;
-  /* one next step per status; delivered/canceled → no bar at all */
+
   const primary =
     job.status === "canceled" || job.deliveredAt
       ? null
@@ -467,8 +430,6 @@ function ActionBar({ job }: { job: Job }) {
 
   const act = useUpdateJob();
 
-  /* Same split as the payment sheet: the hook performs the write and refreshes
-     the job + the money feeds; this screen decides what the user is told. */
   const runAction = () =>
     act.mutate(
       { id: job.id, input: primary!.done },
@@ -497,11 +458,7 @@ function ActionBar({ job }: { job: Job }) {
       <div className="relative mx-auto w-full max-w-107.5">
         <div className="pointer-events-auto rounded-t-3xl border-t border-(--hig-separator) bg-(--hig-bar) px-5 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
           {confirming ? (
-            /* ---------- step 2: the conscious action ----------
-               The bar morphs in place: the same label, now phrased as a
-               question, flanked by Cancel (returns to the calm state) and
-               the confirming button. The accent-tint wash signals the
-               mode switch at a glance. */
+
             <div
               role="alert"
               className="flex animate-fade-in items-center gap-2.5 rounded-[20px] bg-(--hig-accent-tint) px-4 py-2.5"
@@ -512,7 +469,7 @@ function ActionBar({ job }: { job: Job }) {
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                /* py-3.5 → ≥44px tall (HIG touch minimum) */
+
                 className="shrink-0 rounded-xl bg-(--hig-card) px-4 py-3.5 text-[13.5px] font-semibold text-(--hig-label-secondary) shadow-(--hig-bar-shadow) transition-transform duration-200 active:scale-95"
               >
                 Cancel
@@ -534,10 +491,7 @@ function ActionBar({ job }: { job: Job }) {
               </button>
             </div>
           ) : (
-            /* ---------- step 1: the calm, always-visible action ----------
-               Tapping does NOT mutate — it arms the confirmation above.
-               (The + payment shortcut was removed earlier — "Record a
-               payment" lives in The money card.) */
+
             <button
               type="button"
               onClick={() => setConfirming(true)}
@@ -553,15 +507,6 @@ function ActionBar({ job }: { job: Job }) {
   );
 }
 
-/* ---------------------------------- skeleton ---------------------------------- */
-
-/** Bars mirror the real anatomy so loading never shifts the layout. */
-/**
- * A Cloudinary photo with a skeleton while it loads and a tap-to-zoom
- * affordance. The pulse layer sits behind the img, which fades in only on
- * load; onError also releases the skeleton so a broken URL never pulses
- * forever. The whole slot is one button — tapping opens the lightbox.
- */
 function LoadablePhoto({
   src,
   alt,
@@ -598,7 +543,7 @@ function LoadablePhoto({
           loaded ? "opacity-100" : "opacity-0"
         }`}
       />
-      {/* quiet zoom hint — appears on hover (desktop), invisible on touch */}
+      {}
       <span
         className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         aria-hidden="true"
@@ -642,26 +587,19 @@ function DetailSkeleton() {
   );
 }
 
-/* ---------------------------------- page ---------------------------------- */
-
 export default function JobDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [payOpen, setPayOpen] = useState(false);
-  /* full-screen photo viewer — the image being inspected, or null. */
+
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
-  /* The single source of truth for this screen — GET /jobs/:id. The freshness
-     window (5 min stale / 1 h cached, so a revisit renders from memory instead
-     of re-showing the skeleton) and the ["job", id] key now live in useJob().
-     Mutations invalidate that key, so the window is only a safety net. */
   const jobQ = useJob(id);
 
   const job = jobQ.data;
   const overdue = job ? isOverdue(job) : false;
 
-  /* Lightbox: Escape closes, page scroll locks while it is up. */
   useEffect(() => {
     if (!lightbox) return;
     const onKey = (e: KeyboardEvent) => {
@@ -675,13 +613,9 @@ export default function JobDetailPage() {
     };
   }, [lightbox]);
 
-  /* comparison — reference wins the left slot, finished the right; the
-     right slot stays dashed until the finished shots exist */
   const ref = job?.styleRef?.[0];
   const fin = job?.finishedJob?.[0];
-  /* shots = every photo the job carries, used for the caption fallback
-     ("will appear here") once ANY photo exists but the finished slot is
-     still empty */
+
   const shots = (job?.styleRef ?? []).length + (job?.finishedJob ?? []).length;
 
   const rails = useMemo(() => (job ? milestones(job) : []), [job]);
@@ -689,15 +623,13 @@ export default function JobDetailPage() {
 
   return (
     <main className="hig min-h-dvh bg-(--hig-grouped) pb-44 text-(--hig-label) transition-colors duration-300">
-      {/* ---------- chrome ---------- */}
+      {}
       <header className="sticky top-0 z-30 border-b border-(--hig-separator) bg-(--hig-bar)/80 backdrop-blur-[20px] backdrop-saturate-150">
         <div className="mx-auto flex w-full max-w-107.5 items-center justify-between px-4 py-1.5">
           <button
             type="button"
             aria-label="Back to jobs"
-            /* router.back() when we arrived via a link (keeps the list's
-               scroll position); a hard push only as a fallback when the
-               history is empty (direct URL load). */
+
             onClick={() => (window.history.length > 1 ? router.back() : router.push("/jobs"))}
             className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-(--hig-accent) transition-transform duration-200 active:scale-90"
           >
@@ -709,7 +641,7 @@ export default function JobDetailPage() {
       </header>
 
       {jobQ.isError ? (
-        /* ---------- error state ---------- */
+
         <div className="mx-auto mt-24 w-full max-w-107.5 px-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-6 w-6" aria-hidden="true">
@@ -734,7 +666,7 @@ export default function JobDetailPage() {
         <DetailSkeleton />
       ) : (
         <>
-          {/* ---------- header (entrance: hig-rise, 8pt-staggered) ---------- */}
+          {}
           <div
             className="hig-rise mx-auto w-full max-w-107.5 px-4 pt-6"
             style={{ animationDelay: "0ms" }}
@@ -746,8 +678,7 @@ export default function JobDetailPage() {
               {job.description || "Garment"}
             </h1>
 
-            {/* subject row — avatar tinted from the name (same hue as the
-                list + dashboard); call only (message was removed) */}
+            {}
             <div className="mt-4 flex items-center gap-2.5">
               <span
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold"
@@ -768,10 +699,7 @@ export default function JobDetailPage() {
                 </p>
               </div>
               {job.customerPhone && (
-                /* tel: opens the native dialer with the number pre-filled —
-                   strip everything but digits and an optional leading + so
-                   spaces/dashes/braces can't break the URI. The button is a
-                   BARE accent icon (no bg circle) on a 44px hit area. */
+
                 <a
                   href={`tel:${job.customerPhone.replace(/[^\d+]/g, "")}`}
                   aria-label={`Call ${job.customerPhone}`}
@@ -794,7 +722,7 @@ export default function JobDetailPage() {
               )}
             </div>
 
-            {/* placed / due meta strip — hairline-divided, like Concept 1 */}
+            {}
             <div className="mt-5 flex border-t border-dashed border-(--hig-separator) pt-3.5">
               <div className="flex-1">
                 <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
@@ -823,13 +751,13 @@ export default function JobDetailPage() {
             </div>
           </div>
 
-          {/* ---------- the comparison ---------- */}
+          {}
           <section
             className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4"
             style={{ animationDelay: "40ms" }}
           >
             <div className="grid grid-cols-2 gap-3">
-              {/* reference — first style shot */}
+              {}
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
                   <span className="h-1.5 w-1.5 rounded-full bg-(--hig-label-tertiary)" aria-hidden="true" />
@@ -855,7 +783,7 @@ export default function JobDetailPage() {
                 </p>
               </div>
 
-              {/* finished — dashed "stitched" slot until the shots land */}
+              {}
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-secondary)">
                   <span className="h-1.5 w-1.5 rounded-full bg-(--hig-accent)" aria-hidden="true" />
@@ -884,7 +812,7 @@ export default function JobDetailPage() {
             </div>
           </section>
 
-          {/* ---------- the rail ---------- */}
+          {}
           <section
             className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "80ms" }}
@@ -900,7 +828,7 @@ export default function JobDetailPage() {
             <div className="rounded-[20px] bg-(--hig-card) px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
               {rails.map((m) => (
                 <div key={m.label} className="relative flex gap-3 pb-4 last:pb-1.5">
-                  {/* stitched spine between milestones */}
+                  {}
                   <span
                     className="absolute bottom-0 left-2.25 top-6 border-l-[1.5px] border-dashed border-(--hig-separator)"
                     aria-hidden="true"
@@ -949,7 +877,7 @@ export default function JobDetailPage() {
             </div>
           </section>
 
-          {/* ---------- the tape (Concept 1 grid) ---------- */}
+          {}
           <section
             className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "120ms" }}
@@ -965,7 +893,7 @@ export default function JobDetailPage() {
             <Tape job={job} />
           </section>
 
-          {/* ---------- the money (Concept 1 card) ---------- */}
+          {}
           <section
             className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "160ms" }}
@@ -992,13 +920,13 @@ export default function JobDetailPage() {
         </>
       )}
 
-      {/* ---------- action bar + payment sheet ---------- */}
+      {}
       {job && <ActionBar job={job} />}
       {job && (
         <PaymentSheet job={job} open={payOpen} onClose={() => setPayOpen(false)} />
       )}
 
-      {/* ---------- full-screen photo viewer ---------- */}
+      {}
       {lightbox && (
         <div
           role="dialog"
