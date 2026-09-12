@@ -1,66 +1,12 @@
 "use client";
 
-/**
- * Job detail — "The Inspection Table" (Concept 3, wired to the live API).
- *
- * ─────────────────────────────────────────────────────────────────────────
- * SCREEN ANATOMY (top to bottom)
- * ─────────────────────────────────────────────────────────────────────────
- *   • Chrome     — back, screen title, theme toggle (sticky).
- *   • Header     — kicker + garment title, then the subject row (avatar,
- *                  name, phone, call) and a placed/due meta strip.
- *                  There is deliberately NO status pill here: the rail
- *                  below owns the status voice. (Message was dropped —
- *                  call only.)
- *   • Comparison — the style reference and the finished piece sit side by
- *                  side (the hook of Concept 3). Until the finished shots
- *                  land, that slot is a dashed "stitched" frame with a
- *                  waiting note so the layout never shifts.
- *   • The rail   — the job's life as milestones: placed → on the bench →
- *                  ready → delivered, all derived from the same fields the
- *                  list uses (createdAt, status, deliveredAt).
- *   • The tape   — measurements as the 2-column stitched grid from
- *                  Concept 1 (the user's explicit choice).
- *   • The money  — Concept 1's card: agreed / paid so far / balance,
- *                  a progress track, the payment history, and an inline
- *                  "+ Record a payment" that opens the payment sheet.
- *   • Action bar — one next step for the current status (mark ready →
- *                  mark delivered), hidden once the job is delivered or
- *                  canceled so there is never a dead button. The bar is
- *                  fixed at the bottom, which puts it right under the
- *                  scrolling thumb — so the first tap only RAISES an
- *                  inline confirmation ("…?" + Cancel / confirm); a
- *                  second, deliberate tap performs the mutation. The
- *                  label stays visible in both states.
- *
- * DATA + MUTATIONS
- *   GET  /jobs/:id                          → everything above
- *   POST /jobs/:jobId/payments              → the payment sheet
- *   PATCH /jobs/:id { status }              → mark ready to collect
- *   PATCH /jobs/:id { status, deliveredAt } → mark as delivered
- *   After each mutation the job query (["job", id]) and the shared
- *   ["jobs"] / ["reports"] keys are invalidated, so the list counts,
- *   balances and revenue refresh together — the same keys the dashboard
- *   and the New Job modal already use.
- *
- * Derived states match the rest of the app exactly: delivered = completed
- * + deliveredAt set; ready = completed + no deliveredAt; overdue = pending
- * with a due date before today.
- */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import ThemeToggle from "@/components/theme-toggle";
-import { useToast } from "@/components/toast";
-import {
-  createPayment,
-  getJob,
-  updateJob,
-  type Job,
-} from "@/lib/api-client";
+import ThemeToggle from "@/components/ui/theme-toggle";
+import { useToast } from "@/components/ui/toast";
+import { useCreatePayment, useJob, useUpdateJob } from "@/hooks/use-jobs";
 import { avatarColor, avatarTint } from "@/lib/avatar-colors";
-
-/* ---------------------------------- helpers ---------------------------------- */
+import type { Job } from "@/types/job";
 
 const naira = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -73,7 +19,6 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-/** "2026-09-24" (date column) → "24 Sep" — no timezone drift. */
 function fmtDay(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!m) return value;
@@ -196,34 +141,32 @@ function Tape({ job }: { job: Job }) {
   const entries = Object.entries(job.measurements ?? {});
   if (entries.length === 0) {
     return (
-      <div className="rounded-[20px] bg-[var(--hig-card)] px-4 py-6 text-center text-[12.5px] text-[var(--hig-label-tertiary)]">
+      <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12.5px] text-(--hig-label-tertiary)">
         No measurements on file for this fitting.
       </div>
     );
   }
   return (
-    <div className="grid grid-cols-2 rounded-[20px] bg-[var(--hig-card)] px-4 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+    <div className="grid grid-cols-2 rounded-[20px] bg-(--hig-card) px-4 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
       {entries.map(([key, value], i) => (
         <div
           key={key}
           className={`px-3 py-3 ${
-            // stitched seams: dashed right border on odd cells, dashed top
-            // border from the second row on — the Concept 1 grid DNA
-            i % 2 === 0 ? "border-r border-dashed border-[var(--hig-separator)]" : ""
-          } ${i >= 2 ? "border-t border-dashed border-[var(--hig-separator)]" : ""}`}
+            i % 2 === 0 ? "border-r border-dashed border-(--hig-separator)" : ""
+          } ${i >= 2 ? "border-t border-dashed border-(--hig-separator)" : ""}`}
         >
-          <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--hig-label-tertiary)]">
+          <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
             {key}
           </p>
           <p className="mt-1 text-[17px] font-medium tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
             {value === null ? (
-              <span className="text-[12px] font-light text-[var(--hig-label-tertiary)]">
+              <span className="text-[12px] font-light text-(--hig-label-tertiary)">
                 not taken
               </span>
             ) : (
               <>
                 {value}
-                <em className="ml-1 text-[10px] font-medium not-italic text-[var(--hig-label-secondary)]">
+                <em className="ml-1 text-[10px] font-medium not-italic text-(--hig-label-secondary)">
                   cm
                 </em>
               </>
@@ -252,27 +195,27 @@ function Money({
 
   return (
     /* 16px inner padding per the design system's card spec */
-    <div className="rounded-[20px] bg-[var(--hig-card)] px-4 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+    <div className="rounded-[20px] bg-(--hig-card) px-4 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
       {/* agreed / paid / balance — amounts at 500 (content type per HIG) */}
       <div className="flex items-baseline justify-between">
-        <p className="text-[12px] text-[var(--hig-label-secondary)]">Agreed</p>
+        <p className="text-[12px] text-(--hig-label-secondary)">Agreed</p>
         <p className="text-[15px] font-medium [font-variant-numeric:tabular-nums]">
           {naira.format(job.agreedPrice)}
         </p>
       </div>
       <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-[12px] text-[var(--hig-label-secondary)]">Paid so far</p>
-        <p className="text-[15px] font-medium text-[var(--hig-success)] [font-variant-numeric:tabular-nums]">
+        <p className="text-[12px] text-(--hig-label-secondary)">Paid so far</p>
+        <p className="text-[15px] font-medium text-(--hig-success) [font-variant-numeric:tabular-nums]">
           {naira.format(paid)}
         </p>
       </div>
       <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-[12px] text-[var(--hig-label-secondary)]">
+        <p className="text-[12px] text-(--hig-label-secondary)">
           Balance to collect
         </p>
         <p
           className={`text-[15px] font-medium [font-variant-numeric:tabular-nums] ${
-            balance > 0 ? "text-[var(--hig-warning)]" : "text-[var(--hig-label)]"
+            balance > 0 ? "text-(--hig-warning)" : "text-(--hig-label)"
           }`}
         >
           {naira.format(balance)}
@@ -280,9 +223,9 @@ function Money({
       </div>
 
       {/* progress — the collection story at a glance */}
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--hig-fill)]">
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-(--hig-fill)">
         <div
-          className="h-full rounded-full bg-[var(--hig-accent)] transition-[width] duration-500"
+          className="h-full rounded-full bg-(--hig-accent) transition-[width] duration-500"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -292,15 +235,15 @@ function Money({
         {payments.map((p) => (
           <div
             key={p.id}
-            className="flex items-center gap-2.5 border-t border-dashed border-[var(--hig-separator)] py-2.5 first:border-t-0"
+            className="flex items-center gap-2.5 border-t border-dashed border-(--hig-separator) py-2.5 first:border-t-0"
           >
             <span
-              className="h-[7px] w-[7px] flex-shrink-0 rounded-full bg-[var(--hig-success)]"
+              className="h-1.75 w-1.75 shrink-0 rounded-full bg-(--hig-success)"
               aria-hidden="true"
             />
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium leading-tight">Payment</p>
-              <p className="text-[10.5px] text-[var(--hig-label-secondary)]">
+              <p className="text-[10.5px] text-(--hig-label-secondary)">
                 {fmtISO(p.paidAt)}
               </p>
             </div>
@@ -310,7 +253,7 @@ function Money({
           </div>
         ))}
         {payments.length === 0 && (
-          <p className="border-t border-dashed border-[var(--hig-separator)] py-3 text-center text-[11.5px] text-[var(--hig-label-tertiary)]">
+          <p className="border-t border-dashed border-(--hig-separator) py-3 text-center text-[11.5px] text-(--hig-label-tertiary)">
             Nothing recorded yet.
           </p>
         )}
@@ -320,7 +263,7 @@ function Money({
       <button
         type="button"
         onClick={onRecord}
-        className="mt-3 w-full rounded-[13px] bg-[var(--hig-fill)] py-3 text-[13.5px] font-semibold text-[var(--hig-label)] transition-transform duration-200 active:scale-[0.98]"
+        className="mt-3 w-full rounded-[13px] bg-(--hig-fill) py-3 text-[13.5px] font-semibold text-(--hig-label) transition-transform duration-200 active:scale-[0.98]"
       >
         + Record a payment
       </button>
@@ -339,7 +282,6 @@ function PaymentSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const toast = useToast();
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -348,29 +290,35 @@ function PaymentSheet({
   const amountNum = Number(amount.replace(/[^\d.]/g, ""));
   const valid = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0;
 
-  const pay = useMutation({
-    mutationFn: () =>
-      createPayment(job.id, {
+  const pay = useCreatePayment();
+
+  /* One submit path shared by the Enter key and the button. The hook owns the
+     request AND the cache invalidation (see src/hooks/use-jobs.ts — the
+     "what is stale after money moves" rule lives there once, not here); this
+     screen owns only the UI consequence. React Query runs both the hook-level
+     and the call-level callbacks. */
+  const submitPayment = () =>
+    pay.mutate(
+      {
+        jobId: job.id,
         amount: amountNum,
         // the backend z.coerce.date() accepts the "YYYY-MM-DD" from the picker
         paidAt: date ? new Date(date + "T12:00:00").toISOString() : undefined,
-      }),
-    onSuccess: () => {
-      // Refresh the job (paid/balance/progress/payments) plus the shared
-      // keys the dashboard's balances + revenue read.
-      queryClient.invalidateQueries({ queryKey: ["job", job.id] });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["reports", "outstanding-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["reports", "monthly-revenue"] });
-      toast.show({
-        title: "Payment recorded.",
-        detail: `${naira.format(amountNum)} on ${fmtDay(date)}`,
-      });
-      onClose();
-    },
-    onError: (err) =>
-      setError(err instanceof Error ? err.message : "Could not record the payment."),
-  });
+      },
+      {
+        onSuccess: () => {
+          toast.show({
+            title: "Payment recorded.",
+            detail: `${naira.format(amountNum)} on ${fmtDay(date)}`,
+          });
+          onClose();
+        },
+        onError: (err) =>
+          setError(
+            err instanceof Error ? err.message : "Could not record the payment.",
+          ),
+      },
+    );
 
   /* Reset-on-open WITHOUT useEffect — a deliberately subtle pattern:
      this block runs DURING render (not after paint), so the sheet always
@@ -401,27 +349,27 @@ function PaymentSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] animate-sheet-in rounded-t-[26px] border border-b-0 border-[var(--hig-separator)] bg-[var(--hig-card)] px-5 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
-        <div className="mx-auto h-1 w-[38px] rounded-full bg-[var(--hig-separator)]" aria-hidden="true" />
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full max-w-107.5 animate-sheet-in rounded-t-[26px] border border-b-0 border-(--hig-separator) bg-(--hig-card) px-5 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+        <div className="mx-auto h-1 w-9.5 rounded-full bg-(--hig-separator)" aria-hidden="true" />
         <div className="mt-3 flex items-center justify-between">
           <h2 className="text-[20px] font-medium tracking-[-0.005em]">
-            Record a <span className="text-[var(--hig-accent)]">payment</span>
+            Record a <span className="text-(--hig-accent)">payment</span>
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--hig-label-secondary)] transition-colors hover:text-[var(--hig-label)]"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-(--hig-label-secondary) transition-colors hover:text-(--hig-label)"
           >
-            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-[var(--hig-separator)] bg-[var(--hig-fill)] text-[13px]">
+            <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full border border-(--hig-separator) bg-(--hig-fill) text-[13px]">
               ✕
             </span>
           </button>
         </div>
 
-        <p className="mt-1 text-[12px] text-[var(--hig-label-secondary)]">
+        <p className="mt-1 text-[12px] text-(--hig-label-secondary)">
           Balance to collect ·{" "}
-          <b className="font-semibold text-[var(--hig-warning)] [font-variant-numeric:tabular-nums]">
+          <b className="font-semibold text-(--hig-warning) [font-variant-numeric:tabular-nums]">
             {naira.format(
               Math.max(0, job.agreedPrice - (job.payments ?? []).reduce((s, p) => s + p.amount, 0)),
             )}
@@ -430,11 +378,11 @@ function PaymentSheet({
 
         {/* amount — naira-prefixed, numeric keypad */}
         <div className="relative mt-4">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[17px] font-medium text-[var(--hig-accent)]">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[17px] font-medium text-(--hig-accent)">
             ₦
           </span>
           <input
-            className="w-full rounded-[13px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] py-3.5 pl-9 pr-4 text-[19px] font-medium text-[var(--hig-label)] outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-[var(--hig-label-tertiary)] focus:border-[var(--hig-accent)] focus:shadow-[0_0_0_3px_var(--hig-accent-soft)] [font-variant-numeric:tabular-nums]"
+            className="w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) py-3.5 pl-9 pr-4 text-[19px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-(--hig-label-tertiary) focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)] [font-variant-numeric:tabular-nums]"
             placeholder="0"
             inputMode="numeric"
             autoFocus
@@ -444,7 +392,7 @@ function PaymentSheet({
               setError(null);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && valid) pay.mutate();
+              if (e.key === "Enter" && valid) submitPayment();
             }}
           />
         </div>
@@ -457,7 +405,7 @@ function PaymentSheet({
             stroke="currentColor"
             strokeWidth="1.8"
             strokeLinecap="round"
-            className="pointer-events-none absolute left-4 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-[var(--hig-accent)]"
+            className="pointer-events-none absolute left-4 top-1/2 h-3.75 w-3.75 -translate-y-1/2 text-(--hig-accent)"
             aria-hidden="true"
           >
             <rect x="3.5" y="5" width="17" height="16" rx="3" />
@@ -467,19 +415,19 @@ function PaymentSheet({
           </svg>
           <input
             type="date"
-            className="w-full rounded-[13px] border border-[var(--hig-separator)] bg-[var(--hig-fill)] py-3.5 pl-11 pr-4 text-[13.5px] font-medium text-[var(--hig-label)] outline-none transition-[border-color,box-shadow] focus:border-[var(--hig-accent)] focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]"
+            className="w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) py-3.5 pl-11 pr-4 text-[13.5px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]"
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
 
-        {error && <p className="mt-3 text-[12px] text-[var(--hig-danger)]">{error}</p>}
+        {error && <p className="mt-3 text-[12px] text-(--hig-danger)">{error}</p>}
 
         <button
           type="button"
           disabled={!valid || pay.isPending}
-          onClick={() => pay.mutate()}
-          className="mt-4 w-full rounded-[15px] bg-[var(--hig-accent)] py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98] disabled:opacity-50"
+          onClick={submitPayment}
+          className="mt-4 w-full rounded-[15px] bg-(--hig-accent) py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98] disabled:opacity-50"
         >
           {pay.isPending ? (
             <span className="mx-auto flex items-center justify-center gap-2">
@@ -501,7 +449,6 @@ function PaymentSheet({
 /* ---------------------------------- action bar ---------------------------------- */
 
 function ActionBar({ job }: { job: Job }) {
-  const queryClient = useQueryClient();
   const toast = useToast();
   /* first tap arms the confirmation; a second tap (or Cancel) resolves it.
      Reset whenever the job or its status changes so a fresh screen always
@@ -518,34 +465,37 @@ function ActionBar({ job }: { job: Job }) {
         ? { label: "Mark as delivered", done: { status: "completed" as const, deliveredAt: new Date().toISOString() } }
         : { label: "Mark ready to collect", done: { status: "completed" as const } };
 
-  const act = useMutation({
-    mutationFn: () => updateJob(job.id, primary!.done),
-    onSuccess: () => {
-      setConfirming(false);
-      queryClient.invalidateQueries({ queryKey: ["job", job.id] });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["reports", "outstanding-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["reports", "monthly-revenue"] });
-      toast.show({
-        title: ready ? "Job delivered." : "Marked ready to collect.",
-        detail: ready
-          ? `${job.subjectName ?? "Client"} can pick it up.`
-          : `Waiting for ${job.subjectName ?? "the client"}.`,
-      });
-    },
-    onError: (err) =>
-      toast.show({
-        title: "Couldn't update the job.",
-        detail: err instanceof Error ? err.message : "Try again.",
-      }),
-  });
+  const act = useUpdateJob();
+
+  /* Same split as the payment sheet: the hook performs the write and refreshes
+     the job + the money feeds; this screen decides what the user is told. */
+  const runAction = () =>
+    act.mutate(
+      { id: job.id, input: primary!.done },
+      {
+        onSuccess: () => {
+          setConfirming(false);
+          toast.show({
+            title: ready ? "Job delivered." : "Marked ready to collect.",
+            detail: ready
+              ? `${job.subjectName ?? "Client"} can pick it up.`
+              : `Waiting for ${job.subjectName ?? "the client"}.`,
+          });
+        },
+        onError: (err) =>
+          toast.show({
+            title: "Couldn't update the job.",
+            detail: err instanceof Error ? err.message : "Try again.",
+          }),
+      },
+    );
 
   if (!primary) return null;
 
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-      <div className="relative mx-auto w-full max-w-[430px]">
-        <div className="pointer-events-auto rounded-t-[24px] border-t border-[var(--hig-separator)] bg-[var(--hig-bar)] px-5 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150">
+      <div className="relative mx-auto w-full max-w-107.5">
+        <div className="pointer-events-auto rounded-t-3xl border-t border-(--hig-separator) bg-(--hig-bar) px-5 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
           {confirming ? (
             /* ---------- step 2: the conscious action ----------
                The bar morphs in place: the same label, now phrased as a
@@ -554,24 +504,24 @@ function ActionBar({ job }: { job: Job }) {
                mode switch at a glance. */
             <div
               role="alert"
-              className="flex animate-fade-in items-center gap-2.5 rounded-[20px] bg-[var(--hig-accent-tint)] px-4 py-2.5"
+              className="flex animate-fade-in items-center gap-2.5 rounded-[20px] bg-(--hig-accent-tint) px-4 py-2.5"
             >
-              <p className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-[var(--hig-label)]">
+              <p className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-(--hig-label)">
                 {primary.label}?
               </p>
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
                 /* py-3.5 → ≥44px tall (HIG touch minimum) */
-                className="flex-shrink-0 rounded-[12px] bg-[var(--hig-card)] px-4 py-3.5 text-[13.5px] font-semibold text-[var(--hig-label-secondary)] shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-95"
+                className="shrink-0 rounded-xl bg-(--hig-card) px-4 py-3.5 text-[13.5px] font-semibold text-(--hig-label-secondary) shadow-(--hig-bar-shadow) transition-transform duration-200 active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => act.mutate()}
+                onClick={runAction}
                 disabled={act.isPending}
-                className="flex flex-shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-[var(--hig-accent)] px-4 py-3.5 text-[13.5px] font-semibold text-white transition-transform duration-200 active:scale-95 disabled:opacity-60"
+                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-(--hig-accent) px-4 py-3.5 text-[13.5px] font-semibold text-white transition-transform duration-200 active:scale-95 disabled:opacity-60"
               >
                 {act.isPending ? (
                   <span
@@ -591,7 +541,7 @@ function ActionBar({ job }: { job: Job }) {
             <button
               type="button"
               onClick={() => setConfirming(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--hig-accent)] py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98]"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-(--hig-accent) py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98]"
             >
               {primary.label}
               <span aria-hidden="true">→</span>
@@ -633,7 +583,7 @@ function LoadablePhoto({
     >
       {!loaded && (
         <span
-          className="absolute inset-0 animate-pulse bg-[var(--hig-separator)]"
+          className="absolute inset-0 animate-pulse bg-(--hig-separator)"
           aria-hidden="true"
         />
       )}
@@ -665,13 +615,13 @@ function LoadablePhoto({
 }
 
 function DetailSkeleton() {
-  const bar = "animate-pulse rounded bg-[var(--hig-separator)]";
+  const bar = "animate-pulse rounded bg-(--hig-separator)";
   return (
-    <div className="mx-auto w-full max-w-[430px] px-4">
+    <div className="mx-auto w-full max-w-107.5 px-4">
       <div className={`mt-6 h-2.5 w-24 ${bar}`} />
       <div className={`mt-3 h-7 w-3/4 ${bar}`} />
       <div className="mt-4 flex items-center gap-2.5">
-        <div className={`h-10 w-10 flex-shrink-0 rounded-full ${bar}`} />
+        <div className={`h-10 w-10 shrink-0 rounded-full ${bar}`} />
         <div className="flex-1">
           <div className={`h-3.5 w-28 ${bar}`} />
           <div className={`mt-1.5 h-2.5 w-40 ${bar}`} />
@@ -683,8 +633,8 @@ function DetailSkeleton() {
         <div className={`h-11 flex-1 ${bar}`} />
       </div>
       <div className="mt-8 grid grid-cols-2 gap-3">
-        <div className={`aspect-[3/4] ${bar}`} />
-        <div className={`aspect-[3/4] ${bar}`} />
+        <div className={`aspect-3/4 ${bar}`} />
+        <div className={`aspect-3/4 ${bar}`} />
       </div>
       <div className={`mt-8 h-40 ${bar}`} />
       <div className={`mt-6 h-44 ${bar}`} />
@@ -702,21 +652,13 @@ export default function JobDetailPage() {
   /* full-screen photo viewer — the image being inspected, or null. */
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
-  /* the single source of truth for this screen — GET /jobs/:id.
-     Long freshness (5 min) + long-lived cache (1 h): revisiting a job
-     renders instantly from memory instead of re-hitting the backend (the
-     default gcTime of 5 min would evict the entry and re-show the
-     skeleton). Mutations below invalidate ["job", id] on change, so the
-     stale window is just a safety net, not the freshness source. */
-  const jobQ = useQuery({
-    queryKey: ["job", id],
-    queryFn: () => getJob(id),
-    enabled: !!id,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-  });
+  /* The single source of truth for this screen — GET /jobs/:id. The freshness
+     window (5 min stale / 1 h cached, so a revisit renders from memory instead
+     of re-showing the skeleton) and the ["job", id] key now live in useJob().
+     Mutations invalidate that key, so the window is only a safety net. */
+  const jobQ = useJob(id);
 
-  const job = jobQ.data?.data;
+  const job = jobQ.data;
   const overdue = job ? isOverdue(job) : false;
 
   /* Lightbox: Escape closes, page scroll locks while it is up. */
@@ -746,10 +688,10 @@ export default function JobDetailPage() {
   const doneCount = rails.filter((m) => m.state === "done").length;
 
   return (
-    <main className="hig min-h-dvh bg-[var(--hig-grouped)] pb-44 text-[var(--hig-label)] transition-colors duration-300">
+    <main className="hig min-h-dvh bg-(--hig-grouped) pb-44 text-(--hig-label) transition-colors duration-300">
       {/* ---------- chrome ---------- */}
-      <header className="sticky top-0 z-30 border-b border-[var(--hig-separator)] bg-[var(--hig-bar)]/80 backdrop-blur-[20px] backdrop-saturate-150">
-        <div className="mx-auto flex w-full max-w-[430px] items-center justify-between px-4 py-1.5">
+      <header className="sticky top-0 z-30 border-b border-(--hig-separator) bg-(--hig-bar)/80 backdrop-blur-[20px] backdrop-saturate-150">
+        <div className="mx-auto flex w-full max-w-107.5 items-center justify-between px-4 py-1.5">
           <button
             type="button"
             aria-label="Back to jobs"
@@ -757,7 +699,7 @@ export default function JobDetailPage() {
                scroll position); a hard push only as a fallback when the
                history is empty (direct URL load). */
             onClick={() => (window.history.length > 1 ? router.back() : router.push("/jobs"))}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-[var(--hig-accent)] transition-transform duration-200 active:scale-90"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-(--hig-accent) transition-transform duration-200 active:scale-90"
           >
             ‹
           </button>
@@ -768,8 +710,8 @@ export default function JobDetailPage() {
 
       {jobQ.isError ? (
         /* ---------- error state ---------- */
-        <div className="mx-auto mt-24 w-full max-w-[430px] px-4 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--hig-danger-tint)] text-[var(--hig-danger)]">
+        <div className="mx-auto mt-24 w-full max-w-107.5 px-4 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-6 w-6" aria-hidden="true">
               <path d="M12 8.5v5" />
               <path d="M12 17.2v.1" />
@@ -777,13 +719,13 @@ export default function JobDetailPage() {
             </svg>
           </div>
           <p className="mt-4 text-[16px] font-medium">Couldn&apos;t open this job.</p>
-          <p className="mt-1 text-[13px] text-[var(--hig-label-secondary)]">
+          <p className="mt-1 text-[13px] text-(--hig-label-secondary)">
             {jobQ.error instanceof Error ? jobQ.error.message : "Check your connection and try again."}
           </p>
           <button
             type="button"
             onClick={() => jobQ.refetch()}
-            className="mt-5 rounded-[13px] bg-[var(--hig-accent)] px-6 py-3 text-[14px] font-semibold text-white transition-transform duration-200 active:scale-95"
+            className="mt-5 rounded-[13px] bg-(--hig-accent) px-6 py-3 text-[14px] font-semibold text-white transition-transform duration-200 active:scale-95"
           >
             Retry
           </button>
@@ -794,13 +736,13 @@ export default function JobDetailPage() {
         <>
           {/* ---------- header (entrance: hig-rise, 8pt-staggered) ---------- */}
           <div
-            className="hig-rise mx-auto w-full max-w-[430px] px-4 pt-6"
+            className="hig-rise mx-auto w-full max-w-107.5 px-4 pt-6"
             style={{ animationDelay: "0ms" }}
           >
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--hig-label-tertiary)]">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
               Order file · <span className="[font-variant-numeric:tabular-nums]">{job.id.slice(0, 8)}</span>
             </p>
-            <h1 className="mt-2 text-[26px] font-medium leading-[32px] tracking-[-0.02em]">
+            <h1 className="mt-2 text-[26px] font-medium leading-8 tracking-[-0.02em]">
               {job.description || "Garment"}
             </h1>
 
@@ -808,7 +750,7 @@ export default function JobDetailPage() {
                 list + dashboard); call only (message was removed) */}
             <div className="mt-4 flex items-center gap-2.5">
               <span
-                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold"
                 style={{
                   backgroundColor: avatarTint(job.subjectName ?? ""),
                   color: avatarColor(job.subjectName ?? ""),
@@ -821,7 +763,7 @@ export default function JobDetailPage() {
                 <p className="truncate text-[15px] font-medium leading-tight">
                   for {job.subjectName ?? "the client"}
                 </p>
-                <p className="mt-0.5 truncate text-[12px] text-[var(--hig-label-secondary)]">
+                <p className="mt-0.5 truncate text-[12px] text-(--hig-label-secondary)">
                   {job.customerPhone ?? "no phone on file"}
                 </p>
               </div>
@@ -834,7 +776,7 @@ export default function JobDetailPage() {
                   href={`tel:${job.customerPhone.replace(/[^\d+]/g, "")}`}
                   aria-label={`Call ${job.customerPhone}`}
                   title={`Call ${job.customerPhone}`}
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center text-[var(--hig-accent)] transition-transform duration-200 active:scale-90"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center text-(--hig-accent) transition-transform duration-200 active:scale-90"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -853,26 +795,26 @@ export default function JobDetailPage() {
             </div>
 
             {/* placed / due meta strip — hairline-divided, like Concept 1 */}
-            <div className="mt-5 flex border-t border-dashed border-[var(--hig-separator)] pt-3.5">
+            <div className="mt-5 flex border-t border-dashed border-(--hig-separator) pt-3.5">
               <div className="flex-1">
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--hig-label-tertiary)]">
+                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
                   Placed
                 </p>
                 <p className="mt-1 text-[14px] font-medium [font-variant-numeric:tabular-nums]">
                   {fmtISO(job.createdAt)}
                 </p>
               </div>
-              <div className="border-l border-dashed border-[var(--hig-separator)] pl-4">
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-[var(--hig-label-tertiary)]">
+              <div className="border-l border-dashed border-(--hig-separator) pl-4">
+                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
                   Due
                 </p>
                 <p
                   className={`mt-1 text-[14px] font-medium [font-variant-numeric:tabular-nums] ${
                     overdue
-                      ? "text-[var(--hig-danger)]"
+                      ? "text-(--hig-danger)"
                       : job.dueDate
-                        ? "text-[var(--hig-accent)]"
-                        : "text-[var(--hig-label-tertiary)]"
+                        ? "text-(--hig-accent)"
+                        : "text-(--hig-label-tertiary)"
                   }`}
                 >
                   {job.dueDate ? fmtDay(job.dueDate) : "—"}
@@ -883,17 +825,17 @@ export default function JobDetailPage() {
 
           {/* ---------- the comparison ---------- */}
           <section
-            className="hig-rise mx-auto mt-6 w-full max-w-[430px] px-4"
+            className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4"
             style={{ animationDelay: "40ms" }}
           >
             <div className="grid grid-cols-2 gap-3">
               {/* reference — first style shot */}
               <div>
-                <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--hig-label-tertiary)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--hig-label-tertiary)]" aria-hidden="true" />
+                <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
+                  <span className="h-1.5 w-1.5 rounded-full bg-(--hig-label-tertiary)" aria-hidden="true" />
                   Reference
                 </p>
-                <div className="relative aspect-[3/4] overflow-hidden rounded-[20px] bg-[var(--hig-fill)] shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                   {ref?.url ? (
                     <LoadablePhoto
                       src={ref.url}
@@ -902,25 +844,25 @@ export default function JobDetailPage() {
                       onOpen={() => setLightbox({ src: ref.url!, alt: ref.alt || "Style reference" })}
                     />
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--hig-label-tertiary)]">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-(--hig-label-tertiary)">
                       <IconPhoto className="h-8 w-8" />
                       <span className="px-6 text-center text-[11px]">no reference on file</span>
                     </div>
                   )}
                 </div>
-                <p className="mt-1.5 truncate text-center text-[11px] text-[var(--hig-label-tertiary)]">
+                <p className="mt-1.5 truncate text-center text-[11px] text-(--hig-label-tertiary)">
                   {ref?.alt ?? "—"}
                 </p>
               </div>
 
               {/* finished — dashed "stitched" slot until the shots land */}
               <div>
-                <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-[var(--hig-label-secondary)]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--hig-accent)]" aria-hidden="true" />
+                <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-secondary)">
+                  <span className="h-1.5 w-1.5 rounded-full bg-(--hig-accent)" aria-hidden="true" />
                   Finished
                 </p>
                 {fin?.url ? (
-                  <div className="relative aspect-[3/4] overflow-hidden rounded-[20px] bg-[var(--hig-fill)] shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                  <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                     <LoadablePhoto
                       src={fin.url}
                       alt={fin.alt || "Finished piece"}
@@ -928,14 +870,14 @@ export default function JobDetailPage() {
                     />
                   </div>
                 ) : (
-                  <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed border-[var(--hig-separator)] text-[var(--hig-label-tertiary)]">
+                  <div className="flex aspect-3/4 flex-col items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed border-(--hig-separator) text-(--hig-label-tertiary)">
                     <IconPhoto className="h-8 w-8" />
                     <span className="px-6 text-center text-[11px] leading-relaxed">
                       Waiting for the finished shot
                     </span>
                   </div>
                 )}
-                <p className="mt-1.5 truncate text-center text-[11px] text-[var(--hig-label-tertiary)]">
+                <p className="mt-1.5 truncate text-center text-[11px] text-(--hig-label-tertiary)">
                   {fin?.alt ?? (shots > 0 ? "will appear here" : "—")}
                 </p>
               </div>
@@ -944,34 +886,34 @@ export default function JobDetailPage() {
 
           {/* ---------- the rail ---------- */}
           <section
-            className="hig-rise mx-auto mt-7 w-full max-w-[430px] px-4"
+            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "80ms" }}
           >
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
-              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
                 The rail
               </h2>
-              <span className="text-[11.5px] text-[var(--hig-label-tertiary)] [font-variant-numeric:tabular-nums]">
+              <span className="text-[11.5px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
                 {doneCount} of 4
               </span>
             </div>
-            <div className="rounded-[20px] bg-[var(--hig-card)] px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            <div className="rounded-[20px] bg-(--hig-card) px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
               {rails.map((m) => (
                 <div key={m.label} className="relative flex gap-3 pb-4 last:pb-1.5">
                   {/* stitched spine between milestones */}
                   <span
-                    className="absolute bottom-0 left-[9px] top-[24px] border-l-[1.5px] border-dashed border-[var(--hig-separator)]"
+                    className="absolute bottom-0 left-2.25 top-6 border-l-[1.5px] border-dashed border-(--hig-separator)"
                     aria-hidden="true"
                   />
                   <span
-                    className={`relative z-10 mt-0.5 flex h-[19px] w-[19px] flex-shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
+                    className={`relative z-10 mt-0.5 flex h-4.75 w-4.75 shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
                       m.state === "done"
-                        ? "bg-[var(--hig-success)]"
+                        ? "bg-(--hig-success)"
                         : m.state === "now"
-                          ? "bg-[var(--hig-accent)] shadow-[0_0_0_4px_var(--hig-accent-tint)]"
+                          ? "bg-(--hig-accent) shadow-[0_0_0_4px_var(--hig-accent-tint)]"
                           : m.state === "over"
-                            ? "bg-[var(--hig-danger)]"
-                            : "bg-[var(--hig-fill)] shadow-[inset_0_0_0_1.5px_var(--hig-separator)]"
+                            ? "bg-(--hig-danger)"
+                            : "bg-(--hig-fill) shadow-[inset_0_0_0_1.5px_var(--hig-separator)]"
                     }`}
                     aria-hidden="true"
                   >
@@ -981,22 +923,22 @@ export default function JobDetailPage() {
                     <p
                       className={`text-[14px] font-medium leading-tight ${
                         m.state === "now"
-                          ? "text-[var(--hig-accent)]"
+                          ? "text-(--hig-accent)"
                           : m.state === "over"
-                            ? "text-[var(--hig-danger)]"
+                            ? "text-(--hig-danger)"
                             : ""
                       }`}
                     >
                       {m.label}
                     </p>
-                    <p className="mt-0.5 text-[11.5px] text-[var(--hig-label-tertiary)]">{m.sub}</p>
+                    <p className="mt-0.5 text-[11.5px] text-(--hig-label-tertiary)">{m.sub}</p>
                   </div>
                   {m.tag && (
                     <p
                       className={`pt-0.5 text-[11.5px] ${
                         m.state === "over"
-                          ? "font-medium text-[var(--hig-danger)]"
-                          : "text-[var(--hig-label-tertiary)]"
+                          ? "font-medium text-(--hig-danger)"
+                          : "text-(--hig-label-tertiary)"
                       }`}
                     >
                       {m.tag}
@@ -1009,14 +951,14 @@ export default function JobDetailPage() {
 
           {/* ---------- the tape (Concept 1 grid) ---------- */}
           <section
-            className="hig-rise mx-auto mt-7 w-full max-w-[430px] px-4"
+            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "120ms" }}
           >
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
-              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
                 The tape
               </h2>
-              <span className="text-[11.5px] text-[var(--hig-label-tertiary)] [font-variant-numeric:tabular-nums]">
+              <span className="text-[11.5px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
                 {Object.keys(job.measurements ?? {}).length} taken
               </span>
             </div>
@@ -1025,14 +967,14 @@ export default function JobDetailPage() {
 
           {/* ---------- the money (Concept 1 card) ---------- */}
           <section
-            className="hig-rise mx-auto mt-7 w-full max-w-[430px] px-4"
+            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
             style={{ animationDelay: "160ms" }}
           >
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
-              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
                 The money
               </h2>
-              <span className="text-[11.5px] text-[var(--hig-label-tertiary)] [font-variant-numeric:tabular-nums]">
+              <span className="text-[11.5px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
                 {(job.payments ?? []).length} payments
               </span>
             </div>
@@ -1040,7 +982,7 @@ export default function JobDetailPage() {
           </section>
 
           <p
-            className="hig-rise mx-auto mt-6 w-full max-w-[430px] px-4 text-center text-[11.5px] leading-relaxed text-[var(--hig-label-tertiary)]"
+            className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary)"
             style={{ animationDelay: "200ms" }}
           >
             Placed {fmtISO(job.createdAt)}

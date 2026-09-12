@@ -1,43 +1,15 @@
 "use client";
 
-/**
- * Jobs — Apple HIG (Concept 4 · The Rail, separated).
- *
- * The real version of the concept: separated job cards (12px air, 16px
- * padding, 20px radius — 8pt grid), a four-segment status filter with live
- * counts in the labels, and cursor pagination against GET /jobs
- * (limit 10, desc created_at — newest first).
- *
- * Data:
- *   - The list uses useInfiniteQuery keyed on the active filter; each filter
- *     is its own query with its own cursor (`?status=…&cursor=…`).
- *   - Counts (All/Pending/Completed/Delivered) come from one extra
- *     limit-100 read — the same pattern the dashboard uses for studio
- *     counts — because the cursor feed alone can't know totals.
- *   - Both queries live under the ["jobs"] key, so the New Job modal's
- *     post-create invalidation refreshes them together.
- *
- * Presentation follows the design-system doc (docs/design-system.md):
- * one accent, flat surfaces (no borders), semantic status colours,
- * 500-weight content type, tabular numerals for money.
- */
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import NewJobModal from "@/components/new-job-modal";
-import TabBar from "@/components/tab-bar";
-import ThemeToggle from "@/components/theme-toggle";
-import {
-  listJobs,
-  type Job,
-  type JobStatusFilter,
-} from "@/lib/api-client";
+import NewJobModal from "@/components/jobs/new-job-modal";
+import TabBar from "@/components/ui/tab-bar";
+import ThemeToggle from "@/components/ui/theme-toggle";
+import { useJobsCounts, useJobsList, type JobsListFilter } from "@/hooks/use-jobs";
 import { cloudinaryThumb } from "@/lib/cloudinary";
+import type { Job } from "@/types/job";
 
-/* ---------------------------------- filter ---------------------------------- */
-
-/** "all" renders without a status param; the rest map 1:1 to it. */
-type JobFilter = "all" | JobStatusFilter;
+type JobFilter = JobsListFilter;
 
 const FILTERS: { key: JobFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -46,9 +18,6 @@ const FILTERS: { key: JobFilter; label: string }[] = [
   { key: "delivered", label: "Delivered" },
 ];
 
-/* ---------------------------------- helpers ---------------------------------- */
-
-/** "2026-09-12" (or ISO) → "12 Sep" without timezone drift. */
 function formatDueDate(value: string | null | undefined): string {
   if (!value) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -59,15 +28,10 @@ function formatDueDate(value: string | null | undefined): string {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-/* status derivation — same as the dashboard: delivered is derived, not a
-   row status (delivered = completed + deliveredAt set). */
 const isPending = (j: Job) => j.status === "pending";
 const isReady = (j: Job) => j.status === "completed" && !j.deliveredAt;
 const isDelivered = (j: Job) => j.status === "completed" && !!j.deliveredAt;
 
-/* The pg `date` column serializes as ISO ("2026-09-24T00:00:00.000Z");
-   appending "T00:00:00" to that yields Invalid Date, so parse both shapes
-   before comparing (the detail page shares this helper's logic). */
 function parseDay(value: string): number {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
@@ -81,8 +45,6 @@ const isOverdue = (j: Job) =>
   Number.isFinite(parseDay(j.dueDate)) &&
   parseDay(j.dueDate) < new Date(new Date().toDateString()).getTime();
 
-/* ---------------------------------- icons ---------------------------------- */
-
 function IconChevronDown() {
   return (
     <svg
@@ -92,7 +54,7 @@ function IconChevronDown() {
       strokeWidth="2.4"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-[10px] w-[10px] text-[var(--hig-accent)]"
+      className="h-2.5 w-2.5 text-(--hig-accent)"
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
@@ -119,15 +81,6 @@ function IconPhoto() {
   );
 }
 
-/* ---------------------------------- card ---------------------------------- */
-
-/**
- * Split card with the photo strip FLUSH to the card's left edge (like the
- * Verdant reference — no padding frame around the image): the strip takes
- * ~1/3 of the card width and spans its full height, with a quiet placeholder
- * when the job has no pictures. The right side leads with the subject name,
- * the garment description underneath, and the price + status pill at the foot.
- */
 function JobCard({ job }: { job: Job }) {
   const router = useRouter();
   const overdue = isOverdue(job);
@@ -139,16 +92,16 @@ function JobCard({ job }: { job: Job }) {
   let note: string;
   let noteClass = "";
   if (overdue) {
-    pill = "bg-[var(--hig-danger)] text-white";
+    pill = "bg-(--hig-danger) text-white";
     label = "Overdue";
     note = `was due ${formatDueDate(job.dueDate)}`;
-    noteClass = " text-[var(--hig-danger)]";
+    noteClass = " text-(--hig-danger)";
   } else if (isPending(job)) {
-    pill = "bg-[var(--hig-warning-tint)] text-[var(--hig-warning)]";
+    pill = "bg-(--hig-warning-tint) text-(--hig-warning)";
     label = "In progress";
     note = job.dueDate ? `due ${formatDueDate(job.dueDate)}` : "no due date";
   } else if (ready) {
-    pill = "bg-[var(--hig-success-tint)] text-[var(--hig-success)]";
+    pill = "bg-(--hig-success-tint) text-(--hig-success)";
     label = "Ready";
     note = job.dueDate
       ? `ready · due ${formatDueDate(job.dueDate)}`
@@ -156,11 +109,11 @@ function JobCard({ job }: { job: Job }) {
   } else if (delivered) {
     // accent blue — "done" reads distinctly from Ready's green and keeps the
     // one-accent rule; gray is reserved for canceled.
-    pill = "bg-[var(--hig-accent-tint)] text-[var(--hig-accent)]";
+    pill = "bg-(--hig-accent-tint) text-(--hig-accent)";
     label = "Delivered";
     note = `collected ${formatDueDate(job.deliveredAt)}`;
   } else {
-    pill = "bg-[var(--hig-separator)] text-[var(--hig-label-secondary)]";
+    pill = "bg-(--hig-separator) text-(--hig-label-secondary)";
     label = "Canceled";
     note = "canceled";
   }
@@ -185,10 +138,10 @@ function JobCard({ job }: { job: Job }) {
           router.push(`/jobs/${job.id}`);
         }
       }}
-      className="flex cursor-pointer overflow-hidden rounded-[20px] bg-[var(--hig-card)] shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)] transition-transform duration-200 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
+      className="flex cursor-pointer overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)] transition-transform duration-200 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
     >
       {/* photo strip — flush with the card's left edge, spans the full height */}
-      <div className="relative w-1/3 min-h-[112px] shrink-0 self-stretch overflow-hidden bg-[var(--hig-fill)]">
+      <div className="relative w-1/3 min-h-28 shrink-0 self-stretch overflow-hidden bg-(--hig-fill)">
         {cover ? (
           <img
             /* thumbnail derivative (~20 KB) — the full-res original stays
@@ -200,7 +153,7 @@ function JobCard({ job }: { job: Job }) {
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-[var(--hig-label-tertiary)]">
+          <div className="absolute inset-0 flex items-center justify-center text-(--hig-label-tertiary)">
             <IconPhoto />
           </div>
         )}
@@ -219,23 +172,23 @@ function JobCard({ job }: { job: Job }) {
             {job.subjectName ?? "Client"}
           </p>
           <p
-            className={`max-w-[45%] shrink-0 truncate text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-tertiary)]${noteClass}`}
+            className={`max-w-[45%] shrink-0 truncate text-[9.5px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-tertiary)${noteClass}`}
           >
             {note}
           </p>
         </div>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-[18px] text-[var(--hig-label-secondary)]">
+        <p className="mt-1 line-clamp-2 text-[13px] leading-4.5 text-(--hig-label-secondary)">
           {job.description || "Garment"}
         </p>
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
           <div className="min-w-0">
             <div className="text-[17px] font-medium leading-none tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
-              <small className="mr-0.5 text-[11px] font-medium text-[var(--hig-label-secondary)]">
+              <small className="mr-0.5 text-[11px] font-medium text-(--hig-label-secondary)">
                 ₦
               </small>
               {job.agreedPrice.toLocaleString("en-US")}
             </div>
-            <p className="mt-1 text-[9px] font-medium uppercase tracking-[0.06em] text-[var(--hig-label-tertiary)]">
+            <p className="mt-1 text-[9px] font-medium uppercase tracking-[0.06em] text-(--hig-label-tertiary)">
               Agreed price
             </p>
           </div>
@@ -254,10 +207,10 @@ function JobCard({ job }: { job: Job }) {
    left, then the subject line, two description lines, and the price + pill
    row at the foot — so loading doesn't shift the layout. */
 function JobCardSkeleton() {
-  const bar = "animate-pulse rounded bg-[var(--hig-separator)]";
+  const bar = "animate-pulse rounded bg-(--hig-separator)";
   return (
-    <div className="flex overflow-hidden rounded-[20px] bg-[var(--hig-card)] shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)]">
-      <div className={`w-1/3 min-h-[112px] shrink-0 self-stretch ${bar}`} />
+    <div className="flex overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.10),0_1px_2px_rgba(0,0,0,0.06)]">
+      <div className={`w-1/3 min-h-28 shrink-0 self-stretch ${bar}`} />
       <div className="flex min-w-0 flex-1 flex-col px-4 py-3.5">
         <div className="flex items-baseline justify-between gap-3">
           <div className={`h-4 w-24 ${bar}`} />
@@ -267,7 +220,7 @@ function JobCardSkeleton() {
         <div className={`mt-1.5 h-3.5 w-2/3 ${bar}`} />
         <div className="mt-auto flex items-end justify-between gap-2 pt-4">
           <div className={`h-5 w-20 ${bar}`} />
-          <div className={`h-6 w-[72px] rounded-full ${bar}`} />
+          <div className={`h-6 w-18 rounded-full ${bar}`} />
         </div>
       </div>
     </div>
@@ -299,30 +252,19 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<JobFilter>("all");
   const [newJobOpen, setNewJobOpen] = useState(false);
 
-  const status = filter === "all" ? undefined : filter;
+  /* The list — the query function, its per-filter cache key and the cursor
+     handling all live in use-jobs.ts. `data` is already the flattened Job[]. */
+  const listQ = useJobsList(filter);
 
-  /* The list — one infinite query per filter, cursor-paginated (limit 10). */
-  const listQ = useInfiniteQuery({
-    queryKey: ["jobs", "list", filter],
-    queryFn: ({ pageParam }) => listJobs({ limit: 10, cursor: pageParam, status }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => last.meta?.nextCursor ?? undefined,
-  });
+  /* Whole-collection read: the filter labels and the overdue banner need the
+     full set, not just the loaded page. Shared with the dashboard, which asks
+     for exactly the same 100 jobs — one cache entry, not two. */
+  const countsQ = useJobsCounts();
 
-  /* Counts — a single limit-100 read (dashboard precedent) so the filter
-     labels can show real totals instead of just loaded rows. */
-  const countsQ = useQuery({
-    queryKey: ["jobs", "counts"],
-    queryFn: () => listJobs({ limit: 100 }),
-  });
-
-  const jobs = useMemo(
-    () => listQ.data?.pages.flatMap((p) => p.data ?? []) ?? [],
-    [listQ.data],
-  );
+  const jobs = listQ.data ?? [];
 
   const counts = useMemo(() => {
-    const all = countsQ.data?.data ?? [];
+    const all = countsQ.data ?? [];
     return {
       all: all.length,
       pending: all.filter(isPending).length,
@@ -333,7 +275,7 @@ export default function JobsPage() {
 
   /* overdue banner — derived from the full counts feed, not just page one */
   const overdueJobs = useMemo(
-    () => (countsQ.data?.data ?? []).filter(isOverdue),
+    () => (countsQ.data ?? []).filter(isOverdue),
     [countsQ.data],
   );
   const showBanner =
@@ -365,45 +307,45 @@ export default function JobsPage() {
   const activeIndex = FILTERS.findIndex((f) => f.key === filter);
 
   return (
-    <main className="hig min-h-dvh bg-[var(--hig-grouped)] pb-40 text-[var(--hig-label)] transition-colors duration-300">
-      <div className="relative mx-auto w-full max-w-[430px]">
+    <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
+      <div className="relative mx-auto w-full max-w-107.5">
         {/* ---------- chrome ---------- */}
         {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
             Overview and Customers, so the brand row is identical on every tab. */}
         <header
-          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-[var(--hig-bar)]/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
+          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
           style={{ animationDelay: "0ms" }}
         >
           <p className="text-[20px] font-medium tracking-[-0.02em]">
-            Holly<span className="text-[var(--hig-accent)]">Seams</span>
+            Holly<span className="text-(--hig-accent)">Seams</span>
           </p>
           <ThemeToggle />
         </header>
 
         {/* ---------- head ---------- */}
         <div className="hig-rise px-5 pt-3" style={{ animationDelay: "40ms" }}>
-          <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
             {new Date().toLocaleDateString("en-US", {
               weekday: "long",
               day: "numeric",
               month: "long",
             })}
           </p>
-          <h1 className="mt-1 text-[34px] font-medium leading-[41px] tracking-[-0.02em]">
-            Jobs, <span className="text-[var(--hig-accent)]">on the rack.</span>
+          <h1 className="mt-1 text-[34px] font-medium leading-10.25 tracking-[-0.02em]">
+            Jobs, <span className="text-(--hig-accent)">on the rack.</span>
           </h1>
         </div>
 
         {/* ---------- status filter (counts in labels) ---------- */}
         {/* 24px section gap (8pt grid) between the header and the filter */}
         <div
-          className="hig-rise relative mt-6 flex rounded-[14px] bg-[var(--hig-card)] p-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]"
+          className="hig-rise relative mt-6 flex rounded-[14px] bg-(--hig-card) p-0.75 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]"
           style={{ animationDelay: "40ms" }}
         >
           {/* sliding thumb — one quarter per segment */}
           <span
             aria-hidden="true"
-            className="absolute bottom-[3px] left-[3px] top-[3px] w-[calc((100%-6px)/4)] rounded-[11px] bg-[var(--hig-fill)] transition-transform duration-300 ease-out"
+            className="absolute bottom-0.75 left-0.75 top-0.75 w-[calc((100%-6px)/4)] rounded-[11px] bg-(--hig-fill) transition-transform duration-300 ease-out"
             style={{ transform: `translateX(${activeIndex * 100}%)` }}
           />
           {FILTERS.map((f) => (
@@ -412,18 +354,18 @@ export default function JobsPage() {
               type="button"
               aria-pressed={filter === f.key}
               onClick={() => setFilter(f.key)}
-              className={`relative z-10 flex min-w-0 flex-1 flex-col items-center gap-[1px] rounded-[11px] px-1 py-2 transition-colors duration-200 ${
+              className={`relative z-10 flex min-w-0 flex-1 flex-col items-center gap-px rounded-[11px] px-1 py-2 transition-colors duration-200 ${
                 filter === f.key
-                  ? "text-[var(--hig-label)]"
-                  : "text-[var(--hig-label-secondary)]"
+                  ? "text-(--hig-label)"
+                  : "text-(--hig-label-secondary)"
               }`}
             >
               <span className="text-[12.5px] font-semibold">{f.label}</span>
               <span
                 className={`text-[10.5px] font-semibold [font-variant-numeric:tabular-nums] ${
                   filter === f.key
-                    ? "text-[var(--hig-accent)]"
-                    : "text-[var(--hig-label-secondary)]"
+                    ? "text-(--hig-accent)"
+                    : "text-(--hig-label-secondary)"
                 }`}
               >
                 {countsQ.isPending ? "…" : counts[f.key]}
@@ -434,7 +376,7 @@ export default function JobsPage() {
 
         {/* ---------- results line ---------- */}
         <div
-          className="hig-rise mt-4 flex items-baseline justify-between text-[12px] text-[var(--hig-label-secondary)] [font-variant-numeric:tabular-nums]"
+          className="hig-rise mt-4 flex items-baseline justify-between text-[12px] text-(--hig-label-secondary) [font-variant-numeric:tabular-nums]"
           style={{ animationDelay: "80ms" }}
         >
           <span>{metaCount}</span>
@@ -447,16 +389,16 @@ export default function JobsPage() {
         {/* ---------- error banner ---------- */}
         {anyError && (
           <div
-            className="mt-4 flex items-center justify-between rounded-[16px] bg-[var(--hig-danger-tint)] px-4 py-3"
+            className="mt-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3"
             style={{ animationDelay: "100ms" }}
           >
-            <p className="text-[15px] text-[var(--hig-danger)]">
+            <p className="text-[15px] text-(--hig-danger)">
               Couldn&apos;t reach the studio. Check your connection.
             </p>
             <button
               type="button"
               onClick={retryAll}
-              className="shrink-0 pl-3 text-[15px] font-semibold text-[var(--hig-accent)]"
+              className="shrink-0 pl-3 text-[15px] font-semibold text-(--hig-accent)"
             >
               Retry
             </button>
@@ -466,19 +408,19 @@ export default function JobsPage() {
         {/* ---------- overdue banner ---------- */}
         {showBanner && !anyError && (
           <div
-            className="hig-rise mt-4 flex items-center gap-2.5 rounded-[16px] bg-[var(--hig-danger-tint)] px-4 py-3"
+            className="hig-rise mt-4 flex items-center gap-2.5 rounded-2xl bg-(--hig-danger-tint) px-4 py-3"
             style={{ animationDelay: "100ms" }}
           >
             <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-              <span className="hig-ping absolute inset-0 rounded-full bg-[var(--hig-danger)]" />
-              <span className="relative h-2.5 w-2.5 rounded-full bg-[var(--hig-danger)]" />
+              <span className="hig-ping absolute inset-0 rounded-full bg-(--hig-danger)" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-(--hig-danger)" />
             </span>
-            <div className="flex-1 text-[12.5px] text-[var(--hig-danger)]">
+            <div className="flex-1 text-[12.5px] text-(--hig-danger)">
               <b>
                 {overdueJobs.length} garment
                 {overdueJobs.length === 1 ? "" : "s"} overdue
               </b>
-              <small className="block text-[11.5px] text-[var(--hig-label-secondary)]">
+              <small className="block text-[11.5px] text-(--hig-label-secondary)">
                 {overdueJobs[0]?.description} — was due{" "}
                 {formatDueDate(overdueJobs[0]?.dueDate)}
               </small>
@@ -495,17 +437,17 @@ export default function JobsPage() {
           </div>
         ) : jobs.length === 0 && !anyError ? (
           <div
-            className="hig-rise mt-4 rounded-[20px] bg-[var(--hig-card)] px-6 py-10 text-center"
+            className="hig-rise mt-4 rounded-[20px] bg-(--hig-card) px-6 py-10 text-center"
             style={{ animationDelay: "120ms" }}
           >
             <p className="text-[15px] font-semibold">{empty.big}</p>
-            <p className="mt-1.5 text-[13px] leading-5 text-[var(--hig-label-secondary)]">
+            <p className="mt-1.5 text-[13px] leading-5 text-(--hig-label-secondary)">
               {empty.small}
             </p>
             <button
               type="button"
               onClick={() => setNewJobOpen(true)}
-              className="mt-4 rounded-[13px] bg-[var(--hig-accent)] px-5 py-3 text-[14px] font-semibold text-white transition-transform duration-200 active:scale-95"
+              className="mt-4 rounded-[13px] bg-(--hig-accent) px-5 py-3 text-[14px] font-semibold text-white transition-transform duration-200 active:scale-95"
             >
               + New job
             </button>
@@ -525,12 +467,12 @@ export default function JobsPage() {
                 type="button"
                 onClick={() => listQ.fetchNextPage()}
                 disabled={listQ.isFetchingNextPage}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-[16px] bg-[var(--hig-card)] py-3.5 text-[15px] font-medium text-[var(--hig-label)] transition-transform duration-200 active:scale-[0.98] disabled:opacity-60"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-(--hig-card) py-3.5 text-[15px] font-medium text-(--hig-label) transition-transform duration-200 active:scale-[0.98] disabled:opacity-60"
               >
                 {listQ.isFetchingNextPage ? (
                   <>
                     <span
-                      className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--hig-accent-soft)] border-t-[var(--hig-accent)]"
+                      className="h-4 w-4 animate-spin rounded-full border-2 border-(--hig-accent-soft) border-t-(--hig-accent)"
                       aria-hidden="true"
                     />
                     Loading…
@@ -538,13 +480,13 @@ export default function JobsPage() {
                 ) : (
                   <>
                     Show more jobs
-                    <span className="text-[var(--hig-accent)]">▾</span>
+                    <span className="text-(--hig-accent)">▾</span>
                   </>
                 )}
               </button>
             )}
             {!listQ.hasNextPage && (
-              <p className="mt-5 text-center text-[11.5px] text-[var(--hig-label-tertiary)]">
+              <p className="mt-5 text-center text-[11.5px] text-(--hig-label-tertiary)">
                 You&apos;re all caught up — newest jobs first.
               </p>
             )}
@@ -561,7 +503,7 @@ export default function JobsPage() {
             aria-label="New job"
             title="New job"
             onClick={() => setNewJobOpen(true)}
-            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
+            className="pointer-events-auto absolute bottom-21 right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-(--hig-accent) text-white shadow-(--hig-bar-shadow) transition-transform duration-200 active:scale-90"
           >
             <svg
               viewBox="0 0 24 24"

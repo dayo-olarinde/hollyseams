@@ -1,17 +1,5 @@
 "use client";
 
-/**
- * Tab bar — the shared bottom navigation (Apple HIG: full-bleed translucent
- * material, rounded top 24px, active tab = accent-tint pill, one accent).
- *
- * Used by every screen (Overview / Jobs / Customers / Reports). Rendered as
- * next/link with default prefetch so each tab's route is fetched in the
- * background while the app is idle — switching tabs is instant, and the
- * page's own skeletons cover the data loading.
- *
- * The FAB is passed in as `fab` so it stays anchored to the same fixed
- * column (right of the phone-width container) without duplicating the bar.
- */
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -73,9 +61,9 @@ export default function TabBar({
 }) {
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-      <div className="relative mx-auto w-full max-w-[430px]">
+      <div className="relative mx-auto w-full max-w-107.5">
         {fab}
-        <div className="pointer-events-auto flex h-16 items-center rounded-t-[24px] bg-[var(--hig-bar)] px-2 shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150">
+        <div className="pointer-events-auto flex h-16 items-center rounded-t-3xl bg-(--hig-bar) px-2 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
           {TABS.map((tab) => {
             const isActive = tab.key === active;
             return (
@@ -84,13 +72,13 @@ export default function TabBar({
                 href={tab.href}
                 aria-label={tab.label}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex h-full flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-[16px] transition-all duration-200 active:scale-95 ${
+                className={`flex h-full flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                   isActive
-                    ? "bg-[var(--hig-accent-tint)] text-[var(--hig-accent)]"
-                    : "text-[var(--hig-label-tertiary)]"
+                    ? "bg-(--hig-accent-tint) text-(--hig-accent)"
+                    : "text-(--hig-label-tertiary)"
                 }`}
               >
-                <span className="h-[22px] w-[22px]">{tab.icon}</span>
+                <span className="h-5.5 w-5.5">{tab.icon}</span>
                 <span
                   className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}
                 >

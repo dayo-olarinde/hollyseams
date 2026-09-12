@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * Dark/light toggle for the Apple HIG theme.
- *
- * A 44px circular material button (iOS style: translucent, blurred) that sits
- * in the top-right corner. It shows the mode you switch TO — a moon in light
- * mode, a sun in dark mode — and animates a quick rotate+fade on swap.
- *
- * State lives on <html> as `hig-light`/`hig-dark` (see globals.css) and is
- * persisted in localStorage("hig-theme"); the root layout's inline script
- * applies it before first paint, so login and dashboard always agree.
- */
 import { useEffect, useState } from "react";
 
 function MoonIcon() {
@@ -31,8 +20,6 @@ function SunIcon() {
 }
 
 export default function ThemeToggle() {
-  // Initialised in an effect (not the useState initialiser) to avoid an SSR
-  // mismatch — `document` doesn't exist on the server.
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -52,7 +39,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-      className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--hig-bar)] text-[var(--hig-label)] shadow-[var(--hig-bar-shadow)] backdrop-blur-[20px] backdrop-saturate-150 transition-transform duration-200 active:scale-90"
+      className="flex h-11 w-11 items-center justify-center rounded-full bg-(--hig-bar) text-(--hig-label) shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150 transition-transform duration-200 active:scale-90"
     >
       <span key={dark ? "sun" : "moon"} className="hig-swap flex h-5 w-5">
         {dark ? <SunIcon /> : <MoonIcon />}

@@ -1,18 +1,6 @@
 @import "tailwindcss";
 
-/*
- * Hollyseams Design System — Apple HIG
- *
- * The heritage Midnight Indigo theme (teal palette, Fraunces + Space
- * Grotesk, dark indigo surfaces) is preserved in git at commit b1fa5cc —
- * roll back with `git checkout b1fa5cc -- frontend/src` if it ever
- * returns. Its fonts and tokens were removed because nothing renders that
- * theme anymore: they shipped ~11 font files and dead CSS on every load.
- */
-
 @theme {
-  /* Custom animations — the HIG motion tokens components actually use.
-     (blink/rise were heritage-only; remove when no longer used.) */
   --animate-dot-pulse: needle-pulse 2.4s ease-in-out 1.6s infinite;
   --animate-sheet-in: sheet-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-fade-in: fade-in 0.3s ease both;
@@ -23,7 +11,6 @@
     50% { transform: scale(1.6); opacity: 0.55; }
   }
 
-  /* Bottom sheet + scrim entrance */
   @keyframes sheet-in {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
@@ -35,37 +22,26 @@
   }
 
   @keyframes toast-in {
-    /* drops from above — toasts live at the top of the screen */
+
     from { opacity: 0; transform: translateY(-14px) scale(0.96); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
 }
 
-/*
- * Apple HIG scoped theme — the whole app (Midnight Indigo preserved in git).
- * Values mirror the playbook tokens; typeface is Inter (the playbook's
- * cross-platform SF substitute) for a consistent, premium weight across devices.
- *
- * Themes are class-driven, not media-query-driven: an inline script in the root
- * layout sets `hig-light` or `hig-dark` on <html> from localStorage (falling
- * back to the OS preference), so the top-right toggle can override the system
- * and every screen always agrees.
- */
 .hig {
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color-scheme: light; /* native controls (date picker, scrollbars) follow the theme */
+  color-scheme: light;
 }
 
 html.hig-dark .hig {
   color-scheme: dark;
 }
 
-/* Light scheme — iOS system palette */
 html.hig-light .hig {
   --hig-accent: #007AFF;
   --hig-accent-soft: rgba(0, 122, 255, 0.25);
-  --hig-accent-tint: rgba(0, 122, 255, 0.12); /* soft blue chip/avatar fills */
-  --hig-accent-line: rgba(0, 122, 255, 0.35); /* stitched seams, dashed accents */
+  --hig-accent-tint: rgba(0, 122, 255, 0.12);
+  --hig-accent-line: rgba(0, 122, 255, 0.35);
   --hig-bg: #FFFFFF;
   --hig-fill: #F2F2F7;
   --hig-label: #000000;
@@ -73,11 +49,11 @@ html.hig-light .hig {
   --hig-label-tertiary: rgba(60, 60, 67, 0.3);
   --hig-dot-empty: rgba(0, 0, 0, 0.25);
   --hig-error: #FF3B30;
-  --hig-grouped: #F2F2F7; /* screen background (iOS grouped) */
-  --hig-card: #FFFFFF; /* card surface */
+  --hig-grouped: #F2F2F7;
+  --hig-card: #FFFFFF;
   --hig-separator: rgba(60, 60, 67, 0.29);
-  --hig-grid: rgba(60, 60, 67, 0.12); /* faint chart gridlines */
-  --hig-bar: rgba(255, 255, 255, 0.78); /* tab bar material */
+  --hig-grid: rgba(60, 60, 67, 0.12);
+  --hig-bar: rgba(255, 255, 255, 0.78);
   --hig-bar-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
   --hig-success: #34C759;
   --hig-success-tint: rgba(52, 199, 89, 0.12);
@@ -87,7 +63,6 @@ html.hig-light .hig {
   --hig-danger-tint: rgba(255, 59, 48, 0.12);
 }
 
-/* Dark scheme — iOS system palette */
 html.hig-dark .hig {
   --hig-accent: #0A84FF;
   --hig-accent-soft: rgba(10, 132, 255, 0.25);
@@ -114,27 +89,6 @@ html.hig-dark .hig {
   --hig-danger-tint: rgba(255, 69, 58, 0.14);
 }
 
-/* Studio-pulse halo: a slow expanding ping under status dots */
-@keyframes hig-ping {
-  0% { transform: scale(1); opacity: 0.45; }
-  80%, 100% { transform: scale(2.4); opacity: 0; }
-}
-
-.hig-ping {
-  animation: hig-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-/* Theme-toggle icon swap: quick rotate + fade, standard ease */
-@keyframes hig-swap {
-  from { opacity: 0; transform: rotate(-60deg) scale(0.8); }
-  to { opacity: 1; transform: rotate(0) scale(1); }
-}
-
-.hig-swap {
-  animation: hig-swap 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-/* Entrance: fade + small rise/scale, 260ms on the standard ease — per playbook motion tokens */
 @keyframes hig-rise {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -144,7 +98,6 @@ html.hig-dark .hig {
   animation: hig-rise 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-/* PIN-error shake (login) and measurement validation (new-job sheet) */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-6px); }
@@ -157,9 +110,6 @@ html.hig-dark .hig {
   animation: shake 0.35s ease;
 }
 
-/*
- * Base styles applied via Tailwind's @layer base.
- */
 @layer base {
   html {
     font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -167,8 +117,6 @@ html.hig-dark .hig {
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Theme-matched overscroll: the .hig <main> covers the viewport, but the
-     area revealed by pull-to-refresh / overscroll should match the theme. */
   html.hig-light body {
     background: #FFFFFF;
   }
@@ -177,14 +125,11 @@ html.hig-dark .hig {
     background: #000000;
   }
 
-  /* Accessible focus ring for keyboard navigation — falls back to the
-     accent-coloured rings each interactive element already declares. */
   :focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
   }
 
-  /* Respect reduced-motion preference */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

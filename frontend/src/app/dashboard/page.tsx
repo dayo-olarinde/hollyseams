@@ -1,48 +1,19 @@
 "use client";
 
-/**
- * Overview — Apple HIG (experiment). Mobile-only.
- *
- * Every number here comes from the live backend:
- *   - /reports/monthly-revenue      → revenue card + seam chart
- *   - /reports/outstanding-payments → balances to collect
- *   - /jobs                         → latest work + bench counts
- *
- * Jobs are fetched with limit 100 so the "on the bench" counts reflect the
- * whole studio rather than just the visible rows; a single tailor's list is
- * small, and the pagination cap is 100.
- *
- * Presentation follows the Apple HIG playbook:
- *   - Inter typeface via the `.hig` class (auth layout shares it)
- *   - iOS grouped layout: gray screen bg, white cards, hairline separators
- *   - One accent (system Blue) for the chart, FAB, active tab and avatars;
- *     green/orange/red only as semantic status colors
- *   - Full-bleed mobile layout (no side padding); inner card padding only
- *   - Light + dark via class-driven --hig-* variables; the top-right toggle
- *     overrides the OS preference and persists in localStorage
- *   - Motion: 260ms rise entrances, eased count-ups; reduced-motion safe
- *
- * The previous Midnight Indigo design is preserved in git history:
- *   git checkout b1fa5cc -- frontend/src/app/dashboard
- */
-import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import NewJobModal from "@/components/new-job-modal";
-import TabBar from "@/components/tab-bar";
-import ThemeToggle from "@/components/theme-toggle";
+import NewJobModal from "@/components/jobs/new-job-modal";
+import TabBar from "@/components/ui/tab-bar";
+import ThemeToggle from "@/components/ui/theme-toggle";
+import { useJobsCounts } from "@/hooks/use-jobs";
 import {
-  getMonthlyRevenue,
-  getOutstandingPayments,
-  listJobs,
-  type Job,
-  type MonthlyRevenue,
-  type OutstandingPayment,
-} from "@/lib/api-client";
+  useMonthlyRevenue,
+  useOutstandingPayments,
+} from "@/hooks/use-reports";
 import { avatarColor, avatarTint } from "@/lib/avatar-colors";
-
-/* ---------------------------------- helpers ---------------------------------- */
+import type { Job } from "@/types/job";
+import type { MonthlyRevenue, OutstandingPayment } from "@/types/report";
 
 const naira = new Intl.NumberFormat("en-NG", {
   style: "currency",
@@ -54,7 +25,6 @@ const reduceMotion =
   typeof window !== "undefined" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** "2026-09-12" (or any parseable date) → "12 Sep" without timezone drift. */
 function formatDueDate(value: string | null | undefined): string {
   if (!value) return "";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -85,10 +55,9 @@ function initials(name: string): string {
 }
 
 function balanceOf(o: OutstandingPayment): number {
-  return o.balanceDue ?? o.balance ?? 0;
+  return o.balanceDue;
 }
 
-/** Eased count-up that honours prefers-reduced-motion. */
 function CountUp({
   value,
   currency = false,
@@ -125,9 +94,6 @@ function CountUp({
   );
 }
 
-/* ---------------------------------- icons ---------------------------------- */
-
-/* SF-Symbols-style glyphs, drawn inline (stroke, currentColor). */
 function IconScissors() {
   return (
     <svg
@@ -148,17 +114,8 @@ function IconScissors() {
   );
 }
 
-/* ---------------------------------- atoms ---------------------------------- */
+const cardClass = "rounded-[20px] bg-(--hig-card)";
 
-/* iOS grouped-list card: white surface on the gray screen bg, no border/shadow. */
-const cardClass = "rounded-[20px] bg-[var(--hig-card)]";
-
-/**
- * iOS grouped-list section header: 13px semibold uppercase secondary label,
- * with an optional trailing link. 32px of air above (8pt grid). When
- * `linkHref` is set the link navigates (prefetched next/link, like the tab
- * bar); without it the link text is a plain label (e.g. the balances count).
- */
 function GroupHeader({
   title,
   link,
@@ -177,19 +134,19 @@ function GroupHeader({
       className={`hig-rise mb-2 flex items-baseline justify-between ${className}`}
       style={{ animationDelay: `${delay}ms` }}
     >
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--hig-label-secondary)]">
+      <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
         {title}
       </h2>
       {link &&
         (linkHref ? (
           <Link
             href={linkHref}
-            className="cursor-pointer text-[13px] font-medium text-[var(--hig-accent)] transition-opacity duration-200 active:opacity-60"
+            className="cursor-pointer text-[13px] font-medium text-(--hig-accent) transition-opacity duration-200 active:opacity-60"
           >
             {link}
           </Link>
         ) : (
-          <span className="text-[13px] font-medium text-[var(--hig-accent)]">
+          <span className="text-[13px] font-medium text-(--hig-accent)">
             {link}
           </span>
         ))}
@@ -200,7 +157,7 @@ function GroupHeader({
 function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-[12px] bg-[var(--hig-separator)] ${className}`}
+      className={`animate-pulse rounded-xl bg-(--hig-separator) ${className}`}
     />
   );
 }
@@ -315,8 +272,8 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
             key={m.monthKey}
             className={`text-[10px] font-medium tracking-[0.04em] ${
               i === data.length - 1
-                ? "font-semibold text-[var(--hig-accent)]"
-                : "text-[var(--hig-label-tertiary)]"
+                ? "font-semibold text-(--hig-accent)"
+                : "text-(--hig-label-tertiary)"
             }`}
           >
             {shortMonth(m.monthKey)}
@@ -332,22 +289,17 @@ function RevenueChart({ data }: { data: MonthlyRevenue[] }) {
 export default function DashboardPage() {
   const router = useRouter();
   const [newJobOpen, setNewJobOpen] = useState(false);
-  const revenueQ = useQuery({
-    queryKey: ["reports", "monthly-revenue"],
-    queryFn: getMonthlyRevenue,
-  });
-  const outstandingQ = useQuery({
-    queryKey: ["reports", "outstanding-payments"],
-    queryFn: getOutstandingPayments,
-  });
-  const jobsQ = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => listJobs({ limit: 100 }),
-  });
+  const revenueQ = useMonthlyRevenue();
+  const outstandingQ = useOutstandingPayments();
+  /* The SAME 100-job read the jobs screen makes. Keyed as ["jobs","counts"]
+     rather than the old ["jobs"], so both screens hit one cache entry instead
+     of fetching an identical payload twice when navigating between them. */
+  const jobsQ = useJobsCounts();
 
-  const months = revenueQ.data?.data ?? [];
-  const outstanding = outstandingQ.data?.data ?? [];
-  const jobs = jobsQ.data?.data ?? [];
+  /* Each hook's `select` has already unwrapped the API envelope. */
+  const months = revenueQ.data ?? [];
+  const outstanding = outstandingQ.data ?? [];
+  const jobs = jobsQ.data ?? [];
 
   const thisMonth = months.at(-1);
   const prevMonth = months.at(-2);
@@ -379,18 +331,18 @@ export default function DashboardPage() {
   const monthName = new Date().toLocaleDateString("en-US", { month: "long" });
 
   return (
-    <main className="hig min-h-dvh bg-[var(--hig-grouped)] pb-40 text-[var(--hig-label)] transition-colors duration-300">
+    <main className="hig min-h-dvh bg-(--hig-grouped) pb-40 text-(--hig-label) transition-colors duration-300">
       {/* Mobile-only: the whole app keeps a fixed phone width, centred on larger screens.
           Full-bleed — no side padding; only cards pad their own content. */}
-      <div className="relative mx-auto w-full max-w-[430px]">        {/* ---------- chrome ---------- */}
+      <div className="relative mx-auto w-full max-w-107.5">        {/* ---------- chrome ---------- */}
         {/* Sticky translucent bar (wordmark + theme toggle) — same chrome as
             Jobs and Customers, so the brand row is identical on every tab. */}
         <header
-          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-[var(--hig-bar)]/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
+          className="hig-rise sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 py-2.5 backdrop-blur-[20px] backdrop-saturate-150"
           style={{ animationDelay: "0ms" }}
         >
           <p className="text-[20px] font-medium tracking-[-0.02em]">
-            Holly<span className="text-[var(--hig-accent)]">Seams</span>
+            Holly<span className="text-(--hig-accent)">Seams</span>
           </p>
           {/* Dark/light toggle — persists in localStorage; see theme-toggle.tsx */}
           <ThemeToggle />
@@ -400,14 +352,14 @@ export default function DashboardPage() {
         <div className="hig-rise mb-8 px-5 pt-3" style={{ animationDelay: "40ms" }}>
           {/* Greeting card — the page hero: accent-tinted surface, live studio
               pulse by the date, stitched seam at the foot (the tailoring motif). */}
-          <div className="relative mt-3 rounded-[24px] bg-[var(--hig-accent-tint)] px-5 pb-3.5 pt-4">
+          <div className="relative mt-3 rounded-3xl bg-(--hig-accent-tint) px-5 pb-3.5 pt-4">
             <div className="flex items-center gap-2">
               {/* live studio pulse — soft expanding halo + core dot */}
               <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="hig-ping absolute inset-0 rounded-full bg-[var(--hig-accent)]" />
-                <span className="relative h-2 w-2 rounded-full bg-[var(--hig-accent)]" />
+                <span className="hig-ping absolute inset-0 rounded-full bg-(--hig-accent)" />
+                <span className="relative h-2 w-2 rounded-full bg-(--hig-accent)" />
               </span>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--hig-label-secondary)]">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-secondary)">
                 {new Date().toLocaleDateString("en-US", {
                   weekday: "long",
                   day: "numeric",
@@ -415,24 +367,24 @@ export default function DashboardPage() {
                 })}
               </p>
             </div>
-            <h1 className="mt-2 text-[34px] font-medium leading-[41px] tracking-[-0.02em]">
+            <h1 className="mt-2 text-[34px] font-medium leading-10.25 tracking-[-0.02em]">
               {greeting}, Wunmi —{" "}
               {/* Personality line in the accent, like the original Midnight greeting.
                   Name is hardcoded — the backend user table has no endpoint exposing it yet. */}
-              <span className="text-[var(--hig-accent)]">{monthName} is flying.</span>
+              <span className="text-(--hig-accent)">{monthName} is flying.</span>
             </h1>
             {/* Creative studio line — scissors glyph + rhythmic tailor copy;
                 adjectives in the label colour so the phrase reads with a beat. */}
-            <p className="mt-1.5 flex items-center gap-1.5 text-[14px] font-medium text-[var(--hig-label-secondary)]">
-              <span className="h-[14px] w-[14px] text-[var(--hig-accent)]" aria-hidden="true">
+            <p className="mt-1.5 flex items-center gap-1.5 text-[14px] font-medium text-(--hig-label-secondary)">
+              <span className="h-3.5 w-3.5 text-(--hig-accent)" aria-hidden="true">
                 <IconScissors />
               </span>
-              Needles <span className="text-[var(--hig-label)]">busy</span>. Threads{" "}
-              <span className="text-[var(--hig-label)]">tight</span>.
+              Needles <span className="text-(--hig-label)">busy</span>. Threads{" "}
+              <span className="text-(--hig-label)">tight</span>.
             </p>
             {/* stitched seam — dashed accent hairline, the sewing signature */}
             <div
-              className="mt-3.5 border-t border-dashed border-[var(--hig-accent-line)]"
+              className="mt-3.5 border-t border-dashed border-(--hig-accent-line)"
               aria-hidden="true"
             />
           </div>
@@ -440,14 +392,14 @@ export default function DashboardPage() {
 
         {/* ---------- error banner ---------- */}
         {anyError && (
-          <div className="mb-4 flex items-center justify-between rounded-[16px] bg-[var(--hig-danger-tint)] px-4 py-3">
-            <p className="text-[15px] text-[var(--hig-danger)]">
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-(--hig-danger-tint) px-4 py-3">
+            <p className="text-[15px] text-(--hig-danger)">
               Couldn&apos;t reach the studio. Check your connection.
             </p>
             <button
               type="button"
               onClick={retryAll}
-              className="shrink-0 pl-3 text-[15px] font-semibold text-[var(--hig-accent)]"
+              className="shrink-0 pl-3 text-[15px] font-semibold text-(--hig-accent)"
             >
               Retry
             </button>
@@ -459,13 +411,13 @@ export default function DashboardPage() {
           className={`${cardClass} hig-rise mb-3 px-4 pb-4 pt-4`}
           style={{ animationDelay: "60ms" }}
         >
-          <div className="flex items-center justify-between">            <div className="text-[17px] font-medium leading-[22px]">Revenue</div>
+          <div className="flex items-center justify-between">            <div className="text-[17px] font-medium leading-5.5">Revenue</div>
             {deltaPct !== null && (
               <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-medium ${
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.75 text-[11px] font-medium ${
                   deltaPct >= 0
-                    ? "bg-[var(--hig-success-tint)] text-[var(--hig-success)]"
-                    : "bg-[var(--hig-danger-tint)] text-[var(--hig-danger)]"
+                    ? "bg-(--hig-success-tint) text-(--hig-success)"
+                    : "bg-(--hig-danger-tint) text-(--hig-danger)"
                 }`}
               >
                 {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct).toFixed(0)}%
@@ -478,17 +430,17 @@ export default function DashboardPage() {
             <div className="py-2">
               <Skeleton className="h-9 w-36" />
               <Skeleton className="mt-2 h-3 w-32" />
-              <Skeleton className="mt-3 h-[183px] w-full" />
+              <Skeleton className="mt-3 h-45.75 w-full" />
             </div>
           ) : (
             <>
-              <div className="mt-2 text-[34px] font-medium leading-[41px] tracking-[-0.02em] [font-variant-numeric:tabular-nums]">
-                <small className="mr-0.5 text-[19px] font-medium text-[var(--hig-label-secondary)]">
+              <div className="mt-2 text-[34px] font-medium leading-10.25 tracking-[-0.02em] [font-variant-numeric:tabular-nums]">
+                <small className="mr-0.5 text-[19px] font-medium text-(--hig-label-secondary)">
                   ₦
                 </small>
                 <CountUp value={thisMonth?.revenue ?? 0} />
               </div>
-              <p className="text-[13px] text-[var(--hig-label-secondary)]">
+              <p className="text-[13px] text-(--hig-label-secondary)">
                 {thisMonth
                   ? `${monthName} to date${months.length > 1 ? ` · ${months.length}-month trend` : ""}`
                   : "No revenue yet — payments will appear here."}
@@ -498,19 +450,18 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* ---------- mini stats ---------- */}
         <section
           className="hig-rise mb-3 grid grid-cols-2 gap-3"
           style={{ animationDelay: "120ms" }}
         >
           <div className={`${cardClass} px-4 py-3`}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[13px] font-medium text-[var(--hig-label-secondary)]">
+              <span className="text-[13px] font-medium text-(--hig-label-secondary)">
                 To collect
               </span>
-              <span className="h-2 w-2 rounded-full bg-[var(--hig-warning)] shadow-[0_0_10px_rgba(255,149,0,0.55)]" aria-hidden="true" />
+              <span className="h-2 w-2 rounded-full bg-(--hig-warning) shadow-[0_0_10px_rgba(255,149,0,0.55)]" aria-hidden="true" />
             </div>
-            <div className="text-[22px] font-medium leading-[28px] tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
+            <div className="text-[22px] font-medium leading-7 tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
               {loading ? (
                 <>
                   <Skeleton className="h-7 w-20" />
@@ -518,17 +469,17 @@ export default function DashboardPage() {
                 </>
               ) : (
                 <>
-                  <small className="mr-0.5 text-[13px] font-medium text-[var(--hig-label-secondary)]">
+                  <small className="mr-0.5 text-[13px] font-medium text-(--hig-label-secondary)">
                     ₦
                   </small>
                   <CountUp value={totalOutstanding} />
                 </>
               )}
             </div>            {/* One-line footer (12px) so both cards stay visually even */}
-            <p className="mt-2 truncate text-[12px] leading-[16px] text-[var(--hig-label-secondary)]">
+            <p className="mt-2 truncate text-[12px] leading-4 text-(--hig-label-secondary)">
               {outstanding.length > 0 ? (
                 <>
-                  <b className="font-medium text-[var(--hig-label)]">{outstanding.length} garment{outstanding.length === 1 ? "" : "s"}</b>
+                  <b className="font-medium text-(--hig-label)">{outstanding.length} garment{outstanding.length === 1 ? "" : "s"}</b>
                   {largestDue > 0 && <> · largest {naira.format(largestDue)}</>}
                 </>
               ) : (
@@ -538,12 +489,12 @@ export default function DashboardPage() {
           </div>
           <div className={`${cardClass} px-4 py-3`}>
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-[13px] font-medium text-[var(--hig-label-secondary)]">
+              <span className="text-[13px] font-medium text-(--hig-label-secondary)">
                 On the bench
               </span>
-              <span className="h-2 w-2 rounded-full bg-[var(--hig-accent)] shadow-[0_0_10px_rgba(10,132,255,0.55)]" aria-hidden="true" />
+              <span className="h-2 w-2 rounded-full bg-(--hig-accent) shadow-[0_0_10px_rgba(10,132,255,0.55)]" aria-hidden="true" />
             </div>
-            <div className="text-[22px] font-medium leading-[28px] tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
+            <div className="text-[22px] font-medium leading-7 tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
               {loading ? (
                 <>
                   <Skeleton className="h-7 w-10" />
@@ -554,8 +505,8 @@ export default function DashboardPage() {
               )}
             </div>
             {/* One-line footer (12px) — the headline already says the total on the bench */}
-            <p className="mt-2 truncate text-[12px] leading-[16px] text-[var(--hig-label-secondary)]">
-              <b className="font-medium text-[var(--hig-label)]">{readyCount} ready</b> to pick up
+            <p className="mt-2 truncate text-[12px] leading-4 text-(--hig-label-secondary)">
+              <b className="font-medium text-(--hig-label)">{readyCount} ready</b> to pick up
             </p>
           </div>
         </section>
@@ -565,17 +516,17 @@ export default function DashboardPage() {
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-[72px] w-full" />
+              <Skeleton key={i} className="h-18 w-full" />
             ))}
           </div>
         ) : jobs.length === 0 ? (
           <p
-            className={`${cardClass} px-4 py-4 text-[15px] text-[var(--hig-label-secondary)]`}
+            className={`${cardClass} px-4 py-4 text-[15px] text-(--hig-label-secondary)`}
           >
             No jobs yet — add your first garment from the Jobs tab.
           </p>
         ) : (          <div
-            className={`${cardClass} hig-rise overflow-hidden divide-y divide-[var(--hig-separator)]`}
+            className={`${cardClass} hig-rise overflow-hidden divide-y divide-(--hig-separator)`}
             style={{ animationDelay: "200ms" }}
           >
             {jobs.slice(0, 5).map((j) => (
@@ -596,17 +547,17 @@ export default function DashboardPage() {
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-[76px] w-full" />
+              <Skeleton key={i} className="h-19 w-full" />
             ))}
           </div>
         ) : outstanding.length === 0 ? (
           <p
-            className={`${cardClass} px-4 py-4 text-[15px] text-[var(--hig-label-secondary)]`}
+            className={`${cardClass} px-4 py-4 text-[15px] text-(--hig-label-secondary)`}
           >
             All balances settled — nothing due right now.
           </p>
         ) : (          <div
-            className={`${cardClass} hig-rise overflow-hidden divide-y divide-[var(--hig-separator)]`}
+            className={`${cardClass} hig-rise overflow-hidden divide-y divide-(--hig-separator)`}
             style={{ animationDelay: "260ms" }}
           >
             {outstanding.slice(0, 4).map((o) => {
@@ -624,7 +575,8 @@ export default function DashboardPage() {
                   new Date(new Date().toDateString()).getTime();
               // Self subjects carry the customer's own name in the DB — show
               // "Self" instead of repeating the name next to it.
-              const customerName = o.customer?.name ?? o.customerName ?? "";
+              // (customer is always present on the feed — see types/report.ts.)
+              const customerName = o.customer.name;
               const isSelf =
                 !!o.subjectName &&
                 o.subjectName.trim().toLowerCase() ===
@@ -642,12 +594,12 @@ export default function DashboardPage() {
                       router.push(`/jobs/${o.jobId}`);
                     }
                   }}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-[var(--hig-fill)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-(--hig-fill) focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
                 >
                   {/* initials avatar — tinted from the customer's name so each
                       client keeps one colour across every screen (avatarColor) */}
                   <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
                     style={{
                       backgroundColor: avatarTint(customerName),
                       color: avatarColor(customerName),
@@ -657,27 +609,27 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[15px] font-medium leading-[20px]">
+                      <span className="truncate text-[15px] font-medium leading-5">
                         {customerName || "Client"}
                       </span>
                       {/* subject chip — "Self" instead of repeating the customer name */}
                       {o.subjectName && (
-                        <span className="shrink-0 rounded-full bg-[var(--hig-accent-tint)] px-2 py-[3px] text-[10px] font-medium text-[var(--hig-accent)]">
+                        <span className="shrink-0 rounded-full bg-(--hig-accent-tint) px-2 py-0.75 text-[10px] font-medium text-(--hig-accent)">
                           {isSelf ? "Self" : o.subjectName}
                         </span>
                       )}
                     </div>
                     {/* agreed/paid line — amounts pop: agreed in label, paid in green */}
-                    <div className="mt-1 text-[12px] leading-[16px] text-[var(--hig-label-secondary)] [font-variant-numeric:tabular-nums]">
-                      <b className="font-medium text-[var(--hig-label)]">
+                    <div className="mt-1 text-[12px] leading-4 text-(--hig-label-secondary) [font-variant-numeric:tabular-nums]">
+                      <b className="font-medium text-(--hig-label)">
                         {naira.format(o.agreedPrice)}
                       </b>{" "}
                       agreed ·{" "}
                       <b
                         className={`font-medium ${
                           o.totalPaid > 0
-                            ? "text-[var(--hig-success)]"
-                            : "text-[var(--hig-label)]"
+                            ? "text-(--hig-success)"
+                            : "text-(--hig-label)"
                         }`}
                       >
                         {naira.format(o.totalPaid)}
@@ -685,16 +637,16 @@ export default function DashboardPage() {
                       paid
                     </div>
                     {/* paid progress — gray track, blue fill */}
-                    <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-[var(--hig-separator)]">
+                    <div className="mt-2 h-0.75 overflow-hidden rounded-full bg-(--hig-separator)">
                       <div
-                        className="h-full rounded-full bg-[var(--hig-accent)] transition-[width] duration-600 ease-out"
+                        className="h-full rounded-full bg-(--hig-accent) transition-[width] duration-600 ease-out"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-[17px] font-medium leading-[22px] tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
-                      <small className="mr-0.5 text-[11px] font-medium text-[var(--hig-label-secondary)]">
+                  <div className="shrink-0 text-right">
+                    <div className="text-[17px] font-medium leading-5.5 tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
+                      <small className="mr-0.5 text-[11px] font-medium text-(--hig-label-secondary)">
                         ₦
                       </small>
                       {balance.toLocaleString("en-US")}
@@ -702,8 +654,8 @@ export default function DashboardPage() {
                     <div
                       className={`mt-0.5 text-[12px] ${
                         overdue
-                          ? "font-medium text-[var(--hig-danger)]"
-                          : "text-[var(--hig-label-secondary)]"
+                          ? "font-medium text-(--hig-danger)"
+                          : "text-(--hig-label-secondary)"
                       }`}
                     >
                       {overdue ? "overdue" : "due"}{" "}
@@ -726,7 +678,7 @@ export default function DashboardPage() {
             aria-label="New job"
             title="New job"
             onClick={() => setNewJobOpen(true)}
-            className="pointer-events-auto absolute bottom-[84px] right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-[var(--hig-accent)] text-white shadow-[var(--hig-bar-shadow)] transition-transform duration-200 active:scale-90"
+            className="pointer-events-auto absolute bottom-21 right-0 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full bg-(--hig-accent) text-white shadow-(--hig-bar-shadow) transition-transform duration-200 active:scale-90"
           >
             <svg
               viewBox="0 0 24 24"
@@ -762,17 +714,15 @@ export default function DashboardPage() {
    subject's avatar hue everywhere in the app. */
 const statusMeta: Record<Job["status"], { chip: string }> = {
   pending: {
-    chip: "bg-[var(--hig-warning-tint)] text-[var(--hig-warning)]",
+    chip: "bg-(--hig-warning-tint) text-(--hig-warning)",
   },
   completed: {
-    chip: "bg-[var(--hig-success-tint)] text-[var(--hig-success)]",
+    chip: "bg-(--hig-success-tint) text-(--hig-success)",
   },
   canceled: {
-    chip: "bg-[var(--hig-separator)] text-[var(--hig-label-secondary)]",
+    chip: "bg-(--hig-separator) text-(--hig-label-secondary)",
   },
 };
-
-
 
 function JobRow({ job }: { job: Job }) {
   const router = useRouter();
@@ -807,13 +757,13 @@ function JobRow({ job }: { job: Job }) {
           router.push(`/jobs/${job.id}`);
         }
       }}
-      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-[var(--hig-fill)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--hig-accent)]"
+      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-200 active:bg-(--hig-fill) focus-visible:outline-2 focus-visible:outline-(--hig-accent)"
     >
       {/* decorative glowing dot — keyed to the SUBJECT's name (avatarColor),
           so a job's dot always matches that subject's avatar hue; self
           subjects carry the customer's name, matching their avatar too */}
       <span
-        className="h-[9px] w-[9px] flex-shrink-0 rounded-full"
+        className="h-2.25 w-2.25 shrink-0 rounded-full"
         style={{
           backgroundColor: avatarColor(job.subjectName ?? ""),
           boxShadow: `0 0 10px ${avatarColor(job.subjectName ?? "")}80`,
@@ -821,21 +771,21 @@ function JobRow({ job }: { job: Job }) {
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-medium leading-[20px]">
+        <div className="truncate text-[15px] font-medium leading-5">
           {job.description || "Garment"}
         </div>
-        <div className="mt-0.5 truncate text-[13px] text-[var(--hig-label-secondary)]">
-          <span className="text-[var(--hig-label)]">{job.subjectName}</span> ·{" "}
+        <div className="mt-0.5 truncate text-[13px] text-(--hig-label-secondary)">
+          <span className="text-(--hig-label)">{job.subjectName}</span> ·{" "}
           {note}
         </div>
       </div>
-      <div className="flex-shrink-0 text-right">
-        <div className="text-[15px] font-medium leading-[20px] tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
-          <small className="mr-0.5 text-[11px] font-medium text-[var(--hig-label-secondary)]">
+      <div className="shrink-0 text-right">
+        <div className="text-[15px] font-medium leading-5 tracking-[-0.01em] [font-variant-numeric:tabular-nums]">
+          <small className="mr-0.5 text-[11px] font-medium text-(--hig-label-secondary)">
             ₦
           </small>
           {job.agreedPrice.toLocaleString("en-US")}
-        </div>        <span className={`mt-1.5 inline-block rounded-full px-2 py-[3px] text-[10px] font-medium ${meta.chip}`}>
+        </div>        <span className={`mt-1.5 inline-block rounded-full px-2 py-0.75 text-[10px] font-medium ${meta.chip}`}>
           {label}
         </span>
       </div>

@@ -1,24 +1,5 @@
 "use client";
 
-/**
- * Authentication Context
- *
- * The backend uses httpOnly cookies for session management. We don't store
- * tokens in JavaScript — the browser sends them automatically with requests
- * (via `credentials: "include"`).
- *
- * Mounted ONCE at the root layout, so the session check runs a single time
- * per app load (not on every tab switch). The login page owns the
- * authenticated → /dashboard redirect (it flips `isAuthenticated`).
- *
- * This context provides:
- * - A way to check if the user is authenticated (via the session-check read)
- * - Login/logout functions that call the backend
- * - Loading/error states for auth operations
- */
-
-"use client";
-
 import {
   createContext,
   useCallback,
@@ -27,7 +8,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { checkSession as apiCheckSession, login as apiLogin, logout as apiLogout, ApiError } from "./api-client";
+import {
+  checkSession as apiCheckSession,
+  login as apiLogin,
+  logout as apiLogout,
+} from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/transport";
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -45,22 +31,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if the user has an active session on mount (once, at the root).
   useEffect(() => {
     async function checkActiveSession() {
       try {
-        // Reuse the Axios client so auth checks and dashboard queries share the
-        // same cookie policy and error normalization.
         await apiCheckSession();
         setIsAuthenticated(true);
       } catch {
-        // Not authenticated — stay where we are
       } finally {
         setIsLoading(false);
       }
     }
 
-    checkActiveSession();
+    void checkActiveSession();
   }, []);
 
   const login = useCallback(async (pin: string): Promise<boolean> => {
@@ -70,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiLogin({ pin });
       setIsAuthenticated(true);
-      // Redirect to dashboard after successful login
       window.location.href = "/dashboard";
       return true;
     } catch (err) {
@@ -90,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiLogout();
     } finally {
       setIsAuthenticated(false);
-      // Redirect to login after logout
       window.location.href = "/login";
     }
   }, []);
