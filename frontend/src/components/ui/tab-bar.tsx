@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 export type TabKey = "overview" | "jobs" | "customers" | "reports";
@@ -45,13 +45,25 @@ function IconReports() {
   );
 }
 
-const TABS: { key: TabKey; label: string; href: string; icon: ReactNode }[] = [
-  { key: "overview", label: "Overview", href: "/dashboard", icon: <IconHouse /> },
-  { key: "jobs", label: "Jobs", href: "/jobs", icon: <IconScissors /> },
-  { key: "customers", label: "Customers", href: "/customers", icon: <IconCustomers /> },
-  { key: "reports", label: "Reports", href: "/reports", icon: <IconReports /> },
+const TABS: { key: TabKey; label: string; icon: ReactNode }[] = [
+  { key: "overview", label: "Overview", icon: <IconHouse /> },
+  { key: "jobs", label: "Jobs", icon: <IconScissors /> },
+  { key: "customers", label: "Customers", icon: <IconCustomers /> },
+  { key: "reports", label: "Reports", icon: <IconReports /> },
 ];
 
+/**
+ * All four tabs are one route now (`/dashboard`), so a "tap" is a state change, not a navigation —
+ * there is no route for the browser to unmount/remount, so there is nothing for a shell to cover
+ * anymore. The old version of this file painted a placeholder screen to bridge the gap between a
+ * tap and the next route committing (see the removed `lib/tab-shell.ts`); that gap doesn't exist
+ * here, which is the whole point of the merge.
+ *
+ * `router.replace` (not `push`) keeps tab switches out of browser history — tapping between tabs
+ * ten times shouldn't take ten taps of the back button to undo. The query string is kept mainly so
+ * `router.back()` from a job or customer detail page restores the tab you actually came from,
+ * not because this app cares about shareable tab URLs.
+ */
 export default function TabBar({
   active,
   fab,
@@ -59,19 +71,41 @@ export default function TabBar({
   active: TabKey;
   fab?: ReactNode;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const selectTab = (tab: TabKey) => {
+    if (tab === active) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === "overview") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tab);
+    }
+    const query = params.toString();
+    router.replace(query ? `/dashboard?${query}` : "/dashboard", { scroll: false });
+  };
+
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
       <div className="relative mx-auto w-full max-w-107.5">
         {fab}
-        <div className="pointer-events-auto flex h-16 items-center rounded-t-3xl bg-(--hig-bar) px-2 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
+        {/*
+          `tabbar-safe` is the 64px of real tab bar the design always had, plus the home-indicator
+          strip as padding underneath it — so the blur reaches the bottom edge of the screen while
+          the labels stay clear of the indicator. On a phone without a notch the inset is zero and
+          this is exactly the old `h-16`.
+        */}
+        <div className="tabbar-safe pointer-events-auto flex items-center rounded-t-3xl bg-(--hig-bar) px-2 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
           {TABS.map((tab) => {
             const isActive = tab.key === active;
             return (
-              <Link
+              <button
                 key={tab.key}
-                href={tab.href}
+                type="button"
                 aria-label={tab.label}
                 aria-current={isActive ? "page" : undefined}
+                onClick={() => selectTab(tab.key)}
                 className={`flex h-full flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                   isActive
                     ? "bg-(--hig-accent-tint) text-(--hig-accent)"
@@ -84,7 +118,7 @@ export default function TabBar({
                 >
                   {tab.label}
                 </span>
-              </Link>
+              </button>
             );
           })}
         </div>

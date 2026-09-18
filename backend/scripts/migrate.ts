@@ -1,31 +1,34 @@
 /**
- * Apply pending drizzle migrations.
+ * Apply pending Drizzle migrations — `bun run db:migrate`.
  *
- * This exists because `drizzle-kit migrate` FAILS on any database that has
- * already been migrated: its bootstrap statements (`CREATE SCHEMA IF NOT
- * EXISTS drizzle`, `CREATE TABLE IF NOT EXISTS __drizzle_migrations`) reply
- * with NOTICE ("already exists, skipping"), and the CLI's postgres.js driver
- * surfaces those NOTICEs as fatal errors — so migration #2 and beyond can
- * never run. Running the same migrator through drizzle-orm directly with
- * `onnotice: () => {}` suppresses exactly those harmless notices.
+ * This exists instead of the `drizzle-kit migrate` CLI because the CLI treats Postgres NOTICEs as
+ * fatal. On a database that has already been migrated, the bootstrap statements
+ * (`CREATE SCHEMA IF NOT EXISTS drizzle`, `CREATE TABLE IF NOT EXISTS __drizzle_migrations`)
+ * answer "already exists, skipping", and the CLI never gets to the real migrations. Going through
+ * drizzle-orm's migrator with `onnotice: () => {}` suppresses exactly those harmless notices.
  *
- * Usage: bun scripts/migrate.ts   (or `bun run db:migrate`)
+ * (The same 15-line workaround the Express app carried in `backend/scripts/migrate.ts` — kept
+ * because the database is the same one, still mid-migration.)
  */
-import postgres from "postgres";
+import { Logger } from "@nestjs/common";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import "dotenv/config";
-import { logger } from "../src/config/logger";
+import postgres from "postgres";
 
+const logger = new Logger("Migrate");
+
+// `max: 1` because this is a one-shot script: a pool of one is enough, and it cannot keep the
+// process alive after `end()`.
 const sql = postgres(process.env.DATABASE_URL!, {
   onnotice: () => {},
   max: 1,
 });
 
 try {
-  const db = drizzle(sql);
-  await migrate(db, { migrationsFolder: "./src/db/migrations" });
-  logger.info("Migrations applied");
+  await migrate(drizzle(sql), {
+    migrationsFolder: "./src/database/migrations",
+  });
+  logger.log("Migrations applied");
 } finally {
   await sql.end();
 }

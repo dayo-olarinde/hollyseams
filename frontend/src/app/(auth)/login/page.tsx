@@ -1,24 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { haptic } from "@/lib/haptics";
 
 const PIN_LENGTH = 4;
 
 export default function LoginPage() {
-  const { login, error, clearError, isLoading, isAuthenticated } = useAuth();
+  // `isSigningIn`, not `isLoading`: the spinner and the disabled keypad belong to *this* submit.
+  // The old provider reported a single loading flag that was also true while the page was still
+  // checking whether a session already existed, so the keypad could look busy before a finger
+  // touched it. The redirect once a session exists is `SessionWatcher`'s job now — one rule for
+  // the whole app instead of one per screen.
+  const { login, error, clearError, isSigningIn } = useAuth();
   const [pin, setPin] = useState("");
   const [isShaking, setIsShaking] = useState(false);
-  const dotsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isAuthenticated) window.location.replace("/dashboard");
-  }, [isAuthenticated]);
 
   const handleSubmit = useCallback(
     async (pinValue: string) => {
       const success = await login(pinValue);
       if (!success) {
+        haptic("error");
         setIsShaking(true);
         setTimeout(() => {
           setIsShaking(false);
@@ -33,6 +35,7 @@ export default function LoginPage() {
     (digit: string) => {
       clearError();
       if (pin.length >= PIN_LENGTH) return;
+      haptic();
 
       const newPin = pin + digit;
       setPin(newPin);
@@ -45,11 +48,13 @@ export default function LoginPage() {
   );
 
   const handleClear = useCallback(() => {
+    haptic();
     setPin("");
     clearError();
   }, [clearError]);
 
   const handleBackspace = useCallback(() => {
+    haptic();
     setPin((prev) => prev.slice(0, -1));
     clearError();
   }, [clearError]);
@@ -88,25 +93,27 @@ export default function LoginPage() {
         Welcome back — enter your PIN to continue
       </p>
 
-      <div
-        ref={dotsRef}
-        role="group"
-        aria-label="PIN entry"
-        className={`hig-rise mt-10 flex justify-center gap-3 ${
-          isShaking ? "animate-shake" : ""
-        }`}
-        style={{ animationDelay: "80ms" }}
-      >
-        {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-          <div
-            key={i}
-            className={`h-5 w-5 rounded-full border-2 transition-colors duration-150 ${
-              i < pin.length
-                ? "border-(--hig-label) bg-(--hig-label)"
-                : "border-(--hig-dot-empty)"
-            }`}
-          />
-        ))}
+      <div className="hig-rise mt-10" style={{ animationDelay: "80ms" }}>
+        {/* Separate node: stacking two animations on one element lets the cascade
+            pick a single winner, so the shake silently loses the hig-rise class. */}
+        <div
+          role="group"
+          aria-label="PIN entry"
+          className={`flex justify-center gap-3 ${
+            isShaking ? "animate-shake" : ""
+          }`}
+        >
+          {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-5 w-5 rounded-full border-2 transition-colors duration-150 ${
+                i < pin.length
+                  ? "border-(--hig-label) bg-(--hig-label)"
+                  : "border-(--hig-dot-empty)"
+              }`}
+            />
+          ))}
+        </div>
       </div>
 
       {}
@@ -114,7 +121,7 @@ export default function LoginPage() {
         className="hig-rise mt-6 flex h-5 items-center justify-center"
         style={{ animationDelay: "80ms" }}
       >
-        {isLoading ? (
+        {isSigningIn ? (
           <span
             className="h-4 w-4 animate-spin rounded-full border-2 border-(--hig-accent-soft) border-t-(--hig-accent)"
             aria-label="Signing in"
@@ -134,7 +141,7 @@ export default function LoginPage() {
 
       {}
       <div
-        className="hig-rise mx-auto mt-6 grid w-full max-w-66 grid-cols-3 gap-3"
+        className="hig-rise mx-auto mt-6 grid w-full max-w-80 grid-cols-3 gap-3"
         style={{ animationDelay: "120ms" }}
       >
         {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
@@ -142,8 +149,8 @@ export default function LoginPage() {
             key={digit}
             aria-label={digit}
             onClick={() => handleDigit(digit)}
-            disabled={isLoading || pin.length >= PIN_LENGTH}
-            className="flex aspect-square items-center justify-center rounded-full bg-(--hig-fill) text-[28px] text-(--hig-label) transition-all duration-100 active:scale-95 active:bg-(--hig-accent) active:text-white disabled:opacity-30"
+            disabled={isSigningIn || pin.length >= PIN_LENGTH}
+            className="flex aspect-square touch-manipulation items-center justify-center rounded-full bg-(--hig-fill) text-[32px] text-(--hig-label) transition-all duration-100 active:scale-95 active:bg-(--hig-accent) active:text-white disabled:opacity-30"
           >
             {digit}
           </button>
@@ -151,8 +158,8 @@ export default function LoginPage() {
 
         <button
           onClick={handleClear}
-          disabled={isLoading}
-          className="flex aspect-square items-center justify-center rounded-full text-[17px] text-(--hig-label-tertiary) transition-all duration-100 active:scale-95 active:opacity-60 disabled:opacity-30"
+          disabled={isSigningIn}
+          className="flex aspect-square touch-manipulation items-center justify-center rounded-full text-[18px] text-(--hig-label-tertiary) transition-all duration-100 active:scale-95 active:opacity-60 disabled:opacity-30"
         >
           Clear
         </button>
@@ -160,21 +167,22 @@ export default function LoginPage() {
         <button
           aria-label="0"
           onClick={() => handleDigit("0")}
-          disabled={isLoading || pin.length >= PIN_LENGTH}
-          className="flex aspect-square items-center justify-center rounded-full bg-(--hig-fill) text-[28px] text-(--hig-label) transition-all duration-100 active:scale-95 active:bg-(--hig-accent) active:text-white disabled:opacity-30"
+          disabled={isSigningIn || pin.length >= PIN_LENGTH}
+          className="flex aspect-square touch-manipulation items-center justify-center rounded-full bg-(--hig-fill) text-[32px] text-(--hig-label) transition-all duration-100 active:scale-95 active:bg-(--hig-accent) active:text-white disabled:opacity-30"
         >
           0
         </button>
 
         <button
           onClick={handleBackspace}
-          disabled={isLoading}
-          className="flex aspect-square items-center justify-center rounded-full text-(--hig-label-tertiary) transition-all duration-100 active:scale-95 active:opacity-60 disabled:opacity-30"
+          disabled={isSigningIn}
+          className="flex aspect-square touch-manipulation items-center justify-center rounded-full text-[18px] text-(--hig-label-tertiary) transition-all duration-100 active:scale-95 active:opacity-60 disabled:opacity-30"
           aria-label="Delete last digit"
-        >          {}
+        >
+          {}
           <svg
             viewBox="0 0 24 24"
-            className="h-6 w-6"
+            className="h-7 w-7"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.9"

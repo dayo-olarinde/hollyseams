@@ -8,6 +8,7 @@ RUN bun install --frozen-lockfile
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# tsc -p tsconfig.build.json → dist/ (Bun runs the emitted JS directly; no bundling).
 RUN bun run build
 
 FROM base AS runner
@@ -17,4 +18,4 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 EXPOSE 7000
-CMD ["bun", "dist/server.js"]
+CMD ["bun", "dist/main.js"]

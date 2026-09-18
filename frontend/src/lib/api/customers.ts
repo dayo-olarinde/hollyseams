@@ -6,16 +6,30 @@ import type {
   UpdateCustomerInput,
 } from "@/types/customer";
 
-export async function listCustomers(params?: PaginatedQuery) {
-  return request<Customer[], PaginationMeta>({ url: "/customers", params });
+/**
+ * `meta.totalCount` is the exact size of the whole table, counts included.
+ *
+ * The tab needs one number ("12 clients · A→Z") that a cursor page cannot contain, and the
+ * previous frontend fetched a second, full copy of the list just to call `.length` on it. Asking
+ * the database for a count is one aggregate instead of a hundred rows over the phone.
+ */
+export async function listCustomers(
+  params?: PaginatedQuery,
+  signal?: AbortSignal,
+) {
+  return request<Customer[], PaginationMeta>({
+    url: "/customers",
+    params,
+    signal,
+  });
 }
 
 export async function createCustomer(input: CreateCustomerInput) {
   return request<Customer>({ url: "/customers", method: "POST", data: input });
 }
 
-export async function getCustomer(id: string) {
-  return request<Customer>({ url: `/customers/${id}` });
+export async function getCustomer(id: string, signal?: AbortSignal) {
+  return request<Customer>({ url: `/customers/${id}`, signal });
 }
 
 export async function updateCustomer(id: string, input: UpdateCustomerInput) {

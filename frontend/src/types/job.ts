@@ -90,6 +90,22 @@ export interface CreatePaymentInput {
 
 export type JobStatusFilter = "pending" | "completed" | "delivered";
 
+/**
+ * The status tab counts, as `GET /jobs/counts` returns them.
+ *
+ * `all` includes cancelled jobs, which have no tab of their own; `ready` is the API's
+ * `status=completed` filter (completed and not yet delivered), so a tab label always agrees with
+ * the list it opens.
+ */
+export interface JobCounts {
+  all: number;
+  pending: number;
+  ready: number;
+  delivered: number;
+  /** Still open and past its due date, counted by the server rather than inferred from a page. */
+  overdue: number;
+}
+
 export interface JobsQuery extends PaginatedQuery {
   status?: JobStatusFilter;
 }

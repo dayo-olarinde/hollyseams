@@ -1,61 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import ThemeToggle from "@/components/ui/theme-toggle";
+import { useParams } from "next/navigation";
+import { DetailHeader } from "@/components/ui/detail-header";
+import { JobDetailSkeleton } from "@/components/ui/skeletons";
 import { useToast } from "@/components/ui/toast";
 import { useCreatePayment, useJob, useUpdateJob } from "@/hooks/use-jobs";
 import { avatarColor, avatarTint } from "@/lib/avatar-colors";
+import { ApiError } from "@/lib/api/transport";
+import {
+  formatDay,
+  formatStampDay,
+  initials,
+  isOverdue,
+  naira,
+  todayISO,
+} from "@/lib/format";
 import type { Job } from "@/types/job";
-
-const naira = new Intl.NumberFormat("en-NG", {
-  style: "currency",
-  currency: "NGN",
-  maximumFractionDigits: 0,
-});
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function fmtDay(value: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!m) return value;
-  return `${+m[3]!} ${MONTHS[+m[2]! - 1]}`;
-}
-
-function fmtISO(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
-}
-
-function parseDay(value: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return NaN;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-function isOverdue(j: Job): boolean {
-  if (j.status !== "pending" || !j.dueDate) return false;
-  const due = parseDay(j.dueDate);
-  if (!Number.isFinite(due)) return false;
-  return due < new Date(new Date().toDateString()).getTime();
-}
-
-function initials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter((w) => !/^(mrs|mr|ms|dr)\.?$/i.test(w))
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("") || "•"
-  );
-}
 
 function IconPhoto({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -88,7 +49,7 @@ function milestones(j: Job): Milestone[] {
   const delivered = !!j.deliveredAt;
   const over = isOverdue(j);
   const ms: Milestone[] = [
-    { label: "Placed", sub: fmtISO(j.createdAt), state: "done" },
+    { label: "Placed", sub: formatStampDay(j.createdAt), state: "done" },
   ];
   if (j.status === "canceled") {
     ms.push({
@@ -107,13 +68,13 @@ function milestones(j: Job): Milestone[] {
 
   ms.push({
     label: "Ready to collect",
-    sub: delivered ? fmtISO(j.deliveredAt!) : "—",
+    sub: delivered ? formatStampDay(j.deliveredAt!) : "—",
     state: delivered ? "done" : ready ? "now" : "future",
     tag: ready ? "now" : undefined,
   });
   ms.push({
     label: "Delivered",
-    sub: delivered ? fmtISO(j.deliveredAt!) : "—",
+    sub: delivered ? formatStampDay(j.deliveredAt!) : "—",
     state: delivered ? "done" : "future",
   });
   return ms;
@@ -180,13 +141,13 @@ function Money({
       <div className="flex items-baseline justify-between">
         <p className="text-[12px] text-(--hig-label-secondary)">Agreed</p>
         <p className="text-[15px] font-medium [font-variant-numeric:tabular-nums]">
-          {naira.format(job.agreedPrice)}
+          {naira(job.agreedPrice)}
         </p>
       </div>
       <div className="mt-2 flex items-baseline justify-between">
         <p className="text-[12px] text-(--hig-label-secondary)">Paid so far</p>
         <p className="text-[15px] font-medium text-(--hig-success) [font-variant-numeric:tabular-nums]">
-          {naira.format(paid)}
+          {naira(paid)}
         </p>
       </div>
       <div className="mt-2 flex items-baseline justify-between">
@@ -198,7 +159,7 @@ function Money({
             balance > 0 ? "text-(--hig-warning)" : "text-(--hig-label)"
           }`}
         >
-          {naira.format(balance)}
+          {naira(balance)}
         </p>
       </div>
 
@@ -224,11 +185,11 @@ function Money({
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium leading-tight">Payment</p>
               <p className="text-[10.5px] text-(--hig-label-secondary)">
-                {fmtISO(p.paidAt)}
+                {formatStampDay(p.paidAt)}
               </p>
             </div>
             <p className="text-[13.5px] font-medium [font-variant-numeric:tabular-nums]">
-              {naira.format(p.amount)}
+              {naira(p.amount)}
             </p>
           </div>
         ))}
@@ -253,17 +214,49 @@ function Money({
 
 function PaymentSheet({
   job,
-  open,
   onClose,
 }: {
   job: Job;
-  open: boolean;
   onClose: () => void;
 }) {
   const toast = useToast();
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISO);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * [1/12] The idempotency key: one per *intent*, minted when the sheet opens and reused by
+   * every delivery of it — the first tap, a second tap that slips through before the button
+   * re-renders as disabled, a retry after the response was lost.
+   *
+   * WHY here and not in `submitPayment`: a key minted at tap time would be a *new* intent per
+   * tap, so the double-tap this exists to stop would carry two different keys and produce two
+   * payments. The sheet's lifetime is the intent's lifetime — the component is mounted only
+   * while it is open (see the call site), so closing and reopening genuinely starts a new
+   * intent and correctly gets a new key.
+   *
+   * WHAT the server does with it: steps [5/12]–[11/12]. The backend refuses to record two
+   * payments for one key, so a request that arrives twice, or a retry whose first answer was
+   * lost *after* the payment had already committed, comes back as the same payment
+   * (`Idempotent-Replay: true`) instead of a second one.
+   */
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
+  /**
+   * Mounted only while it is open (see the call site), so each visit starts with empty fields and
+   * no state has to be reset on the way in.
+   *
+   * The old version stayed mounted and reset itself *during render* — `if (open && !wasOpen) {
+   * setWasOpen(true); setAmount(""); ... }` — which also reached into `document.body` from the
+   * render phase. Reset-through-render is a trick React tolerates, not a place to do side effects:
+   * a render that runs twice (StrictMode, a concurrent re-render) would touch the DOM twice.
+   */
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
 
   const amountNum = Number(amount.replace(/[^\d.]/g, ""));
   const valid = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0;
@@ -277,12 +270,17 @@ function PaymentSheet({
         amount: amountNum,
 
         paidAt: date ? new Date(date + "T12:00:00").toISOString() : undefined,
+
+        // [2/12] The key travels with the mutation, so every attempt to record this payment
+        // carries the same value. The button guards against the accidental second tap; this
+        // guards against the second *delivery*, which no amount of UI state can prevent.
+        idempotencyKey,
       },
       {
         onSuccess: () => {
           toast.show({
             title: "Payment recorded.",
-            detail: `${naira.format(amountNum)} on ${fmtDay(date)}`,
+            detail: `${naira(amountNum)} on ${formatDay(date)}`,
           });
           onClose();
         },
@@ -292,21 +290,6 @@ function PaymentSheet({
           ),
       },
     );
-
-  const [wasOpen, setWasOpen] = useState(false);
-  if (open && !wasOpen) {
-    setWasOpen(true);
-    setAmount("");
-    setDate(new Date().toISOString().slice(0, 10));
-    setError(null);
-    document.body.style.overflow = "hidden";
-  }
-  if (!open && wasOpen) {
-    setWasOpen(false);
-    document.body.style.overflow = "";
-  }
-
-  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Record a payment">
@@ -337,7 +320,7 @@ function PaymentSheet({
         <p className="mt-1 text-[12px] text-(--hig-label-secondary)">
           Balance to collect ·{" "}
           <b className="font-semibold text-(--hig-warning) [font-variant-numeric:tabular-nums]">
-            {naira.format(
+            {naira(
               Math.max(0, job.agreedPrice - (job.payments ?? []).reduce((s, p) => s + p.amount, 0)),
             )}
           </b>
@@ -405,7 +388,7 @@ function PaymentSheet({
               Recording…
             </span>
           ) : (
-            `Record ${valid ? naira.format(amountNum) : "payment"}`
+            `Record ${valid ? naira(amountNum) : "payment"}`
           )}
         </button>
       </div>
@@ -559,36 +542,7 @@ function LoadablePhoto({
   );
 }
 
-function DetailSkeleton() {
-  const bar = "animate-pulse rounded bg-(--hig-separator)";
-  return (
-    <div className="mx-auto w-full max-w-107.5 px-4">
-      <div className={`mt-6 h-2.5 w-24 ${bar}`} />
-      <div className={`mt-3 h-7 w-3/4 ${bar}`} />
-      <div className="mt-4 flex items-center gap-2.5">
-        <div className={`h-10 w-10 shrink-0 rounded-full ${bar}`} />
-        <div className="flex-1">
-          <div className={`h-3.5 w-28 ${bar}`} />
-          <div className={`mt-1.5 h-2.5 w-40 ${bar}`} />
-        </div>
-      </div>
-      <div className="mt-5 flex">
-        <div className={`h-11 flex-1 ${bar}`} />
-        <div className={`mx-4 h-11 w-px ${bar}`} />
-        <div className={`h-11 flex-1 ${bar}`} />
-      </div>
-      <div className="mt-8 grid grid-cols-2 gap-3">
-        <div className={`aspect-3/4 ${bar}`} />
-        <div className={`aspect-3/4 ${bar}`} />
-      </div>
-      <div className={`mt-8 h-40 ${bar}`} />
-      <div className={`mt-6 h-44 ${bar}`} />
-    </div>
-  );
-}
-
 export default function JobDetailPage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [payOpen, setPayOpen] = useState(false);
@@ -622,26 +576,10 @@ export default function JobDetailPage() {
   const doneCount = rails.filter((m) => m.state === "done").length;
 
   return (
-    <main className="hig min-h-dvh bg-(--hig-grouped) pb-44 text-(--hig-label) transition-colors duration-300">
-      {}
-      <header className="sticky top-0 z-30 border-b border-(--hig-separator) bg-(--hig-bar)/80 backdrop-blur-[20px] backdrop-saturate-150">
-        <div className="mx-auto flex w-full max-w-107.5 items-center justify-between px-4 py-1.5">
-          <button
-            type="button"
-            aria-label="Back to jobs"
-
-            onClick={() => (window.history.length > 1 ? router.back() : router.push("/jobs"))}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-(--hig-accent) transition-transform duration-200 active:scale-90"
-          >
-            ‹
-          </button>
-          <h1 className="text-[15px] font-semibold tracking-[-0.01em]">Inspection</h1>
-          <ThemeToggle />
-        </div>
-      </header>
+    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+      <DetailHeader title="Inspection" fallbackHref="/dashboard?tab=jobs" />
 
       {jobQ.isError ? (
-
         <div className="mx-auto mt-24 w-full max-w-107.5 px-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-6 w-6" aria-hidden="true">
@@ -652,18 +590,23 @@ export default function JobDetailPage() {
           </div>
           <p className="mt-4 text-[16px] font-medium">Couldn&apos;t open this job.</p>
           <p className="mt-1 text-[13px] text-(--hig-label-secondary)">
-            {jobQ.error instanceof Error ? jobQ.error.message : "Check your connection and try again."}
+            {/* The API's own sentence when it has one ("Job not found"), a network explanation
+                when it does not. "Check your connection" was previously shown for a deleted job
+                too, which sent the tailor to their wifi settings for nothing. */}
+            {jobQ.error instanceof ApiError && !jobQ.error.isNetworkError
+              ? jobQ.error.message
+              : "No connection — check your network and try again."}
           </p>
           <button
             type="button"
-            onClick={() => jobQ.refetch()}
+            onClick={() => void jobQ.refetch()}
             className="mt-5 rounded-[13px] bg-(--hig-accent) px-6 py-3 text-[14px] font-semibold text-white transition-transform duration-200 active:scale-95"
           >
             Retry
           </button>
         </div>
       ) : !job ? (
-        <DetailSkeleton />
+        <JobDetailSkeleton />
       ) : (
         <>
           {}
@@ -729,7 +672,7 @@ export default function JobDetailPage() {
                   Placed
                 </p>
                 <p className="mt-1 text-[14px] font-medium [font-variant-numeric:tabular-nums]">
-                  {fmtISO(job.createdAt)}
+                  {formatStampDay(job.createdAt)}
                 </p>
               </div>
               <div className="border-l border-dashed border-(--hig-separator) pl-4">
@@ -745,7 +688,7 @@ export default function JobDetailPage() {
                         : "text-(--hig-label-tertiary)"
                   }`}
                 >
-                  {job.dueDate ? fmtDay(job.dueDate) : "—"}
+                  {job.dueDate ? formatDay(job.dueDate) : "—"}
                 </p>
               </div>
             </div>
@@ -913,8 +856,8 @@ export default function JobDetailPage() {
             className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary)"
             style={{ animationDelay: "200ms" }}
           >
-            Placed {fmtISO(job.createdAt)}
-            {job.dueDate ? ` · due ${fmtDay(job.dueDate)}` : ""} · photos update when the
+            Placed {formatStampDay(job.createdAt)}
+            {job.dueDate ? ` · due ${formatDay(job.dueDate)}` : ""} · photos update when the
             finished piece lands.
           </p>
         </>
@@ -922,8 +865,8 @@ export default function JobDetailPage() {
 
       {}
       {job && <ActionBar job={job} />}
-      {job && (
-        <PaymentSheet job={job} open={payOpen} onClose={() => setPayOpen(false)} />
+      {job && payOpen && (
+        <PaymentSheet job={job} onClose={() => setPayOpen(false)} />
       )}
 
       {}

@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toast";
 import { useInvalidateJobWrites } from "@/hooks/use-jobs";
 import { listCustomers } from "@/lib/api/customers";
+import { keys } from "@/lib/query/keys";
 import { createJob, createJobForSubject } from "@/lib/api/jobs";
 import { createMeasurement, listMeasurements } from "@/lib/api/measurements";
 import { addSubject, listSubjects } from "@/lib/api/subjects";
@@ -16,30 +18,7 @@ import type { Job } from "@/types/job";
 import type { Measurement } from "@/types/measurement";
 import type { Subject } from "@/types/subject";
 
-const naira = new Intl.NumberFormat("en-NG", {
-  style: "currency",
-  currency: "NGN",
-  maximumFractionDigits: 0,
-});
-
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function fmtDate(value: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!m) return value;
-  return `${+m[3]!} ${MONTHS[+m[2]! - 1]}`;
-}
-
-function initials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter((w) => !/^(mrs|mr|ms|dr)\.?$/i.test(w))
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("") || "•"
-  );
-}
+import { formatDay, initials, naira, todayISO } from "@/lib/format";
 
 const COMMON_MEASUREMENTS = [
   "Hip", "Knee", "Bust", "Neck", "Thigh", "Ankle", "Chest", "Waist", "Length",
@@ -91,8 +70,6 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
 const MAX_PHOTOS = 1;
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
-
 const inputClass =
   "w-full rounded-xl border border-(--hig-separator) bg-(--hig-fill) px-4 py-3 text-[13px] text-(--hig-label) outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-(--hig-label-tertiary) focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]";
 
@@ -115,6 +92,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   const invalidateJobWrites = useInvalidateJobWrites();
   const toast = useToast();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [customers, setCustomers] = useState<Customer[] | null>(null);
   const [query, setQuery] = useState("");
@@ -153,6 +131,8 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   const [compRect, setCompRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [sugOpen, setSugOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Every object URL this sheet has created, so unmount can revoke all of them. */
+  const previewUrlsRef = useRef<string[]>([]);
   const activeSubject = subjects.find((s) => s.key === activeKey) ?? null;
 
   useEffect(() => {
@@ -179,7 +159,20 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setError(null);
     setCreated(null);
 
-    listCustomers({ limit: 100 })
+    /**
+     * The client list comes from the cache, not from a fresh request every time.
+     *
+     * Opening this sheet used to fire its own `listCustomers({ limit: 100 })` and throw the answer
+     * away on close — a hundred rows on every open, even for a job for a client chosen a minute
+     * ago. `fetchQuery` reads the cache and only hits the network when the entry is missing or
+     * stale, and the key sits under `customers` so a job that creates a client invalidates it.
+     */
+    void queryClient
+      .fetchQuery({
+        queryKey: keys.customers.picker,
+        queryFn: ({ signal }) => listCustomers({ limit: 100 }, signal),
+        staleTime: 5 * 60_000,
+      })
       .then((res) => setCustomers(res.data ?? []))
       .catch(() => setCustomers([]));
 
@@ -187,7 +180,24 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     return () => {
       document.body.style.overflow = "";
     };
-  }, [open]);
+  }, [open, queryClient]);
+
+  /**
+   * Release the local preview blobs when the sheet goes away.
+   *
+   * `URL.createObjectURL` pins a whole image in memory until it is revoked, and a failed or
+   * abandoned upload never reached the "remove" button that revokes one — so on a phone that keeps
+   * the tab alive for days, a few 3 MB photos become a few hundred. The ref, not the `photos`
+   * state, is the source of truth here: a cleanup closure reading state would only ever see the
+   * array from the render it was created in.
+   */
+  useEffect(() => {
+    const previews = previewUrlsRef.current;
+    return () => {
+      for (const url of previews) URL.revokeObjectURL(url);
+      previews.length = 0;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -233,7 +243,13 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     setSubjectError(null);
     setPhone("");
 
-    const res = await listSubjects(c.id, { limit: 100 });
+    // Same cache entry as the customer file's subject list: the tailor who just visited a client
+    // should not pay for that list a second time when opening this sheet.
+    const res = await queryClient.fetchQuery({
+      queryKey: keys.customers.subjects(c.id),
+      queryFn: ({ signal }) => listSubjects(c.id, { limit: 100 }, signal),
+      staleTime: 10 * 60_000,
+    });
     const rows = (res.data ?? []).slice().sort((a, b) =>
       a.relationship === "self" ? -1 : b.relationship === "self" ? 1 : 0,
     );
@@ -337,7 +353,21 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
       setMeas((prev) => (prev[subj.key] ? prev : { ...prev, [subj.key]: emptyFitting() }));
       return;
     }
-    const res = await listMeasurements(subj.subjectId, { limit: 1 });
+
+    /**
+     * Read the subject's fittings through the *same* cache entry the client's file page uses.
+     *
+     * Two things were wrong before: this asked the API directly, so a customer the tailor had just
+     * looked at was fetched again, and it asked for `limit: 1` — meaning the same logical data
+     * lived under two different cache keys depending on which screen wanted it. The list is
+     * ordered newest-first, so the newest fitting is `[0]` whether one row was requested or a
+     * hundred: same question, same answer, one cache entry.
+     */
+    const res = await queryClient.fetchQuery({
+      queryKey: keys.subjects.measurements(subj.subjectId),
+      queryFn: ({ signal }) => listMeasurements(subj.subjectId!, { limit: 100 }, signal),
+      staleTime: 10 * 60_000,
+    });
     const latest: Measurement | undefined = res.data?.[0];
     setSubjects((prev) =>
       prev.map((x) =>
@@ -394,6 +424,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         .trim();
       const alt = `Style reference${stem ? ` — ${stem}` : ""}`.slice(0, 200);
       const previewUrl = URL.createObjectURL(file);
+      previewUrlsRef.current.push(previewUrl);
       setPhotos((prev) => [
         ...prev,
         { file, previewUrl, alt, status: "uploading" },
@@ -574,7 +605,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
   const subjectHue = (s: ModalSubject) =>
     avatarColor(s.relationship === "self" ? (client?.name ?? "") : s.name);
 
-  const dueLabel = dueDate ? fmtDate(dueDate) : null;
+  const dueLabel = dueDate ? formatDay(dueDate) : null;
   const clientLabel = (client?.name ?? query.trim()) || "no client yet";
   const priceNum = Number(price.replace(/[^\d.]/g, "")) || 0;
   const measCount = Object.keys(filledFitting(currentMeas())).length;
@@ -583,7 +614,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
     if (!created) return;
     toast.show({
       title: "Cut and pinned.",
-      detail: `${created.description || "Garment"} for ${subjectLabel(activeSubject!)} — ${naira.format(created.agreedPrice)}${created.dueDate ? `, due ${fmtDate(created.dueDate)}` : ""}`,
+      detail: `${created.description || "Garment"} for ${subjectLabel(activeSubject!)} — ${naira(created.agreedPrice)}${created.dueDate ? `, due ${formatDay(created.dueDate)}` : ""}`,
     });
     onClose();
   };
@@ -994,7 +1025,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
           <Fold
             num={3}
             name="The job"
-            summary={priceNum > 0 ? naira.format(priceNum) : "Set the price"}
+            summary={priceNum > 0 ? naira(priceNum) : "Set the price"}
             open={fold === 3}
             onToggle={() => setFold(fold === 3 ? 1 : 3)}
           >
@@ -1113,7 +1144,7 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
         )}
 
         {}
-        <div className="flex shrink-0 items-center gap-3 border-t border-(--hig-separator) bg-(--hig-card) px-4 pb-4 pt-3">
+        <div className="flex shrink-0 items-center gap-3 border-t border-(--hig-separator) bg-(--hig-card) px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
           <div className="min-w-0 flex-1">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-(--hig-label-tertiary)">Ticket</div>
             <div className="whitespace-nowrap text-[20px] font-medium leading-none tracking-[-0.02em] text-(--hig-label) [font-variant-numeric:tabular-nums]">
@@ -1160,11 +1191,11 @@ export default function NewJobModal({ open, onClose }: { open: boolean; onClose:
               Cut and <span className="text-(--hig-success)">pinned</span>.
             </h3>
             <p className="mt-3 text-[16px] leading-snug text-(--hig-label)">
-              {created.description || "Garment"} for {subjectLabel(activeSubject!)} — {naira.format(created.agreedPrice)}.
+              {created.description || "Garment"} for {subjectLabel(activeSubject!)} — {naira(created.agreedPrice)}.
             </p>
             {}
             <p className="mt-2 text-[13.5px] text-(--hig-label-secondary)">
-              {created.dueDate ? `due ${fmtDate(created.dueDate)}` : "no due date"} · {measCount} measurement{measCount === 1 ? "" : "s"} saved
+              {created.dueDate ? `due ${formatDay(created.dueDate)}` : "no due date"} · {measCount} measurement{measCount === 1 ? "" : "s"} saved
             </p>
             <div className="mt-4 flex w-full gap-3">
               <button

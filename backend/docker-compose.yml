@@ -1,3 +1,14 @@
+# Local Postgres + Redis for the API.
+#
+# `name: hollyseams` is deliberate. This stack replaces the root-level compose file the two apps
+# shared during the migration (Postgres + Redis, project `hollyseams`), so the project name keeps
+# the SAME named volumes — `hollyseams_postgres_data`, `hollyseams_redis_data`. Bringing this file
+# up therefore adopts the existing local database instead of starting a second, empty one.
+#
+# Credentials and ports come from `.env` (see `.env.example`), which is also where the app reads
+# them — one source of truth for "what database am I talking to".
+name: hollyseams
+
 services:
   postgres:
     image: postgres:16-alpine

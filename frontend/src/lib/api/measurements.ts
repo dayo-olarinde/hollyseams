@@ -5,10 +5,12 @@ import type { CreateMeasurementInput, Measurement } from "@/types/measurement";
 export async function listMeasurements(
   subjectId: string,
   params?: PaginatedQuery,
+  signal?: AbortSignal,
 ) {
   return request<Measurement[], PaginationMeta>({
     url: `/subjects/${subjectId}/measurements`,
     params,
+    signal,
   });
 }
 

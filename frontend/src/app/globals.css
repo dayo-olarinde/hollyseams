@@ -89,6 +89,38 @@ html.hig-dark .hig {
   --hig-danger-tint: rgba(255, 69, 58, 0.14);
 }
 
+/*
+ * Safe-area utilities.
+ *
+ * `viewportFit: "cover"` (see `app/layout.tsx`) lets the app paint edge to edge on a notched
+ * iPhone, in exchange for the app taking responsibility for the status bar and the home indicator.
+ * `env(safe-area-inset-*)` is that responsibility, and it is **zero on every device without a
+ * notch** — so on an older iPhone or any Android phone these resolve to exactly the old values and
+ * the design is unchanged. They exist as named utilities rather than twelve copies of a `calc()`
+ * string so the numbers have one home.
+ */
+@utility safe-top {
+  /* The sticky header's own 10px of padding, plus clear air under the status bar. */
+  padding-top: calc(0.625rem + env(safe-area-inset-top));
+}
+
+@utility tabbar-safe {
+  /* 64px of real tab bar (unchanged), then the indicator strip as padding below it, so the blur
+     still reaches the bottom edge of the screen while the labels stay clear of the bar itself. */
+  height: calc(4rem + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility content-safe {
+  /* The 160px the pages already reserved above the tab bar, plus the indicator strip. */
+  padding-bottom: calc(10rem + env(safe-area-inset-bottom));
+}
+
+@utility fab-safe {
+  /* The floating "new" button's 84px, kept relative to the taller bar. */
+  bottom: calc(5.25rem + env(safe-area-inset-bottom));
+}
+
 @keyframes hig-rise {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -123,6 +155,20 @@ html.hig-dark .hig {
 
   html.hig-dark body {
     background: #000000;
+  }
+
+  /*
+   * Phones already show a press by animating `active:` states on every control, so the browser's
+   * blue tap rectangle is noise on top of a deliberate press state. Removing it is the HIG-aligned
+   * choice — but only because those states exist; a button with no press feedback would feel dead.
+   */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Stops iOS inflating text when the phone is turned sideways. */
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   :focus-visible {

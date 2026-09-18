@@ -2,19 +2,29 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",
-    "module": "Preserve",
-    "moduleDetection": "force",
-    "allowJs": true,
+    "module": "preserve",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
+    "types": ["node"],
+
+    // Nest reads `design:paramtypes` to infer class constructor dependencies. Both flags
+    // are required so TypeScript emits that metadata for the runtime DI container.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
     "strict": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
-  }
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Keep this off with decorator metadata: `verbatimModuleSyntax` makes interface-typed
+    // decorated parameters require extra type-only syntax and creates avoidable TS1272
+    // errors in Nest providers. The project still uses strict type checking.
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src", "tests"]
 }

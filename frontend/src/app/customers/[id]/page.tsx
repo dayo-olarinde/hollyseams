@@ -1,67 +1,31 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import ThemeToggle from "@/components/ui/theme-toggle";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { DetailHeader } from "@/components/ui/detail-header";
+import { CustomerFileSkeleton } from "@/components/ui/skeletons";
 import {
   useCustomer,
   useCustomerJobs,
   useCustomerSubjects,
 } from "@/hooks/use-customers";
 import { useOutstandingPayments } from "@/hooks/use-reports";
+import { usePrefetchJob } from "@/hooks/use-jobs";
 import { useSubjectMeasurements } from "@/hooks/use-subjects";
+import { ApiError } from "@/lib/api/transport";
 import { avatarColor, avatarTint } from "@/lib/avatar-colors";
+import {
+  formatDay,
+  formatStampDay,
+  initials,
+  isOverdue,
+  naira,
+} from "@/lib/format";
 import type { Job } from "@/types/job";
 
-const naira = new Intl.NumberFormat("en-NG", {
-  style: "currency",
-  currency: "NGN",
-  maximumFractionDigits: 0,
-});
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function fmtDay(value: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (m) return `${+m[3]!} ${MONTHS[+m[2]! - 1]}`;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
-}
-
-function fmtISO(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]!}`;
-}
-
-function parseDay(value: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (m) return new Date(+m[1]!, +m[2]! - 1, +m[3]!).getTime();
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return NaN;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-const isOverdue = (j: Job) =>
-  j.status === "pending" &&
-  !!j.dueDate &&
-  Number.isFinite(parseDay(j.dueDate)) &&
-  parseDay(j.dueDate) < new Date(new Date().toDateString()).getTime();
-
-function initials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter((w) => !/^(mrs|mr|ms|dr)\.?$/i.test(w))
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("") || "•"
-  );
-}
+/** Balances for this client's jobs, keyed by job id. */
+type Balances = ReadonlyMap<string, number>;
 
 function jobPill(j: Job): { label: string; cls: string } {
   if (isOverdue(j)) return { label: "Overdue", cls: "bg-(--hig-danger-tint) text-(--hig-danger)" };
@@ -74,16 +38,27 @@ function jobPill(j: Job): { label: string; cls: string } {
 function SubjectRow({
   subject,
   jobs,
+  balances,
   open,
   onToggle,
 }: {
   subject: { id: string; name: string; relationship: string | null; createdAt: string };
   jobs: Job[];
+  /**
+   * The client's outstanding balances, passed in as data.
+   *
+   * This used to be a module-level `Map` that a `useMemo` in the page body cleared and refilled —
+   * a global being mutated from a render. Two problems with that, both real: a render is allowed
+   * to run twice and out of order (StrictMode does exactly this, concurrent rendering may), so the
+   * map's contents at the moment a child reads them are not guaranteed; and every mount of a
+   * customer file shared the same map, so a second file could overwrite the first one's numbers.
+   * A prop has none of that ambiguity: it is the same value for the whole render.
+   */
+  balances: Balances;
   open: boolean;
   onToggle: () => void;
 }) {
-  const router = useRouter();
-
+  const prefetchJob = usePrefetchJob();
   const [openFitting, setOpenFitting] = useState<string | null>(null);
 
   const fittingQ = useSubjectMeasurements(subject.id);
@@ -91,7 +66,7 @@ function SubjectRow({
   const latest = fittings[0];
   const hue = avatarColor(subject.name);
 
-  const totalBal = jobs.reduce((s, j) => s + (balancesByJob.get(j.id) ?? 0), 0);
+  const totalBal = jobs.reduce((s, j) => s + (balances.get(j.id) ?? 0), 0);
 
   return (
     <div className="border-t border-dashed border-(--hig-separator) first:border-t-0">
@@ -116,7 +91,7 @@ function SubjectRow({
                 {" · "}
                 {latest ? (
                   <>
-                    fitted <b className="font-semibold text-(--hig-label-secondary)">{fmtDay(String(latest.date))}</b>
+                    fitted <b className="font-semibold text-(--hig-label-secondary)">{formatDay(String(latest.date))}</b>
                   </>
                 ) : (
                   "not fitted yet"
@@ -157,7 +132,7 @@ function SubjectRow({
                     aria-expanded={openFitting === f.id}
                     className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
                   >
-                    <span className="text-[12.5px] font-medium">{fmtDay(String(f.date))}</span>
+                    <span className="text-[12.5px] font-medium">{formatDay(String(f.date))}</span>
                     <span className="flex items-center gap-1.5 text-[10.5px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
                       {Object.keys(f.measurements).length} measurements
                       <span
@@ -207,7 +182,7 @@ function SubjectRow({
 
           {}
           <p className="mt-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
-            Their jobs{totalBal > 0 ? ` · ${naira.format(totalBal)} to collect` : ""}
+            Their jobs{totalBal > 0 ? ` · ${naira(totalBal)} to collect` : ""}
           </p>
           {jobs.length === 0 ? (
             <p className="mt-1.5 text-[11.5px] text-(--hig-label-tertiary)">
@@ -217,12 +192,12 @@ function SubjectRow({
             <div className="mt-1.5 space-y-2">
               {jobs.map((j) => {
                 const pill = jobPill(j);
-                const bal = balancesByJob.get(j.id) ?? 0;
+                const bal = balances.get(j.id) ?? 0;
                 return (
-                  <button
+                  <Link
                     key={j.id}
-                    type="button"
-                    onClick={() => router.push(`/jobs/${j.id}`)}
+                    href={`/jobs/${j.id}`}
+                    onPointerDown={() => prefetchJob(j.id)}
                     className="flex w-full items-center gap-2.5 rounded-[14px] bg-(--hig-card) px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-transform duration-200 active:scale-[0.98]"
                   >
                     <span className="min-w-0 flex-1">
@@ -230,17 +205,17 @@ function SubjectRow({
                         {j.description || "Garment"}
                       </span>
                       <span className="mt-0.5 block text-[10px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
-                        {j.dueDate ? `due ${fmtDay(j.dueDate)}` : "no due date"}
-                        {bal > 0 ? ` · ${naira.format(bal)} owing` : ""}
+                        {j.dueDate ? `due ${formatDay(j.dueDate)}` : "no due date"}
+                        {bal > 0 ? ` · ${naira(bal)} owing` : ""}
                       </span>
                     </span>
                     <span className="shrink-0 text-[13.5px] font-medium [font-variant-numeric:tabular-nums]">
-                      {naira.format(j.agreedPrice)}
+                      {naira(j.agreedPrice)}
                     </span>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-semibold ${pill.cls}`}>
                       {pill.label}
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -251,31 +226,7 @@ function SubjectRow({
   );
 }
 
-const balancesByJob = new Map<string, number>();
-
-function FileSkeleton() {
-  const bar = "animate-pulse rounded bg-(--hig-separator)";
-  return (
-    <div className="mx-auto w-full max-w-107.5 px-4">
-      <div className="mt-6 flex items-center gap-3">
-        <div className={`h-12 w-12 shrink-0 rounded-full ${bar}`} />
-        <div className="flex-1">
-          <div className={`h-4 w-32 ${bar}`} />
-          <div className={`mt-2 h-3 w-40 ${bar}`} />
-        </div>
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-2.5">
-        <div className={`h-16 ${bar}`} />
-        <div className={`h-16 ${bar}`} />
-        <div className={`h-16 ${bar}`} />
-      </div>
-      <div className={`mt-7 h-40 ${bar}`} />
-    </div>
-  );
-}
-
 export default function CustomerFilePage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [openSubject, setOpenSubject] = useState<string | null>(null);
@@ -287,21 +238,21 @@ export default function CustomerFilePage() {
   const outstandingQ = useOutstandingPayments();
 
   const jobs = jobsQ.data ?? [];
-  useMemo(() => {
-    balancesByJob.clear();
+  const balances = useMemo<Balances>(() => {
+    const map = new Map<string, number>();
     for (const o of outstandingQ.data ?? []) {
-      if (o.customer.id === id) {
-
-        balancesByJob.set(o.jobId, o.balanceDue);
-      }
+      if (o.customer.id === id) map.set(o.jobId, o.balanceDue);
     }
+    return map;
   }, [outstandingQ.data, id]);
 
   const customer = customerQ.data;
   const subjects = subjectsQ.data ?? [];
 
-  const toCollect = [...balancesByJob.values()].reduce((s, v) => s + v, 0);
-  const overdue = jobs.filter(isOverdue).reduce((s, j) => s + (balancesByJob.get(j.id) ?? 0), 0);
+  const toCollect = [...balances.values()].reduce((sum, v) => sum + v, 0);
+  const overdue = jobs
+    .filter(isOverdue)
+    .reduce((sum, j) => sum + (balances.get(j.id) ?? 0), 0);
 
   const anyError = customerQ.isError || subjectsQ.isError || jobsQ.isError;
   const retryAll = () => {
@@ -312,22 +263,9 @@ export default function CustomerFilePage() {
   };
 
   return (
-    <main className="hig min-h-dvh bg-(--hig-grouped) pb-16 text-(--hig-label) transition-colors duration-300">
+    <main className="hig min-h-dvh bg-(--hig-grouped) pb-[calc(4rem+env(safe-area-inset-bottom))] text-(--hig-label) transition-colors duration-300">
       {}
-      <header className="sticky top-0 z-30 border-b border-(--hig-separator) bg-(--hig-bar)/80 backdrop-blur-[20px] backdrop-saturate-150">
-        <div className="mx-auto flex w-full max-w-107.5 items-center justify-between px-4 py-1.5">
-          <button
-            type="button"
-            aria-label="Back to customers"
-            onClick={() => (window.history.length > 1 ? router.back() : router.push("/customers"))}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[20px] text-(--hig-accent) transition-transform duration-200 active:scale-90"
-          >
-            ‹
-          </button>
-          <h1 className="text-[15px] font-semibold tracking-[-0.01em]">Customer file</h1>
-          <ThemeToggle />
-        </div>
-      </header>
+      <DetailHeader title="Customer file" fallbackHref="/dashboard?tab=customers" />
 
       {anyError ? (
 
@@ -341,9 +279,9 @@ export default function CustomerFilePage() {
           </div>
           <p className="mt-4 text-[16px] font-medium">Couldn&apos;t open this client.</p>
           <p className="mt-1 text-[13px] text-(--hig-label-secondary)">
-            {customerQ.error instanceof Error
+            {customerQ.error instanceof ApiError && !customerQ.error.isNetworkError
               ? customerQ.error.message
-              : "Check your connection and try again."}
+              : "No connection — check your network and try again."}
           </p>
           <button
             type="button"
@@ -354,7 +292,7 @@ export default function CustomerFilePage() {
           </button>
         </div>
       ) : !customer ? (
-        <FileSkeleton />
+        <CustomerFileSkeleton />
       ) : (
         <>
           {}
@@ -396,7 +334,7 @@ export default function CustomerFilePage() {
             <div className="mt-5 grid grid-cols-3 gap-2.5">
               <div className="rounded-2xl bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
                 <p className="text-[15px] font-medium leading-tight text-(--hig-warning) [font-variant-numeric:tabular-nums]">
-                  {naira.format(toCollect)}
+                  {naira(toCollect)}
                 </p>
                 <p className="mt-1 text-[8.5px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-tertiary)">
                   To collect
@@ -404,7 +342,7 @@ export default function CustomerFilePage() {
               </div>
               <div className="rounded-2xl bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
                 <p className="text-[15px] font-medium leading-tight text-(--hig-danger) [font-variant-numeric:tabular-nums]">
-                  {naira.format(overdue)}
+                  {naira(overdue)}
                 </p>
                 <p className="mt-1 text-[8.5px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-tertiary)">
                   Overdue
@@ -443,6 +381,7 @@ export default function CustomerFilePage() {
                     key={s.id}
                     subject={s}
                     jobs={jobs.filter((j) => j.subjectId === s.id)}
+                    balances={balances}
                     open={openSubject === s.id}
                     onToggle={() => setOpenSubject(openSubject === s.id ? null : s.id)}
                   />
@@ -452,7 +391,7 @@ export default function CustomerFilePage() {
           </section>
 
           <p className="mx-auto mt-6 w-full max-w-107.5 px-4 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary)">
-            Client since {fmtISO(customer.createdAt)} · tap a person to see their fittings and jobs.
+            Client since {formatStampDay(customer.createdAt)} · tap a person to see their fittings and jobs.
           </p>
         </>
       )}
