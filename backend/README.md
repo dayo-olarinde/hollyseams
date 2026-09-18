@@ -1,34 +1,27 @@
-# Hollyseams — Backend (NestJS + Fastify)
+# Hollyseams — Backend
 
-The NestJS 12 + Fastify 5 implementation of the Hollyseams API — **the app the project runs**,
-with its client in `frontend/`. It replaced the Express app that used to live in `backend/`;
-that app survives in this working copy as untracked `backend-express/` and in git history, kept
-for the side-by-side comparison every route was verified against.
+The Hollyseams API: NestJS 12 on Fastify 5, with its client in [`../frontend`](../frontend).
+Customers, measurements, jobs, payments and reports live in PostgreSQL; sessions and rate limits
+live in Redis.
 
 | | |
 |---|---|
-| Directory | `backend/` |
 | Port | **7000** — what `frontend/` proxies to |
-| Status | **the live implementation** (auth, customers, subjects, jobs, reports) |
-
-**One line of cutover is left to you:** `PORT` in `.env` is still `7001` from the
-side-by-side period. Set it to `7000` (the value `.env.example` already documents) — the
-process environment wins over `.env`, so `PORT=7000 bun run dev` works before the flip too.
+| Database | PostgreSQL 16 (Drizzle ORM; migrations and seed in `src/database/`) |
+| Tests | Vitest + `@nestjs/testing`, HTTP tests through `app.inject()` |
 
 ## Stack
 
 - **Runtime:** Bun 1.3 (no compile step in dev — see the decorator-metadata note below)
 - **Framework:** NestJS 12 (`@nestjs/platform-fastify`, Fastify pinned to **5.12.1**)
-- **Database:** PostgreSQL 16 via Drizzle ORM — same database and schema as `backend/`
+- **Database:** PostgreSQL 16 via Drizzle ORM — schema, migrations and seed in `src/database/`
 - **Cache / sessions:** Redis 7 via ioredis (opaque session ids → user, TTL)
 - **Validation:** Zod 4 schemas bound directly to parameters (Nest 12 Standard Schema)
 - **Config:** one zod schema + an injected `ENV` token; `.env` is loaded by Bun, so there is
-  no `@nestjs/config` (§17.2)
+  no `@nestjs/config`
 - **Logging:** Nest's built-in `Logger` (readable lines in the terminal) + one Fastify
-  `onResponse` hook for request lines. **No pino, on purpose** — see
-  [`../hollyseams-nestjs-migration-guide.md`](../hollyseams-nestjs-migration-guide.md) §17.1,
-  which also lists the trigger and the exact steps for adding it back when logs are shipped
-  rather than read
+  `onResponse` hook for request lines. **No pino, on purpose:** at this size logs are read in a
+  terminal, not queried; add pino-http when they are shipped or searched instead.
 - **Tests:** Vitest + `@nestjs/testing`, HTTP tests through `app.inject()`
 
 ## Scripts (`bun run …`)
@@ -76,11 +69,12 @@ Three things a NestJS app depends on that are easy to get wrong here:
 ## Env
 
 Same variables as `.env.example` (the schema in `src/config/env.schema.ts` is the single
-source of truth and fails the boot when something required is missing). Note that the
-process environment **wins over** `.env` — that is
-standard dotenv behaviour. If a shell in your environment exports its own `PORT` (some do,
-with `0`), the app exits with `Invalid environment variables: PORT: Too small`; start it
-with `env -u PORT bun src/main.ts` to let `.env` win.
+source of truth and fails the boot when something required is missing). If your `.env` still
+carries `PORT=7001` from an earlier setup, set it to `7000` — that is what `frontend/` proxies
+to. The process environment **wins over** `.env` (standard dotenv behaviour), so
+`PORT=7000 bun run dev` works before you edit it. If a shell exports its own `PORT` (some do,
+with `0`), the app exits with `Invalid environment variables: PORT: Too small`; start it with
+`env -u PORT bun src/main.ts` to let `.env` win.
 
 ## Layout
 
@@ -102,11 +96,11 @@ src/
 │   └── validation/     # request contracts shared by more than one feature
 └── modules/            # features, one folder each
     ├── health/         # GET /health (root, outside /api/v1 and the rate limiter)
-    ├── auth/           # reference implementation #1 — sessions, guards, cookies
-    ├── customers/      # reference implementation #2 — CRUD + cursor pagination
-    ├── subjects/       # reference implementation #3 — nested routes + a transaction
-    ├── jobs/           # reference implementation #4 — 4 transactions + photo uploads
-    └── reports/        # reference implementation #5 — raw SQL aggregates (no query builder)
+    ├── auth/           # sessions, guards, cookies
+    ├── customers/      # CRUD + cursor pagination
+    ├── subjects/       # nested routes + a transaction
+    ├── jobs/           # four transactions + payment idempotency + photo uploads
+    └── reports/        # raw SQL aggregates (no query builder)
 ```
 
 Each feature module: `<feature>.module.ts` (DI boundary) → `<feature>.controller.ts`
@@ -114,43 +108,28 @@ Each feature module: `<feature>.module.ts` (DI boundary) → `<feature>.controll
 (data access) + `*.schema.ts` (Zod wire contracts). Dependencies point one way:
 `main.ts → app.module.ts → feature modules → config/database/redis → nothing`.
 
-The full Express → NestJS mapping, Fastify differences and the reasoning behind every
-folder live in the migration guide.
-
 ## Status
 
-Done: config, database, Redis, health, the auth module (login/logout/session guard), the
-customers module (list/create/get/update with cursor pagination), the subjects module
-(subjects + measurement history), the jobs module (list/get/create/update/delete, the
-four transactions, payments, photo uploads via Cloudinary), the reports module (three raw-SQL
-aggregates), the photo cleanup queue (BullMQ: a deleted or replaced photo is released off the
-request path, with 5 retries and exponential backoff), Redis-backed rate limiting, the error
-envelope, Postgres-error mapping, logging, graceful shutdown, and the test suite (HTTP
-tests use provider overrides and `app.inject()`, no network).
+All five feature modules are done — auth (login/logout/session guard), customers
+(list/create/get/update with cursor pagination), subjects (measurements + history), jobs
+(list/get/create/update/delete, the four transactions, payments, photo uploads via Cloudinary)
+and reports (three raw-SQL aggregates) — plus the photo cleanup queue (BullMQ: a deleted or
+replaced photo is released off the request path, 5 retries with exponential backoff),
+Redis-backed rate limiting, the error envelope, graceful shutdown, and the test suite: 152
+tests, HTTP tests running the real pipeline with Postgres, Redis and Cloudinary overridden (no
+network).
 
-Every route in the Express app's `src/routes/` exists here with the same path, status and message —
-verified by running both servers against the same database and diffing responses (16/16 checks
-for subjects, ~30/30 for jobs, 8/8 for reports, including all four transactions and both apps'
-upload signatures verified against the real API secret). Writes that would leave rows behind are
-covered by tests against a fake database; the subjects create race was additionally verified
-against the real Postgres with two connections.
+**Error mapping.** A failed query never returns the driver's message.
+`src/database/db-error.ts` maps Postgres SQLSTATEs to safe responses: `23505` → 409 naming the
+conflicting field, `23503` → 400, `22P02` → 400, anything else → 500 `A database error occurred.`
+with the SQLSTATE logged and never serialised into the body.
 
-**One intentional divergence:** a failed constraint used to be a **500** in both apps (Express also
-sent the SQL and its bound parameters to the client). It is now mapped from its SQLSTATE —
-`23503` → 400, `23505` → 409, `22P02` → 400 — with a safe message, in
-`src/database/db-error.ts`. See the guide §20.
-
-**A second intentional divergence — payment idempotency:** `POST /jobs/:jobId/payments` now
-requires an `Idempotency-Key: <uuid>` header and records at most one payment per key. A repeated
-delivery of the same intent (double-tap, retry after a lost response, proxy redelivery) returns
-the payment the first delivery committed with `Idempotent-Replay: true`, instead of inserting a
-second one; the same key sent with different money answers 409. The key lives in the new
-`payments.idempotency_key` column — migration `0009`, in `src/database/migrations` — and the full
-numbered flow ([1/12]–[12/12], frontend to backend) lives in `src/modules/jobs/jobs.service.ts` →
-`createPayment`. `frontend/` sends the key; the retired UIs kept on disk (`frontend-legacy/`,
-`frontend-v2/`) never learned it, so payment requests from them answer 400.
+**Idempotent payments.** `POST /jobs/:jobId/payments` requires an `Idempotency-Key: <uuid>`
+header and records at most one payment per key: a repeated delivery of the same intent returns
+the payment the first delivery committed, with `Idempotent-Replay: true`, and the same key sent
+with different money answers 409. The key lives in `payments.idempotency_key` (migration `0009`
+in `src/database/migrations/`); the numbered flow ([1/12]–[12/12], frontend to backend) lives in
+`src/modules/jobs/jobs.service.ts` → `createPayment`.
 
 Dev tooling lives here: `drizzle.config.ts`, `scripts/migrate.ts`, `database/seed.ts` and the
-Postgres/Redis `docker-compose.yml`. The superseded apps sit beside this one as untracked
-`backend-express/`, `frontend-legacy/` and `frontend-v2/` — delete them whenever the reference
-copies stop being useful.
+Postgres/Redis `docker-compose.yml`.
