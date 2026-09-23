@@ -1,9 +1,28 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 
 export type TabKey = "overview" | "jobs" | "customers" | "reports";
+
+/**
+ * Tab switching as *state*, not navigation.
+ *
+ * The bottom tabs used to call `router.replace("/dashboard?tab=…")` — which is still a real
+ * navigation to Next.js: it fetches the server-component payload for the new URL, waits for the
+ * round trip, then commits. On a dev server that read as a flat ~2s delay on every switch, even
+ * though the tabs were "one route". The status filters on the Jobs tab were instant because they
+ * were plain `useState` — so the bottom tabs now are too.
+ *
+ * `DashboardClient` renders everything and owns the tab as React state; it provides its instant
+ * `selectTab` through this context. `TabBar` prefers the context when one is provided and only
+ * falls back to the router navigation when rendered without one (defensive; today every TabBar
+ * sits inside the dashboard). The URL still updates — via `history.replaceState`, which Next 14+
+ * treats as first-class — so deep links (`/dashboard?tab=jobs`) and the detail pages'
+ * `fallbackHref` keep working, with zero server round trip on switch.
+ */
+export const TabNavContext = createContext<((tab: TabKey) => void) | null>(null);
 
 function IconHouse() {
   return (
@@ -59,10 +78,9 @@ const TABS: { key: TabKey; label: string; icon: ReactNode }[] = [
  * tap and the next route committing (see the removed `lib/tab-shell.ts`); that gap doesn't exist
  * here, which is the whole point of the merge.
  *
- * `router.replace` (not `push`) keeps tab switches out of browser history — tapping between tabs
- * ten times shouldn't take ten taps of the back button to undo. The query string is kept mainly so
- * `router.back()` from a job or customer detail page restores the tab you actually came from,
- * not because this app cares about shareable tab URLs.
+ * `router.replace` (not `push`) keeps tab switches out of browser history when the fallback
+ * navigation path is used — tapping between tabs ten times shouldn't take ten taps of the back
+ * button to undo.
  */
 export default function TabBar({
   active,
@@ -73,7 +91,9 @@ export default function TabBar({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const clientSelect = useContext(TabNavContext);
 
+  /** The fallback path — only used when no instant client select was provided. */
   const selectTab = (tab: TabKey) => {
     if (tab === active) return;
     const params = new URLSearchParams(searchParams.toString());
@@ -88,7 +108,7 @@ export default function TabBar({
 
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-      <div className="relative mx-auto w-full max-w-107.5">
+      <div className="relative mx-auto w-full sm:max-w-107.5">
         {fab}
         {/*
           `tabbar-safe` is the 64px of real tab bar the design always had, plus the home-indicator
@@ -105,16 +125,16 @@ export default function TabBar({
                 type="button"
                 aria-label={tab.label}
                 aria-current={isActive ? "page" : undefined}
-                onClick={() => selectTab(tab.key)}
+                onClick={() => (clientSelect ?? selectTab)(tab.key)}
                 className={`flex h-full flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-2xl transition-all duration-200 active:scale-95 ${
                   isActive
-                    ? "bg-(--hig-accent-tint) text-(--hig-accent)"
-                    : "text-(--hig-label-tertiary)"
+                    ? "text-(--hig-accent)"
+                    : "text-(--hig-label-secondary)"
                 }`}
               >
-                <span className="h-5.5 w-5.5">{tab.icon}</span>
+                <span className="h-6 w-6">{tab.icon}</span>
                 <span
-                  className={`text-[10px] ${isActive ? "font-semibold" : "font-medium"}`}
+                  className={`text-[11.5px] ${isActive ? "font-semibold" : "font-medium"}`}
                 >
                   {tab.label}
                 </span>

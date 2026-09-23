@@ -46,6 +46,12 @@ Size the ceremony to the change. Never skip understanding; only skip ceremony:
 ### Architecture
 
 - Keep the 3-tier split: controllers (HTTP only) → services (domain logic) → data access. **Never pass `req`/`res` into services**; services get plain data and throw plain errors.
+- Transactions are a correctness decision, not a reflex: **one write with no read before it = no transaction**; **read-then-write = transaction + a lock on the row read**. A transaction alone does not stop a concurrent delete at READ COMMITTED — the lock does. **The lock mode is a question about who must wait for me, not about which row I write**, so it can sit on a row the method never touches (`createPayment` takes `FOR UPDATE` on the job row): `.for("share")` when only writers must wait, `.for("update")` when a concurrent FK insert must wait too. Pattern and proof: `hollyseams-nestjs-migration-guide.md` §18.2, §18.4, §19.2.
+- Query style follows query *shape*, not taste: **CRUD through the ORM's query builder** (typed
+  results, refactor-safe column names); **aggregates in SQL** through the existing client/token
+  (`PG_CLIENT` in `backend-nest/`) when the builder would only wrap a CTE, a window function or a
+  `having` in more function calls. Values remain bound parameters — `limit ${n}` becomes `$1`; never
+  string-concatenate.
 - Config: validated and fail-fast at startup (zod), defaults for every optional key, secrets only via env, never in committed code.
 - TypeScript: use it, use it simply. No clever type gymnastics — an advanced feature is a real cost, add it only when it buys something.
 
@@ -54,6 +60,13 @@ Size the ceremony to the change. Never skip understanding; only skip ceremony:
 - All app errors extend the built-in `Error` with `statusCode` + operational flag (e.g. `ApiError`). Never throw strings or bare objects.
 - Distinguish **operational** errors (bad input, 404 — handle and respond) from **programmer** errors (unexpected bugs — log loudly; crash only when state may be corrupted).
 - Handle errors **centrally** in one sink (error middleware): logging, status mapping, envelope. Services and controllers `throw`; they don't scatter try/catch for business errors.
+- **Map database errors from their SQLSTATE; never return the driver's message.** Drizzle wraps every
+  query failure in `DrizzleQueryError`, hides the real `PostgresError` on `cause`, and puts the SQL
+  *and its bound parameters* in its own `message` — so `err.code` is always `undefined` and that
+  message must never reach a client. In `backend-nest/` the mapping is
+  `src/database/db-error.ts` (`23503`→400, `23505`→409, `22P02`→400, anything else→500 + logged
+  SQLSTATE) and the exception filter calls it. The old `backend/` app leaks the query in a 500 —
+  don't copy it.
 - `return await` promises — never return a promise bare, or the stack trace loses the caller frame.
 - Register `error` handlers on every event emitter / stream (Redis, DB pools) so a dead dependency can't zombie the process.
 - Test error flows, not just happy paths: wrong input, missing row, expired session, dependency down.
@@ -62,6 +75,12 @@ Size the ceremony to the change. Never skip understanding; only skip ceremony:
 
 - Structured JSON logger (pino) with levels; **no `console.log`**. Write to stdout; let infra collect.
 - Every request gets a request id in its log lines (pino-http). Log at the right level: 4xx = warn line, 5xx = full error object with path/method.
+- **Exception — `backend-nest/` only:** that app deliberately uses Nest's built-in `Logger`
+  (`new Logger("Context")`) plus one Fastify `onResponse` hook, with Fastify's own pino logger
+  off. Do **not** reintroduce pino there; it is a size-appropriate decision, not an oversight.
+  The trigger for adding it back (logs shipped/queried, multiple instances, redaction,
+  correlation ids) and the exact steps are in `hollyseams-nestjs-migration-guide.md` §17.1.
+- Level still follows meaning everywhere: 4xx = `warn`, 5xx = `error` with path and method.
 
 ### Security (checklist — every endpoint passes all of these)
 

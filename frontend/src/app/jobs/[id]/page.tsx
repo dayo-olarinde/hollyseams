@@ -1,22 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { EditJobSheet } from "@/components/jobs/edit-job-sheet";
+import { PaymentSheet } from "@/components/jobs/payment-sheet";
 import { DetailHeader } from "@/components/ui/detail-header";
-import { JobDetailSkeleton } from "@/components/ui/skeletons";
 import { useToast } from "@/components/ui/toast";
-import { useCreatePayment, useJob, useUpdateJob } from "@/hooks/use-jobs";
-import { avatarColor, avatarTint } from "@/lib/avatar-colors";
+import { JobDetailSkeleton } from "@/components/ui/skeletons";
+import { useDeleteJob, useJob } from "@/hooks/use-jobs";
 import { ApiError } from "@/lib/api/transport";
 import {
+  cmOf,
   formatDay,
   formatStampDay,
-  initials,
   isOverdue,
   naira,
-  todayISO,
 } from "@/lib/format";
+// The list card and this file render the same state from one source of truth.
+import { dueCountdown, jobStage } from "@/lib/job-stage";
+import { waMe } from "@/lib/contact";
 import type { Job } from "@/types/job";
+
+interface Milestone {
+  label: string;
+  sub: string;
+  state: "done" | "now" | "future" | "over";
+  tag?: string;
+}
 
 function IconPhoto({ className = "h-6 w-6" }: { className?: string }) {
   return (
@@ -37,13 +47,13 @@ function IconPhoto({ className = "h-6 w-6" }: { className?: string }) {
   );
 }
 
-interface Milestone {
-  label: string;
-  sub: string;
-  state: "done" | "now" | "future" | "over";
-  tag?: string;
-}
-
+/**
+ * The four production stages, in the order the garment actually moves.
+ *
+ * The hero card draws these as Stitch's horizontal pipeline; the states are the same
+ * `done | now | future | over` vocabulary the old vertical rail used — computed once here, so
+ * the stepper, the callout row and the stage chip can never tell three different stories.
+ */
 function milestones(j: Job): Milestone[] {
   const ready = j.status === "completed" && !j.deliveredAt;
   const delivered = !!j.deliveredAt;
@@ -61,9 +71,19 @@ function milestones(j: Job): Milestone[] {
   } else if (delivered || ready) {
     ms.push({ label: "On the bench", sub: "in progress", state: "done" });
   } else if (over) {
-    ms.push({ label: "On the bench", sub: "in progress", state: "over", tag: "past due" });
+    ms.push({
+      label: "On the bench",
+      sub: "in progress",
+      state: "over",
+      tag: "past due",
+    });
   } else {
-    ms.push({ label: "On the bench", sub: "in progress", state: "now", tag: "now" });
+    ms.push({
+      label: "On the bench",
+      sub: "in progress",
+      state: "now",
+      tag: "now",
+    });
   }
 
   ms.push({
@@ -84,13 +104,13 @@ function Tape({ job }: { job: Job }) {
   const entries = Object.entries(job.measurements ?? {});
   if (entries.length === 0) {
     return (
-      <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12.5px] text-(--hig-label-tertiary)">
+      <div className="stitch-card rounded-[20px] px-4 py-6 text-center text-[12.5px] text-(--hig-label-tertiary)">
         No measurements on file for this fitting.
       </div>
     );
   }
   return (
-    <div className="grid grid-cols-2 rounded-[20px] bg-(--hig-card) px-4 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+    <div className="stitch-card grid grid-cols-2 rounded-[20px] px-4 py-1.5">
       {entries.map(([key, value], i) => (
         <div
           key={key}
@@ -109,8 +129,9 @@ function Tape({ job }: { job: Job }) {
             ) : (
               <>
                 {value}
-                <em className="ml-1 text-[10px] font-medium not-italic text-(--hig-label-secondary)">
-                  cm
+                <em className="ml-0.5 text-[13px] font-medium not-italic text-(--hig-label-secondary)">″</em>
+                <em className="ml-1.5 text-[9.5px] font-medium not-italic text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
+                  ({cmOf(value)} cm)
                 </em>
               </>
             )}
@@ -121,57 +142,124 @@ function Tape({ job }: { job: Job }) {
   );
 }
 
-function Money({
-  job,
-  onRecord,
-}: {
-  job: Job;
-  onRecord: () => void;
-}) {
+/**
+ * The payment status chip, derived the way the money actually is.
+ *
+ * "Partial deposit" in the design maps to a real question with three real answers — nothing
+ * recorded yet, some recorded, or settled — computed from the payment rows, never guessed.
+ */
+function paymentChip(paid: number, agreed: number) {
+  if (agreed > 0 && paid >= agreed) {
+    return {
+      chip: "bg-(--hig-success-tint) text-(--hig-success)",
+      label: "Paid in full",
+    };
+  }
+  if (paid > 0) {
+    return {
+      chip: "bg-(--hig-accent-tint) text-(--hig-accent)",
+      label: "Part payment",
+    };
+  }
+  return {
+    chip: "bg-(--hig-warning-tint) text-(--hig-warning)",
+    label: "Nothing recorded",
+  };
+}
+
+/**
+ * The Garment Ledger — Stitch's financial summary card, on our real payment rows.
+ *
+ * Two figures in wells (agreed / collected), the balance in the highlight strip, and the
+ * itemised history underneath — every number from the same source (`job.payments`), so the
+ * strip, the bar and the rows can never disagree with each other.
+ */
+function Money({ job, onRecord }: { job: Job; onRecord: () => void }) {
   const payments = job.payments ?? [];
   const paid = payments.reduce((s, p) => s + p.amount, 0);
   const balance = Math.max(0, job.agreedPrice - paid);
   const pct =
     job.agreedPrice > 0 ? Math.min(100, (paid / job.agreedPrice) * 100) : 0;
+  const status = paymentChip(paid, job.agreedPrice);
 
   return (
-
-    <div className="rounded-[20px] bg-(--hig-card) px-4 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-      {}
-      <div className="flex items-baseline justify-between">
-        <p className="text-[12px] text-(--hig-label-secondary)">Agreed</p>
-        <p className="text-[15px] font-medium [font-variant-numeric:tabular-nums]">
-          {naira(job.agreedPrice)}
-        </p>
-      </div>
-      <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-[12px] text-(--hig-label-secondary)">Paid so far</p>
-        <p className="text-[15px] font-medium text-(--hig-success) [font-variant-numeric:tabular-nums]">
-          {naira(paid)}
-        </p>
-      </div>
-      <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-[12px] text-(--hig-label-secondary)">
-          Balance to collect
-        </p>
-        <p
-          className={`text-[15px] font-medium [font-variant-numeric:tabular-nums] ${
-            balance > 0 ? "text-(--hig-warning)" : "text-(--hig-label)"
-          }`}
+    <div className="stitch-card rounded-[20px] px-4 py-4">
+      {/* Card head: what this ledger is, and where it stands */}
+      <div className="flex items-center justify-between border-b border-(--hig-separator) pb-3">
+        <div>
+          <p className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
+            Garment ledger
+          </p>
+          <h3 className="mt-0.5 text-[15px] font-semibold">Payment status</h3>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.chip}`}
         >
-          {naira(balance)}
-        </p>
+          {status.label}
+        </span>
       </div>
 
-      {}
+      {/* The two figures, in Stitch's inset wells */}
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <div className="rounded-xl bg-(--hig-fill) p-3">
+          <p className="text-[10.5px] font-medium text-(--hig-label-secondary)">
+            Total fee
+          </p>
+          <p className="mt-0.5 text-[19px] font-semibold tracking-[-0.02em] [font-variant-numeric:tabular-nums]">
+            {naira(job.agreedPrice)}
+          </p>
+          <p className="mt-0.5 text-[10px] text-(--hig-label-tertiary)">
+            Agreed at intake
+          </p>
+        </div>
+        <div className="rounded-xl bg-(--hig-fill) p-3">
+          <p className="text-[10.5px] font-medium text-(--hig-success)">
+            Collected
+          </p>
+          <p className="mt-0.5 text-[19px] font-semibold tracking-[-0.02em] text-(--hig-success) [font-variant-numeric:tabular-nums]">
+            {naira(paid)}
+          </p>
+          <p className="mt-0.5 text-[10px] text-(--hig-label-tertiary)">
+            {payments.length} payment{payments.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      </div>
+
+      {/* Balance strip */}
+      <div className="mt-3 flex items-center justify-between rounded-xl bg-(--hig-filter-well) p-3">
+        <div>
+          <p className="text-[11.5px] font-medium text-(--hig-label-secondary)">
+            Remaining balance
+          </p>
+          <p className="text-[10.5px] text-(--hig-label-tertiary)">
+            {balance > 0 ? "Collect on delivery or before" : "Nothing outstanding"}
+          </p>
+        </div>
+        <div className="text-right">
+          <span
+            className={`text-[20px] font-semibold [font-variant-numeric:tabular-nums] ${
+              balance > 0 ? "text-(--hig-warning)" : "text-(--hig-success)"
+            }`}
+          >
+            {naira(balance)}
+          </span>
+          <span className="block text-[10px] font-medium text-(--hig-label-tertiary)">
+            {balance > 0 ? "Outstanding" : "Settled"}
+          </span>
+        </div>
+      </div>
+
+      {/* Progress: the same numbers, drawn */}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-(--hig-fill)">
         <div
-          className="h-full rounded-full bg-(--hig-accent) transition-[width] duration-500"
+          className={`h-full rounded-full transition-[width] duration-500 ${
+            balance > 0 ? "bg-(--hig-accent)" : "bg-(--hig-success)"
+          }`}
           style={{ width: `${pct}%` }}
         />
       </div>
 
-      {}
+      {/* The itemised history */}
       <div className="mt-2">
         {payments.map((p) => (
           <div
@@ -200,293 +288,20 @@ function Money({
         )}
       </div>
 
-      {}
-      <button
-        type="button"
-        onClick={onRecord}
-        className="mt-3 w-full rounded-[13px] bg-(--hig-fill) py-3 text-[13.5px] font-semibold text-(--hig-label) transition-transform duration-200 active:scale-[0.98]"
-      >
-        + Record a payment
-      </button>
-    </div>
-  );
-}
-
-function PaymentSheet({
-  job,
-  onClose,
-}: {
-  job: Job;
-  onClose: () => void;
-}) {
-  const toast = useToast();
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayISO);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * [1/12] The idempotency key: one per *intent*, minted when the sheet opens and reused by
-   * every delivery of it — the first tap, a second tap that slips through before the button
-   * re-renders as disabled, a retry after the response was lost.
-   *
-   * WHY here and not in `submitPayment`: a key minted at tap time would be a *new* intent per
-   * tap, so the double-tap this exists to stop would carry two different keys and produce two
-   * payments. The sheet's lifetime is the intent's lifetime — the component is mounted only
-   * while it is open (see the call site), so closing and reopening genuinely starts a new
-   * intent and correctly gets a new key.
-   *
-   * WHAT the server does with it: steps [5/12]–[11/12]. The backend refuses to record two
-   * payments for one key, so a request that arrives twice, or a retry whose first answer was
-   * lost *after* the payment had already committed, comes back as the same payment
-   * (`Idempotent-Replay: true`) instead of a second one.
-   */
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
-
-  /**
-   * Mounted only while it is open (see the call site), so each visit starts with empty fields and
-   * no state has to be reset on the way in.
-   *
-   * The old version stayed mounted and reset itself *during render* — `if (open && !wasOpen) {
-   * setWasOpen(true); setAmount(""); ... }` — which also reached into `document.body` from the
-   * render phase. Reset-through-render is a trick React tolerates, not a place to do side effects:
-   * a render that runs twice (StrictMode, a concurrent re-render) would touch the DOM twice.
-   */
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
-
-  const amountNum = Number(amount.replace(/[^\d.]/g, ""));
-  const valid = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0;
-
-  const pay = useCreatePayment();
-
-  const submitPayment = () =>
-    pay.mutate(
-      {
-        jobId: job.id,
-        amount: amountNum,
-
-        paidAt: date ? new Date(date + "T12:00:00").toISOString() : undefined,
-
-        // [2/12] The key travels with the mutation, so every attempt to record this payment
-        // carries the same value. The button guards against the accidental second tap; this
-        // guards against the second *delivery*, which no amount of UI state can prevent.
-        idempotencyKey,
-      },
-      {
-        onSuccess: () => {
-          toast.show({
-            title: "Payment recorded.",
-            detail: `${naira(amountNum)} on ${formatDay(date)}`,
-          });
-          onClose();
-        },
-        onError: (err) =>
-          setError(
-            err instanceof Error ? err.message : "Could not record the payment.",
-          ),
-      },
-    );
-
-  return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Record a payment">
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 w-full animate-fade-in bg-black/50"
-      />
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full max-w-107.5 animate-sheet-in rounded-t-[26px] border border-b-0 border-(--hig-separator) bg-(--hig-card) px-5 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
-        <div className="mx-auto h-1 w-9.5 rounded-full bg-(--hig-separator)" aria-hidden="true" />
-        <div className="mt-3 flex items-center justify-between">
-          <h2 className="text-[20px] font-medium tracking-[-0.005em]">
-            Record a <span className="text-(--hig-accent)">payment</span>
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-(--hig-label-secondary) transition-colors hover:text-(--hig-label)"
-          >
-            <span className="flex h-7.5 w-7.5 items-center justify-center rounded-full border border-(--hig-separator) bg-(--hig-fill) text-[13px]">
-              ✕
-            </span>
-          </button>
-        </div>
-
-        <p className="mt-1 text-[12px] text-(--hig-label-secondary)">
-          Balance to collect ·{" "}
-          <b className="font-semibold text-(--hig-warning) [font-variant-numeric:tabular-nums]">
-            {naira(
-              Math.max(0, job.agreedPrice - (job.payments ?? []).reduce((s, p) => s + p.amount, 0)),
-            )}
-          </b>
-        </p>
-
-        {}
-        <div className="relative mt-4">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[17px] font-medium text-(--hig-accent)">
-            ₦
-          </span>
-          <input
-            className="w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) py-3.5 pl-9 pr-4 text-[19px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-(--hig-label-tertiary) focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)] [font-variant-numeric:tabular-nums]"
-            placeholder="0"
-            inputMode="numeric"
-            autoFocus
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && valid) submitPayment();
-            }}
-          />
-        </div>
-
-        {}
-        <div className="relative mt-3">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            className="pointer-events-none absolute left-4 top-1/2 h-3.75 w-3.75 -translate-y-1/2 text-(--hig-accent)"
-            aria-hidden="true"
-          >
-            <rect x="3.5" y="5" width="17" height="16" rx="3" />
-            <path d="M3.5 10h17" />
-            <path d="M8 3v4" />
-            <path d="M16 3v4" />
-          </svg>
-          <input
-            type="date"
-            className="w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) py-3.5 pl-11 pr-4 text-[13.5px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
-
-        {error && <p className="mt-3 text-[12px] text-(--hig-danger)">{error}</p>}
-
+      {/* The record action only exists while money is still owed — once the ledger
+          reads "Paid in full" there is nothing to record, so the button leaves and
+          the card closes on the history. Same `balance` the strip above uses, so the
+          button and the strip can never disagree. */}
+      {balance > 0 && (
         <button
           type="button"
-          disabled={!valid || pay.isPending}
-          onClick={submitPayment}
-          className="mt-4 w-full rounded-[15px] bg-(--hig-accent) py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98] disabled:opacity-50"
+          onClick={onRecord}
+          className="mt-3 w-full rounded-[13px] bg-(--hig-accent-tint) py-3 text-[13.5px] font-semibold text-(--hig-accent) transition-transform duration-200 active:scale-[0.98]"
         >
-          {pay.isPending ? (
-            <span className="mx-auto flex items-center justify-center gap-2">
-              <span
-                className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                aria-hidden="true"
-              />
-              Recording…
-            </span>
-          ) : (
-            `Record ${valid ? naira(amountNum) : "payment"}`
-          )}
+          + Record a payment
         </button>
-      </div>
+      )}
     </div>
-  );
-}
-
-function ActionBar({ job }: { job: Job }) {
-  const toast = useToast();
-
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => setConfirming(false), [job.id, job.status]);
-
-  const ready = job.status === "completed" && !job.deliveredAt;
-
-  const primary =
-    job.status === "canceled" || job.deliveredAt
-      ? null
-      : ready
-        ? { label: "Mark as delivered", done: { status: "completed" as const, deliveredAt: new Date().toISOString() } }
-        : { label: "Mark ready to collect", done: { status: "completed" as const } };
-
-  const act = useUpdateJob();
-
-  const runAction = () =>
-    act.mutate(
-      { id: job.id, input: primary!.done },
-      {
-        onSuccess: () => {
-          setConfirming(false);
-          toast.show({
-            title: ready ? "Job delivered." : "Marked ready to collect.",
-            detail: ready
-              ? `${job.subjectName ?? "Client"} can pick it up.`
-              : `Waiting for ${job.subjectName ?? "the client"}.`,
-          });
-        },
-        onError: (err) =>
-          toast.show({
-            title: "Couldn't update the job.",
-            detail: err instanceof Error ? err.message : "Try again.",
-          }),
-      },
-    );
-
-  if (!primary) return null;
-
-  return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-10">
-      <div className="relative mx-auto w-full max-w-107.5">
-        <div className="pointer-events-auto rounded-t-3xl border-t border-(--hig-separator) bg-(--hig-bar) px-5 pb-[calc(14px+env(safe-area-inset-bottom))] pt-3 shadow-(--hig-bar-shadow) backdrop-blur-[20px] backdrop-saturate-150">
-          {confirming ? (
-
-            <div
-              role="alert"
-              className="flex animate-fade-in items-center gap-2.5 rounded-[20px] bg-(--hig-accent-tint) px-4 py-2.5"
-            >
-              <p className="min-w-0 flex-1 text-[13.5px] font-medium leading-snug text-(--hig-label)">
-                {primary.label}?
-              </p>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-
-                className="shrink-0 rounded-xl bg-(--hig-card) px-4 py-3.5 text-[13.5px] font-semibold text-(--hig-label-secondary) shadow-(--hig-bar-shadow) transition-transform duration-200 active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={runAction}
-                disabled={act.isPending}
-                className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-(--hig-accent) px-4 py-3.5 text-[13.5px] font-semibold text-white transition-transform duration-200 active:scale-95 disabled:opacity-60"
-              >
-                {act.isPending ? (
-                  <span
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  primary.label
-                )}
-              </button>
-            </div>
-          ) : (
-
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-(--hig-accent) py-4 text-[15px] font-semibold text-white transition-transform duration-200 active:scale-[0.98]"
-            >
-              {primary.label}
-              <span aria-hidden="true">→</span>
-            </button>
-          )}
-        </div>
-      </div>
-    </nav>
   );
 }
 
@@ -526,12 +341,18 @@ function LoadablePhoto({
           loaded ? "opacity-100" : "opacity-0"
         }`}
       />
-      {}
       <span
         className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         aria-hidden="true"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-3.5 w-3.5">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="h-3.5 w-3.5"
+        >
           <path d="M15 3h6v6" />
           <path d="M9 21H3v-6" />
           <path d="M21 3l-7 7" />
@@ -542,17 +363,110 @@ function LoadablePhoto({
   );
 }
 
+/**
+ * The production pipeline, Stitch-style: four horizontal segments under the hero.
+ *
+ * Done stages fill solid with a check; the active one carries the pulsing dot; future ones
+ * stay empty. The old vertical rail said exactly this with a taller layout — the horizontal
+ * form is the design's, and it leaves room for the ledger below the fold to be seen sooner.
+ */
+function Pipeline({ rails, phrase }: { rails: Milestone[]; phrase: string }) {
+  return (
+    <div className="mt-4 border-t border-(--hig-separator) pt-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
+          Production pipeline
+        </span>
+        <span className="text-[10px] font-medium text-(--hig-accent) [font-variant-numeric:tabular-nums]">
+          {rails.filter((m) => m.state === "done").length} of {rails.length}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {rails.map((m) => {
+          const done = m.state === "done";
+          const now = m.state === "now";
+          const over = m.state === "over";
+          return (
+            <div key={m.label} className="flex flex-col items-center gap-1">
+              <div
+                className={`relative h-1.5 w-full rounded-full ${
+                  done
+                    ? over
+                      ? "bg-(--hig-danger)"
+                      : "bg-(--hig-accent)"
+                    : now
+                      ? "bg-(--hig-accent)/40"
+                      : "bg-(--hig-separator)"
+                }`}
+              >
+                {now && (
+                  <span className="hig-ping absolute -top-1 left-1/2 h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-(--hig-card) bg-(--hig-accent)" />
+                )}
+              </div>
+              <span
+                className={`flex items-center gap-0.5 text-[9.5px] font-medium ${
+                  now
+                    ? "text-(--hig-accent)"
+                    : over
+                      ? "text-(--hig-danger)"
+                      : done
+                        ? "text-(--hig-label-secondary)"
+                        : "text-(--hig-label-tertiary)"
+                }`}
+              >
+                {done && !over ? "✓ " : ""}
+                {m.label.replace("On the bench", "Bench").replace("Ready to collect", "Ready")}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Active-stage callout: the phrase the list card uses — one vocabulary everywhere. */}
+      <div className="mt-3 flex items-center justify-between rounded-xl border border-(--hig-separator) bg-(--hig-fill) px-3 py-2">
+        <span className="text-[12px] text-(--hig-label)">{phrase}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? "";
   const [payOpen, setPayOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
+    null,
+  );
 
   const jobQ = useJob(id);
 
   const job = jobQ.data;
-  const overdue = job ? isOverdue(job) : false;
+
+  const router = useRouter();
+  const toast = useToast();
+  const deleteJob = useDeleteJob();
+
+  function handleDelete() {
+    if (!job) return;
+    deleteJob.mutate(job.id, {
+      onSuccess: () => {
+        toast.show({
+          title: "Order torn up.",
+          detail: `${job.description || "The order"} was deleted — nothing was paid against it.`,
+        });
+        router.replace("/dashboard?tab=jobs");
+      },
+      onError: (err) => {
+        setConfirmDelete(false);
+        toast.show({
+          title: "Could not delete",
+          detail: err instanceof Error ? err.message : "Something went wrong. Try again.",
+        });
+      },
+    });
+  }
 
   useEffect(() => {
     if (!lightbox) return;
@@ -567,32 +481,76 @@ export default function JobDetailPage() {
     };
   }, [lightbox]);
 
+  // The delete confirm is a modal alertdialog: Escape means "keep it", like every other sheet.
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmDelete(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDelete]);
+
   const ref = job?.styleRef?.[0];
   const fin = job?.finishedJob?.[0];
 
   const shots = (job?.styleRef ?? []).length + (job?.finishedJob ?? []).length;
 
   const rails = useMemo(() => (job ? milestones(job) : []), [job]);
-  const doneCount = rails.filter((m) => m.state === "done").length;
+  const stage = job ? jobStage(job) : null;
+  const countdown = job ? dueCountdown(job) : null;
 
   return (
     <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
-      <DetailHeader title="Inspection" fallbackHref="/dashboard?tab=jobs" />
+      <DetailHeader
+        title="Order file"
+        fallbackHref="/dashboard?tab=jobs"
+        actions={
+          job && (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="flex h-9 items-center gap-1 rounded-full bg-(--hig-accent-tint) px-3.5 text-[13px] font-semibold text-(--hig-accent) transition-transform duration-200 active:scale-95"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              >
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              Edit
+            </button>
+          )
+        }
+      />
 
       {jobQ.isError ? (
-        <div className="mx-auto mt-24 w-full max-w-107.5 px-4 text-center">
+        <div className="mx-auto mt-24 w-full sm:max-w-107.5 px-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="h-6 w-6" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              className="h-6 w-6"
+              aria-hidden="true"
+            >
               <path d="M12 8.5v5" />
               <path d="M12 17.2v.1" />
               <path d="M10.3 4.2 2.9 17a1.9 1.9 0 0 0 1.65 2.85h14.9A1.9 1.9 0 0 0 21.1 17L13.7 4.2a1.9 1.9 0 0 0-3.4 0Z" />
             </svg>
           </div>
-          <p className="mt-4 text-[16px] font-medium">Couldn&apos;t open this job.</p>
+          <p className="mt-4 text-[16px] font-medium">
+            Couldn&apos;t open this job.
+          </p>
           <p className="mt-1 text-[13px] text-(--hig-label-secondary)">
-            {/* The API's own sentence when it has one ("Job not found"), a network explanation
-                when it does not. "Check your connection" was previously shown for a deleted job
-                too, which sent the tailor to their wifi settings for nothing. */}
             {jobQ.error instanceof ApiError && !jobQ.error.isNetworkError
               ? jobQ.error.message
               : "No connection — check your network and try again."}
@@ -609,115 +567,155 @@ export default function JobDetailPage() {
         <JobDetailSkeleton />
       ) : (
         <>
-          {}
+          {/* Hero card — Stitch's garment bento: chip + countdown, swatch + title + client, pipeline */}
           <div
-            className="hig-rise mx-auto w-full max-w-107.5 px-4 pt-6"
+            className="hig-rise mx-auto mt-4 w-full sm:max-w-107.5 px-4"
             style={{ animationDelay: "0ms" }}
           >
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
-              Order file · <span className="[font-variant-numeric:tabular-nums]">{job.id.slice(0, 8)}</span>
-            </p>
-            <h1 className="mt-2 text-[26px] font-medium leading-8 tracking-[-0.02em]">
-              {job.description || "Garment"}
-            </h1>
-
-            {}
-            <div className="mt-4 flex items-center gap-2.5">
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold"
-                style={{
-                  backgroundColor: avatarTint(job.subjectName ?? ""),
-                  color: avatarColor(job.subjectName ?? ""),
-                  borderColor: avatarColor(job.subjectName ?? "") + "4D",
-                }}
-              >
-                {initials(job.subjectName ?? "•")}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium leading-tight">
-                  for {job.subjectName ?? "the client"}
-                </p>
-                <p className="mt-0.5 truncate text-[12px] text-(--hig-label-secondary)">
-                  {job.customerPhone ?? "no phone on file"}
-                </p>
-              </div>
-              {job.customerPhone && (
-
-                <a
-                  href={`tel:${job.customerPhone.replace(/[^\d+]/g, "")}`}
-                  aria-label={`Call ${job.customerPhone}`}
-                  title={`Call ${job.customerPhone}`}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center text-(--hig-accent) transition-transform duration-200 active:scale-90"
+            <section className="stitch-card rounded-[20px] p-4">
+              {/* Chip row: where the garment stands + the live countdown */}
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${stage!.chip}`}
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-7 w-7"
-                    aria-hidden="true"
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {stage!.label}
+                </span>
+                {countdown && (
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                      countdown.late
+                        ? "bg-(--hig-danger-tint) text-(--hig-danger)"
+                        : "bg-(--hig-accent-tint) text-(--hig-accent)"
+                    }`}
                   >
-                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2Z" />
-                  </svg>
-                </a>
-              )}
-            </div>
+                    {countdown.text}
+                  </span>
+                )}
+              </div>
 
-            {}
-            <div className="mt-5 flex border-t border-dashed border-(--hig-separator) pt-3.5">
-              <div className="flex-1">
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
-                  Placed
-                </p>
-                <p className="mt-1 text-[14px] font-medium [font-variant-numeric:tabular-nums]">
-                  {formatStampDay(job.createdAt)}
-                </p>
+              {/* Title block: garment, client, deadline.
+                  No swatch here — the gallery below owns photos at full size, and the list's
+                  thumbnail (server-side `coverUrl`, which prefers the finished shot) is where a
+                  small image earns its keep. Duplicating it in the hero bought nothing. */}
+              <div className="mt-1 flex items-start gap-3.5">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[19px] font-semibold leading-6 tracking-[-0.01em]">
+                    {job.description || "Garment"}
+                  </h1>
+                  <p className="mt-1 flex items-center gap-1 text-[13px] font-medium text-(--hig-label-secondary)">
+                    {job.subjectName ?? "Client"}
+                    <span className="text-(--hig-label-tertiary)">·</span>
+                    <span className="truncate text-[12px]">
+                      {job.customerPhone ?? "no phone on file"}
+                    </span>
+                  </p>
+                  <p
+                    className={`mt-1 flex items-center gap-1 text-[12px] font-medium ${stage!.dueTone}`}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      className="h-3.5 w-3.5"
+                      aria-hidden="true"
+                    >
+                      <rect x="3.5" y="5" width="17" height="16" rx="3" />
+                      <path d="M3.5 10h17" />
+                      <path d="M8 3v4" />
+                      <path d="M16 3v4" />
+                    </svg>
+                    {stage!.due === "—"
+                      ? `Placed ${formatStampDay(job.createdAt)}`
+                      : stage!.due}
+                  </p>
+                </div>
               </div>
-              <div className="border-l border-dashed border-(--hig-separator) pl-4">
-                <p className="text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
-                  Due
-                </p>
-                <p
-                  className={`mt-1 text-[14px] font-medium [font-variant-numeric:tabular-nums] ${
-                    overdue
-                      ? "text-(--hig-danger)"
-                      : job.dueDate
-                        ? "text-(--hig-accent)"
-                        : "text-(--hig-label-tertiary)"
-                  }`}
-                >
-                  {job.dueDate ? formatDay(job.dueDate) : "—"}
-                </p>
-              </div>
-            </div>
+
+              <Pipeline rails={rails} phrase={stage!.phrase} />
+
+              {/* Client actions: real phone, real WhatsApp deep link */}
+              {job.customerPhone && (
+                <div className="mt-3 flex items-center gap-2">
+                  <a
+                    href={`tel:${job.customerPhone.replace(/[^\d+]/g, "")}`}
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-(--hig-separator) bg-(--hig-fill) text-[13px] font-semibold text-(--hig-label) transition-transform duration-200 active:scale-[0.97]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 text-(--hig-accent)"
+                      aria-hidden="true"
+                    >
+                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2Z" />
+                    </svg>
+                    Call
+                  </a>
+                  <a
+                    href={waMe(job.customerPhone)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-(--hig-separator) bg-(--hig-fill) text-[13px] font-semibold text-(--hig-label) transition-transform duration-200 active:scale-[0.97]"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 text-(--hig-success)"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 3.5a8.5 8.5 0 0 0-7.3 12.8L3.5 20.5l4.3-1.1A8.5 8.5 0 1 0 12 3.5Z" />
+                      <path d="M9 8.5c.5 2.5 3 5 6.5 6.5l1-1.8-2-1.2-1 .7c-.8-.5-1.7-1.4-2.2-2.2l.7-1-1.2-2-1.8 1Z" />
+                    </svg>
+                    WhatsApp
+                  </a>
+                </div>
+              )}
+            </section>
           </div>
 
-          {}
+          {/* Photos — the intake reference beside the finished piece */}
           <section
-            className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4"
+            className="hig-rise mx-auto mt-5 w-full sm:max-w-107.5 px-4"
             style={{ animationDelay: "40ms" }}
           >
             <div className="grid grid-cols-2 gap-3">
-              {}
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
-                  <span className="h-1.5 w-1.5 rounded-full bg-(--hig-label-tertiary)" aria-hidden="true" />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-(--hig-label-tertiary)"
+                    aria-hidden="true"
+                  />
                   Reference
                 </p>
-                <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-(--hig-card-shadow)">
                   {ref?.url ? (
                     <LoadablePhoto
                       src={ref.url}
                       alt={ref.alt || "Style reference"}
                       eager
-                      onOpen={() => setLightbox({ src: ref.url!, alt: ref.alt || "Style reference" })}
+                      onOpen={() =>
+                        setLightbox({
+                          src: ref.url!,
+                          alt: ref.alt || "Style reference",
+                        })
+                      }
                     />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-(--hig-label-tertiary)">
                       <IconPhoto className="h-8 w-8" />
-                      <span className="px-6 text-center text-[11px]">no reference on file</span>
+                      <span className="px-6 text-center text-[11px]">
+                        no reference on file
+                      </span>
                     </div>
                   )}
                 </div>
@@ -726,18 +724,25 @@ export default function JobDetailPage() {
                 </p>
               </div>
 
-              {}
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-secondary)">
-                  <span className="h-1.5 w-1.5 rounded-full bg-(--hig-accent)" aria-hidden="true" />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-(--hig-accent)"
+                    aria-hidden="true"
+                  />
                   Finished
                 </p>
                 {fin?.url ? (
-                  <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                  <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-(--hig-card-shadow)">
                     <LoadablePhoto
                       src={fin.url}
                       alt={fin.alt || "Finished piece"}
-                      onOpen={() => setLightbox({ src: fin.url!, alt: fin.alt || "Finished piece" })}
+                      onOpen={() =>
+                        setLightbox({
+                          src: fin.url!,
+                          alt: fin.alt || "Finished piece",
+                        })
+                      }
                     />
                   </div>
                 ) : (
@@ -755,75 +760,10 @@ export default function JobDetailPage() {
             </div>
           </section>
 
-          {}
+          {/* The tape */}
           <section
-            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
+            className="hig-rise mx-auto mt-6 w-full sm:max-w-107.5 px-4"
             style={{ animationDelay: "80ms" }}
-          >
-            <div className="mb-2.5 flex items-baseline justify-between px-0.5">
-              <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
-                The rail
-              </h2>
-              <span className="text-[11.5px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
-                {doneCount} of 4
-              </span>
-            </div>
-            <div className="rounded-[20px] bg-(--hig-card) px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-              {rails.map((m) => (
-                <div key={m.label} className="relative flex gap-3 pb-4 last:pb-1.5">
-                  {}
-                  <span
-                    className="absolute bottom-0 left-2.25 top-6 border-l-[1.5px] border-dashed border-(--hig-separator)"
-                    aria-hidden="true"
-                  />
-                  <span
-                    className={`relative z-10 mt-0.5 flex h-4.75 w-4.75 shrink-0 items-center justify-center rounded-full text-[10px] text-white ${
-                      m.state === "done"
-                        ? "bg-(--hig-success)"
-                        : m.state === "now"
-                          ? "bg-(--hig-accent) shadow-[0_0_0_4px_var(--hig-accent-tint)]"
-                          : m.state === "over"
-                            ? "bg-(--hig-danger)"
-                            : "bg-(--hig-fill) shadow-[inset_0_0_0_1.5px_var(--hig-separator)]"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {m.state === "done" ? "✓" : ""}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-[14px] font-medium leading-tight ${
-                        m.state === "now"
-                          ? "text-(--hig-accent)"
-                          : m.state === "over"
-                            ? "text-(--hig-danger)"
-                            : ""
-                      }`}
-                    >
-                      {m.label}
-                    </p>
-                    <p className="mt-0.5 text-[11.5px] text-(--hig-label-tertiary)">{m.sub}</p>
-                  </div>
-                  {m.tag && (
-                    <p
-                      className={`pt-0.5 text-[11.5px] ${
-                        m.state === "over"
-                          ? "font-medium text-(--hig-danger)"
-                          : "text-(--hig-label-tertiary)"
-                      }`}
-                    >
-                      {m.tag}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {}
-          <section
-            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
-            style={{ animationDelay: "120ms" }}
           >
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
               <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
@@ -836,10 +776,10 @@ export default function JobDetailPage() {
             <Tape job={job} />
           </section>
 
-          {}
+          {/* The ledger */}
           <section
-            className="hig-rise mx-auto mt-7 w-full max-w-107.5 px-4"
-            style={{ animationDelay: "160ms" }}
+            className="hig-rise mx-auto mt-6 w-full sm:max-w-107.5 px-4"
+            style={{ animationDelay: "120ms" }}
           >
             <div className="mb-2.5 flex items-baseline justify-between px-0.5">
               <h2 className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
@@ -853,23 +793,83 @@ export default function JobDetailPage() {
           </section>
 
           <p
-            className="hig-rise mx-auto mt-6 w-full max-w-107.5 px-4 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary)"
-            style={{ animationDelay: "200ms" }}
+            className="hig-rise mx-auto mt-6 w-full sm:max-w-107.5 px-4 text-center text-[11.5px] leading-relaxed text-(--hig-label-tertiary)"
+            style={{ animationDelay: "160ms" }}
           >
             Placed {formatStampDay(job.createdAt)}
-            {job.dueDate ? ` · due ${formatDay(job.dueDate)}` : ""} · photos update when the
-            finished piece lands.
+            {job.dueDate ? ` · due ${formatDay(job.dueDate)}` : ""} · photos
+            update when the finished piece lands.
           </p>
         </>
       )}
 
-      {}
-      {job && <ActionBar job={job} />}
       {job && payOpen && (
         <PaymentSheet job={job} onClose={() => setPayOpen(false)} />
       )}
+      {job && editOpen && (
+        <EditJobSheet
+          job={job}
+          onClose={() => setEditOpen(false)}
+          onDelete={() => {
+            setEditOpen(false);
+            setConfirmDelete(true);
+          }}
+        />
+      )}
 
-      {}
+      {job && confirmDelete && (
+        <div className="fixed inset-0 z-60" role="alertdialog" aria-modal="true" aria-label="Delete order">
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={() => setConfirmDelete(false)}
+            className="absolute inset-0 w-full animate-fade-in bg-black/50"
+          />
+          <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full sm:max-w-107.5 animate-sheet-in rounded-t-[26px] border border-b-0 border-(--hig-separator) bg-(--hig-card) px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+            <div className="mx-auto h-1 w-9.5 rounded-full bg-(--hig-separator)" aria-hidden="true" />
+            <div className="mx-auto mt-5 flex h-13 w-13 items-center justify-center rounded-full border border-(--hig-danger)/40 bg-(--hig-danger-tint)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--hig-danger)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5.5 w-5.5" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M9 7V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v2" />
+                <path d="M6.5 7l1 12a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-12" />
+                <path d="M10 11v5" /><path d="M14 11v5" />
+              </svg>
+            </div>
+            <h2 className="mt-3 text-center text-[20px] font-medium tracking-[-0.005em] text-(--hig-label)">
+              Tear up this order?
+            </h2>
+            <p className="mx-auto mt-2 max-w-72 text-center text-[13px] leading-snug text-(--hig-label-secondary)">
+              <b className="font-medium text-(--hig-label)">{job.description || "This order"}</b> has no
+              payments, so it can be deleted — photos and all. This cannot be undone.
+            </p>
+            <div className="mt-5 flex w-full gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="relative flex-1 rounded-[15px] border border-(--hig-separator) bg-(--hig-fill) py-3.5 text-[14px] font-semibold text-(--hig-label-secondary) transition-transform active:scale-[0.98] after:absolute after:-inset-2 after:content-['']"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                disabled={deleteJob.isPending}
+                onClick={handleDelete}
+                className="relative flex-1 rounded-[15px] bg-(--hig-danger) py-3.5 text-[14px] font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60 after:absolute after:-inset-2 after:content-['']"
+              >
+                {deleteJob.isPending ? (
+                  <span className="mx-auto flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                    Deleting…
+                  </span>
+                ) : (
+                  "Delete"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {lightbox && (
         <div
           role="dialog"
@@ -878,7 +878,7 @@ export default function JobDetailPage() {
           onClick={() => setLightbox(null)}
           className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/90 px-4"
         >
-          <img
+          <img loading="lazy"
             src={lightbox.src}
             alt={lightbox.alt}
             className="max-h-[88dvh] w-auto max-w-full rounded-lg object-contain shadow-2xl"

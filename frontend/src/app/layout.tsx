@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider, SessionWatcher } from "@/lib/auth";
 import { QueryProvider } from "@/lib/query-provider";
@@ -8,7 +8,8 @@ import { ToastProvider } from "@/components/ui/toast";
 export const metadata: Metadata = {
   title: "Hollyseams",
   description: "Tailor management for Wunmi",
-  // The app is a phone tool; installing it should not show Safari chrome.
+  manifest: "/manifest.webmanifest",
+  // The app is a phone tool; installing it should not show browser chrome.
   appleWebApp: { capable: true, title: "HollySeams", statusBarStyle: "default" },
 };
 
@@ -49,12 +50,18 @@ export const viewport: Viewport = {
 const themeInit = `(function(){try{var t=localStorage.getItem('hig-theme');if(t!=='hig-light'&&t!=='hig-dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'hig-dark':'hig-light';}document.documentElement.classList.add(t);}catch(e){document.documentElement.classList.add('hig-light');}})();`;
 
 /**
- * `next/font` self-hosts the file at build time, so there is no render-blocking request to Google
- * and no flash of a fallback face. `display: "swap"` means the first paint uses the system stack
- * and the swap-in is invisible rather than a blank frame.
+ * Inter, self-hosted.
+ *
+ * Was `next/font/google`, which fetches from Google at *build* time — and one flaky-network day
+ * that fails the whole build (`Failed to fetch Inter`). The file is the variable-weight latin
+ * subset, downloaded once into `src/fonts`; builds are now network-independent, the font still
+ * ships self-hosted (no third-party request at runtime), and `display: "swap"` keeps the first
+ * paint on the system stack while it loads.
  */
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "../fonts/InterVariable.woff2",
+  weight: "100 900",
+  style: "normal",
   variable: "--font-inter",
   display: "swap",
 });

@@ -1,46 +1,74 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import PageSkeleton from "@/components/ui/page-skeleton";
-import TabBar from "@/components/ui/tab-bar";
+import TabBar, { TabNavContext } from "@/components/ui/tab-bar";
+import type { TabKey } from "@/components/ui/tab-bar";
 import { CustomersView } from "@/components/views/customers-view";
 import { JobsView } from "@/components/views/jobs-view";
 import { OverviewView } from "@/components/views/overview-view";
 import { ReportsView } from "@/components/views/reports-view";
-import type { TabKey } from "@/components/ui/tab-bar";
 
 /**
- * The four bottom tabs used to be four separate routes. Switching between them meant Next
- * unmounting one page's React tree and mounting another's — a real navigation, with a real gap
- * where nothing could paint, no matter how warm the React Query cache already was. `lib/tab-shell.ts`
- * covered that gap with a placeholder; it's gone now because the gap it covered is gone.
+ * Tabs as *state*, not navigation.
  *
- * All four tabs are one route (`/dashboard`) with the active tab as a query param. Tapping a tab
- * is `TabBar` calling `router.replace("/dashboard?tab=jobs")` — same segment, so React just swaps
- * which child is rendered in the same commit. No unmount-across-a-navigation-boundary, so nothing
- * to cover with a shell. Revisiting an already-visited tab is a synchronous re-render straight from
- * the React Query cache; a tab visited for the first time still shows its own real skeleton
- * (`listQ.isPending`, unchanged from before) while its data loads, same as it always did.
+ * The four bottom tabs used to be four routes; the merge to `/dashboard` fixed the
+ * unmount/remount cost but the switch still went through `router.replace("/dashboard?tab=…")`,
+ * which is a real Next navigation — fetch the server payload for the new URL, wait for the round
+ * trip, then commit. On a dev server over LAN that read as ~2s of dead air per switch, while the
+ * Jobs screen's status filters (plain `useState`) felt instant. Same bug, two solutions staring
+ * at each other.
  *
- * `useSearchParams()` requires a Suspense ancestor — `DashboardLoading` (`app/dashboard/loading.tsx`)
- * already covers the one real gap left: the cold navigation from `/login` before this route's own
- * JavaScript has arrived at all.
+ * Now the tab is plain React state here. Switching swaps which child renders in one commit —
+ * the exact mechanics the status filters use. Each view manages its own data through React Query,
+ * so revisiting a tab paints synchronously from cache (staleTime 30s) and shows its own skeleton
+ * only when its data genuinely isn't there yet.
+ *
+ * The URL stays true (`/dashboard?tab=jobs`) via `history.replaceState` — which Next treats as
+ * first-class — so deep links and the detail pages' `fallbackHref` still land on the right tab,
+ * and `router.back()` from a detail page still returns you to where you were. Tab switches
+ * themselves never touch the router, so there is nothing to wait for.
  */
+const TAB_VIEWS: Record<TabKey, () => React.JSX.Element> = {
+  overview: OverviewView,
+  jobs: JobsView,
+  customers: CustomersView,
+  reports: ReportsView,
+};
+
+const isTabKey = (value: string | null): value is TabKey =>
+  value === "overview" || value === "jobs" || value === "customers" || value === "reports";
+
 function DashboardTabs() {
   const searchParams = useSearchParams();
-  const tab = (searchParams.get("tab") as TabKey | null) ?? "overview";
+  const requested = searchParams.get("tab");
 
-  switch (tab) {
-    case "jobs":
-      return <JobsView />;
-    case "customers":
-      return <CustomersView />;
-    case "reports":
-      return <ReportsView />;
-    default:
-      return <OverviewView />;
-  }
+  // One-time initialization from the URL; after mount, `tab` is the single source of truth and
+  // the URL follows it (not the other way round) — that's what keeps switching server-free.
+  const [tab, setTab] = useState<TabKey>(() =>
+    isTabKey(requested) ? requested : "overview",
+  );
+
+  const selectTab = useCallback((next: TabKey) => {
+    setTab(next);
+    // A new screen starts at its top — never inherit the previous tab's scroll.
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  useEffect(() => {
+    const url = tab === "overview" ? "/dashboard" : `/dashboard?tab=${tab}`;
+    // replaceState, not the router: zero async work, zero fetch, zero commit delay.
+    window.history.replaceState(null, "", url);
+  }, [tab]);
+
+  const View = TAB_VIEWS[tab];
+
+  return (
+    <TabNavContext.Provider value={selectTab}>
+      <View />
+    </TabNavContext.Provider>
+  );
 }
 
 export default function DashboardClient() {

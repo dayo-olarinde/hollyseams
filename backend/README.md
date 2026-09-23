@@ -1,6 +1,6 @@
 # Hollyseams — Backend
 
-The Hollyseams API: NestJS 12 on Fastify 5, with its client in [`../frontend`](../frontend).
+The Hollyseams API: NestJS 12 on Fastify 5, with its client in [`../frontend`](../frontend) (v3 design; the previous design is kept in `../frontend-v2`).
 Customers, measurements, jobs, payments and reports live in PostgreSQL; sessions and rate limits
 live in Redis.
 

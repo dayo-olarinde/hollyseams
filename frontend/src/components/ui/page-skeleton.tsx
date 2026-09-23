@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import type { TabKey } from "./tab-bar";
 import ThemeToggle from "./theme-toggle";
 import {
+  DossierCardSkeleton,
   FilmstripCardSkeleton,
-  HouseholdCardSkeleton,
   JobCardSkeleton,
   OutstandingRowsSkeleton,
   SkeletonBar,
@@ -34,9 +34,8 @@ import {
  *
  * The root is a `div`, not a `main`: when the tap shell layers over a live page, that page keeps
  * the only `main` landmark on the screen.
- */
-/**
- * The headline each tab shows, and the line under it.
+ *
+ * The headline each tab shows, and the line under it:
  *
  * Static copy belongs to the page, but the shell has to show the same words or the title visibly
  * snaps into place after the page lands — so the two must agree. The subtitle is here for the
@@ -108,7 +107,7 @@ function JobsBody() {
   );
 }
 
-/** The customers tab: three counters, the top-clients filmstrip, then the client list. */
+/** The customers tab: counters, filmstrip, then the client dossier list. */
 function CustomersBody() {
   return (
     <>
@@ -118,7 +117,18 @@ function CustomersBody() {
         <StatCardSkeleton label="Households" />
       </div>
 
-      <div className="mt-5 flex items-baseline justify-between">
+      {/* The search field and status chips the live page now renders */}
+      <div className="mt-4 h-10 rounded-xl bg-(--hig-separator) animate-pulse" />
+      <div className="mt-2.5 flex gap-2">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-8 w-24 shrink-0 rounded-full bg-(--hig-separator) animate-pulse"
+          />
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-baseline justify-between">
         <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-secondary)">
           Top clients
         </span>
@@ -138,7 +148,7 @@ function CustomersBody() {
 
       <div className="mt-3 space-y-3">
         {[0, 1, 2].map((i) => (
-          <HouseholdCardSkeleton key={i} />
+          <DossierCardSkeleton key={i} />
         ))}
       </div>
     </>
@@ -317,7 +327,7 @@ export default function PageSkeleton({
       aria-busy="true"
       className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300"
     >
-      <div className="relative mx-auto w-full max-w-107.5">
+      <div className="relative mx-auto w-full sm:max-w-107.5">
         {/* Same header geometry as the pages it stands in for, insets included. */}
         <header className="hig-rise safe-top sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 pb-2.5 backdrop-blur-[20px] backdrop-saturate-150">
           <p className="text-[20px] font-medium tracking-[-0.02em]">

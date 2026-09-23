@@ -22,6 +22,23 @@ import { keys } from "@/lib/query/keys";
  */
 const REPORT_STALE_TIME_MS = 60_000;
 
+/**
+ * The options live outside the hooks so an idle prefetch can warm the *exact* key the tab will
+ * read — same key, same function, same staleness. Two copies of that triple is how a prefetch
+ * ends up warming a key nothing reads.
+ */
+export const outstandingPaymentsOptions = () => ({
+  queryKey: keys.reports.outstandingPayments,
+  queryFn: ({ signal }: { signal: AbortSignal }) => getOutstandingPayments(signal),
+  staleTime: REPORT_STALE_TIME_MS,
+});
+
+export const topCustomersOptions = (limit: number) => ({
+  queryKey: keys.reports.topCustomers(limit),
+  queryFn: ({ signal }: { signal: AbortSignal }) => getTopCustomers({ limit }, signal),
+  staleTime: REPORT_STALE_TIME_MS,
+});
+
 export function useMonthlyRevenue() {
   return useQuery({
     queryKey: keys.reports.monthlyRevenue,
@@ -33,18 +50,14 @@ export function useMonthlyRevenue() {
 
 export function useOutstandingPayments() {
   return useQuery({
-    queryKey: keys.reports.outstandingPayments,
-    queryFn: ({ signal }) => getOutstandingPayments(signal),
-    staleTime: REPORT_STALE_TIME_MS,
+    ...outstandingPaymentsOptions(),
     select: (response) => response.data ?? [],
   });
 }
 
 export function useTopCustomers(limit = 5) {
   return useQuery({
-    queryKey: keys.reports.topCustomers(limit),
-    queryFn: ({ signal }) => getTopCustomers({ limit }, signal),
-    staleTime: REPORT_STALE_TIME_MS,
+    ...topCustomersOptions(limit),
     select: (response) => response.data ?? [],
   });
 }

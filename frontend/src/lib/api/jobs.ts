@@ -70,17 +70,6 @@ export async function deleteJob(id: string) {
   return request<void>({ url: `/jobs/${id}`, method: "DELETE" });
 }
 
-/**
- * Record a payment.
- *
- * [4/12] The `Idempotency-Key` header is how the client's *intent* reaches the server: the same
- * key must accompany every delivery of the same intent, which is why the caller owns it (the
- * payment sheet mints one when it opens — [1/12]) instead of this function generating one per
- * call. Generating it here would mint a fresh key for every retry and deduplicate nothing.
- *
- * The header is required, not optional: a key only some clients send would protect only some
- * payments, so the endpoint answers 400 without it.
- */
 export async function createPayment(
   jobId: string,
   input: CreatePaymentInput,

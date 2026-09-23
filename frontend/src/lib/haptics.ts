@@ -20,9 +20,9 @@ function isIOS(): boolean {
  * iOS has no usable Vibration API, but since Safari 17.4 toggling a native
  * `<input type="checkbox" switch>` fires the system haptic, so we drive one offscreen.
  *
- * ponytail: Apple patched the programmatic `.click()` in iOS 26.5, so this only covers
- * iOS 17.4–26.4. Newer iOS needs a real transparent switch rendered under the user's own
- * finger inside each tap target — add that if an iPhone ever has to be supported.
+ * iOS 17.4–26.4 only: Apple patched the programmatic `.click()` in 26.5, so newer iOS needs a
+ * real transparent switch rendered under the user's own finger inside each tap target — add
+ * that if an iPhone ever has to be supported.
  */
 function iosSwitchHaptic(): void {
   const label = document.createElement("label");

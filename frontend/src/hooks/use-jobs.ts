@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import {
   createPayment,
+  deleteJob,
   getJob,
   getJobCounts,
   listJobs,
@@ -102,7 +103,13 @@ export function useJobCounts() {
     queryKey: keys.jobs.counts,
     queryFn: ({ signal }) => getJobCounts(signal),
     select: (response): JobCounts =>
-      response.data ?? { all: 0, pending: 0, ready: 0, delivered: 0, overdue: 0 },
+      response.data ?? {
+        all: 0,
+        pending: 0,
+        ready: 0,
+        delivered: 0,
+        overdue: 0,
+      },
     placeholderData: (previous) => previous,
   });
 }
@@ -175,36 +182,19 @@ export interface CreatePaymentVars {
   jobId: string;
   amount: number;
   paidAt?: string;
-  /**
-   * [3/12] The intent's idempotency key, carried from the payment sheet's state into the API
-   * client and out as the `Idempotency-Key` header ([4/12]). One key per intent: re-running the
-   * same mutation — React Query retry, the user tapping again after a timeout — must pass the
-   * same value, or the backend would see two intents.
-   */
   idempotencyKey: string;
 }
 
-/**
- * Record a payment, and show it immediately.
- *
- * On a phone, the round trip is the whole wait: the tailor has already counted the cash, and the
- * balance they are watching must not lag behind the tap. So the cached job is patched first — the
- * new payment appended, the balance recomputed from it — the sheet closes, and the server's answer
- * arrives to confirm or to undo it.
- *
- * If the write fails the patch is rolled back from the snapshot taken in `onMutate`, so the screen
- * never keeps a balance that does not exist. This is the narrow, honest use of an optimistic
- * update: one field of one record, with a rollback that always runs.
- *
- * A retry cannot turn one payment into two, and that guarantee is the server's, not this hook's:
- * the mutation carries the sheet's key ([1/12]–[4/12]) and the endpoint records one payment per
- * key ([5/12]–[11/12]). Re-running a failed attempt is therefore always safe.
- */
 export function useCreatePayment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ jobId, amount, paidAt, idempotencyKey }: CreatePaymentVars) =>
+    mutationFn: ({
+      jobId,
+      amount,
+      paidAt,
+      idempotencyKey,
+    }: CreatePaymentVars) =>
       createPayment(jobId, { amount, paidAt }, idempotencyKey),
 
     onMutate: async ({ jobId, amount, paidAt }) => {
@@ -287,12 +277,28 @@ export function useUpdateJob() {
 
     onError: (_error, variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(keys.jobs.detail(variables.id), context.previous);
+        queryClient.setQueryData(
+          keys.jobs.detail(variables.id),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, _error, variables) =>
       invalidateJobWrites(queryClient, variables.id),
+  });
+}
+
+export function useDeleteJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => deleteJob(id),
+
+    // No optimistic removal: the confirm dialog owns the intent, and a failed delete (the
+    // 409 for "has payments") must leave the list exactly as it was — optimistic deletion
+    // would flash the row away and bring it back, which reads as the app losing data.
+    onSettled: () => invalidateJobWrites(queryClient),
   });
 }
 

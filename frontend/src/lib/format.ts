@@ -25,6 +25,17 @@ const MONTHS = [
 export const naira = (amount: number): string => nairaFormat.format(amount);
 
 /**
+ * Centimetres for a stored inch value, one decimal place: 36 → "91.4".
+ *
+ * The studio measures in inches — every number in the database was taken with an inch tape — but
+ * Stitch's measurement tables print the metric twin in brackets beside each figure, so the book
+ * shows `36″ (91.4 cm)`. Rounded to 0.1cm; a half-inch is 1.27cm, so anything coarser silently
+ * lies about the fit.
+ */
+export const cmOf = (inches: number): string =>
+  (Math.round(inches * 2.54 * 10) / 10).toString();
+
+/**
  * `"5 Mar"` from a date or a date-prefixed timestamp.
  *
  * The regex path is not redundant: the API sends `dueDate` as `YYYY-MM-DD`, which `new Date()`
@@ -124,11 +135,6 @@ export function todayLine(now = new Date()): string {
 export function greeting(now = new Date()): string {
   const hour = now.getHours();
   return hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
-}
-
-/** `"March"` — the dashboard headline names the month it is reporting on. */
-export function currentMonthName(now = new Date()): string {
-  return now.toLocaleDateString("en-US", { month: "long" });
 }
 
 /** Today as `YYYY-MM-DD`, for `<input type="date">` values and measurement dates. */

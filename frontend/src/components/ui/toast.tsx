@@ -46,7 +46,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
 
       <div className="pointer-events-none fixed inset-x-0 top-0 z-60">
-        <div className="mx-auto w-full max-w-107.5 space-y-2 px-4 pt-[calc(10px+env(safe-area-inset-top))]">
+        <div className="mx-auto w-full sm:max-w-107.5 space-y-2 px-4 pt-[calc(10px+env(safe-area-inset-top))]">
           {items.map((t) => (
             <div
               key={t.id}

@@ -122,13 +122,47 @@ All animations are killed under `prefers-reduced-motion` (global rule in
 - **Tab bar** — full-bleed material (`--hig-bar` + `backdrop-blur(20px)`
   `saturate(150%)`), rounded top 24px, active tab = accent-tint pill.
   One shared `components/tab-bar.tsx` on every screen: each tab is a
-  `Link` with default prefetch (routes load while idle → switching tabs is
-  instant; the page's own skeletons cover data loading), pointer cursor,
-  and the per-screen FAB passed in as a prop.
+  `Link` with `prefetch`, pointer cursor, and the per-screen FAB passed in as
+  a prop.
+- **Tap shell** — tapping a tab paints `components/ui/page-skeleton.tsx` in
+  the same frame as the tap, from JavaScript already on screen, and it stays
+  until the route it stands in for is both mounted *and* done loading. This is
+  the fix for a real, measured problem: **the pages' own skeletons cannot
+  cover a navigation**, because they ship with the JavaScript that is still
+  loading, and the router keeps the old screen mounted meanwhile (~300–500ms
+  per tap, ~1.9s for a route the dev server had not compiled; the API answers
+  in 5–60ms, so none of it was data). `prefetch` alone did not fix it.
+  The shell deliberately stops above the bar so the bar's blur and the FAB
+  never flicker, and it shows the same chrome the page will (`TAB_CHROME`) so
+  the headline does not snap into place. Each `app/<tab>/loading.tsx` reuses
+  it for cold loads, before that route's JavaScript exists in the browser at
+  all.
+- **The shell outlives the page that painted it** — its state lives in
+  `lib/tab-shell.ts`, a module-level store, not `useState`. A tab tap unmounts
+  the page the shell was painted from, so component state would die exactly
+  when the shell still has work to do; with the store, the incoming page keeps
+  it up. Two things end it: the tab mounting with `loading === false` (the
+  same boolean the page uses to decide whether it draws skeletons, passed to
+  `TabBar` rather than recomputed, so the two cannot disagree), or its 4s
+  timeout. It has to be that boolean and not the route commit: releasing at
+  the commit let the page's own skeleton show through for one more frame, and
+  a pulse animation restarting behind a pulse animation is what "the skeleton
+  flashes twice" looks like.
+- **One skeleton per shape** — every skeleton the shell draws comes from
+  `components/ui/skeletons.tsx`, which the *pages* also render, and each tab
+  gets its own body (job cards, avatar rows + filmstrip, statement tables,
+  revenue card) rather than one generic stack of bars. A shell that draws a
+  different card than the page it stands in for reads as two skeletons in a
+  row — which is exactly what the first version of this looked like. The rule
+  for a new skeleton: add the shape to `skeletons.tsx`, render it from the
+  page, then (only if that tab has a shell) reuse it in the shell's body.
 - **FAB** — 56px accent circle, white plus, flush right edge, floats above the
   bar.
 - **Skeletons** — mirror real shapes (measured: chart block 183px, job row
-  72px, balance row 76px, stat value + footer bars).
+  72px, balance row 76px, stat value + footer bars). Two kinds: the route
+  shell (above), and each page's data skeletons, which take over once the
+  page renders (`isPending` only — a cached page renders instantly, which is
+  why a revisited tab hands over to content with no skeleton of its own).
 
 ## File map
 
@@ -138,13 +172,29 @@ All animations are killed under `prefers-reduced-motion` (global rule in
 | `frontend/src/app/layout.tsx` | Inter via `next/font`, theme-init inline script, providers |
 | `frontend/src/components/ui/theme-toggle.tsx` | dark/light toggle |
 | `frontend/src/components/ui/toast.tsx` | toast surface + `useToast` |
-| `frontend/src/components/ui/tab-bar.tsx` | shared bottom tab bar + per-screen FAB slot |
+| `frontend/src/components/ui/tab-bar.tsx` | shared bottom tab bar, per-screen FAB slot, tap shell on tab press |
+| `frontend/src/components/ui/page-skeleton.tsx` | the shell a tab shows before it can draw itself, one body per tab |
+| `frontend/src/lib/tab-shell.ts` | which tab the shell stands in for, held outside React so it survives the tap's unmount |
+| `frontend/src/components/ui/skeletons.tsx` | the skeleton shapes, shared by the pages and the shell |
+| `frontend/src/app/<tab>/loading.tsx` | cold-load shell for each tab route (server-streamed) |
 | `frontend/src/components/jobs/new-job-modal.tsx` | new-job sheet — also the only path that creates a client |
 | `frontend/src/app/dashboard/page.tsx` | HIG overview (all tokens consumed here) |
 | `frontend/src/app/(auth)/login/page.tsx` | HIG PIN login (keypad, dots, error) |
 
 Screens read data through `frontend/src/hooks/*` and never build API URLs themselves; the
 layers are `lib/api` (transport + endpoints) → `hooks` (query keys, caching) → screens.
+
+**Cache lifetimes are a UI decision, not a default.** `lib/query-provider.tsx` sets
+`staleTime: 60s` and `gcTime: 30min` deliberately. React Query's default 5-minute `gcTime`
+evicted a tab you had not looked at in five minutes, so switching back re-fetched and showed
+skeletons again — indistinguishable from "caching does nothing". Correctness never rests on
+either value: every mutation invalidates the keys it touched (`use-jobs.ts`), so a write is
+visible immediately regardless of how long data is considered fresh.
+
+Every screen is a client component, which is why navigation needs the shell: nothing
+renders until that route's JavaScript has arrived and run. If a screen ever becomes a
+server component with a small client island, the shell can shrink to the island's
+fallback — that is the structural version of the same fix.
 
 ## Conversion status
 

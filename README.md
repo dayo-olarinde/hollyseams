@@ -7,7 +7,8 @@ A tailor management application for tracking customers, measurements, jobs, and 
 ```
 hollyseams/
 ├── backend/          # NestJS 12 + Fastify 5 API (Bun + TypeScript)
-├── frontend/         # Next.js 15 + TypeScript web application
+├── frontend/         # Next.js 15 + TypeScript web application (v3 — Stitch layouts, HIG skin)
+├── frontend-v2/      # Next.js 15 + TypeScript web application (v2 — previous design, kept for reference)
 └── README.md
 ```
 
@@ -48,6 +49,6 @@ bun run seed            # creates the single user from SEED_PIN
 bun run dev
 
 # 3. Start the frontend, in another terminal
-cd ../frontend && bun install
+cd ../frontend && bun install   # (frontend-v2/ is the previous design, kept for reference)
 bun run dev             # :3000
 ```

@@ -50,14 +50,6 @@ import {
   type CreatePaymentDto,
 } from "./payments.schema";
 
-/**
- * [5/12] The `Idempotency-Key` header, parsed with the same pipe `@Body`/`@Query`/`@Param` use.
- *
- * It is built here rather than passed to `@Headers(...)` because Nest's header decorator does
- * not accept a pipe (unlike the body/query/param decorators). Applying the pipe explicitly keeps
- * the contract identical all the same: the schema runs before the service, and a bad key is the
- * same 400 envelope as a bad body, never a 500 out of the schema.
- */
 const idempotencyKeyPipe = new ZodValidationPipe(idempotencyKeySchema, {
   message: "Invalid Idempotency-Key header",
   field: "Idempotency-Key",
@@ -87,14 +79,13 @@ export class JobsController {
     });
   }
 
-  /**
-   * Declared before `@Get(":id")` — Nest matches in declaration order, and `:id` would
-   * swallow "counts" and answer 400 (it is not a UUID). `/jobs/signature` above exists for
-   * the same reason.
-   */
   @Get("counts")
   async counts(): Promise<ApiResponse<JobCounts>> {
-    return new ApiResponse(200, "Job counts fetched successfully", await this.jobs.counts());
+    return new ApiResponse(
+      200,
+      "Job counts fetched successfully",
+      await this.jobs.counts(),
+    );
   }
 
   @Get("signature")
@@ -176,15 +167,6 @@ export class JobsController {
     return new ApiResponse(200, "Job deleted successfully", job);
   }
 
-  /**
-   * Record a payment for a job — steps [5/12]–[11/12] of the idempotency flow.
-   *
-   * The controller owns the two HTTP edges of the mechanism: the key is *validated* on the way
-   * in ([5/12]) like every other input, and a replayed answer is *labelled* on the way out
-   * ([11/12]) so a client can tell "this request wrote nothing" from "this request wrote a
-   * payment". The deduplication itself lives in the service, next to the unique index that
-   * enforces it — `JobsService.createPayment` holds the full flow and the failure cases.
-   */
   @Post(":jobId/payments")
   async createPayment(
     @Param(
@@ -193,17 +175,9 @@ export class JobsController {
       }),
     )
     params: JobIdParams,
-
     @Body(new ZodValidationPipe(createPaymentSchema))
     body: CreatePaymentDto,
-
-    // [5/12] The raw header; it is validated by `idempotencyKeyPipe` below. A missing or
-    // malformed key is a 400 before the service runs — `payments.schema.ts` explains why the
-    // key is required and why it must be a UUID.
     @Headers("idempotency-key") rawIdempotencyKey: string | undefined,
-
-    // `passthrough` keeps Nest's normal response handling while exposing Fastify's reply, which
-    // the replay header below needs — the same pattern the auth controller uses for cookies.
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<ApiResponse<Payment>> {
     // The pipe either returns a string or throws the 400; the cast only re-states what the
@@ -212,7 +186,6 @@ export class JobsController {
       rawIdempotencyKey,
     ) as string;
 
-    // [6/12] The service owns the transaction; the controller only passes the parsed inputs.
     const { payment, replayed } = await this.jobs.createPayment(
       params.jobId,
       body,

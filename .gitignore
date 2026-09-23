@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 .next/
+.next-prod/
 out/
 
 # Environment files (keep the example)
