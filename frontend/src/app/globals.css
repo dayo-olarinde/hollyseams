@@ -51,40 +51,31 @@ html.hig-dark .hig {
 }
 
 html.hig-light .hig {
-  --hig-accent: #007AFF;
+  --hig-accent: #006199;
   --hig-accent-soft: rgba(0, 122, 255, 0.25);
   --hig-accent-tint: rgba(0, 122, 255, 0.12);
   --hig-accent-line: rgba(0, 122, 255, 0.35);
-  --hig-bg: #FFFFFF;
-  /* Stitch's visible page canvas. The design ships two light surfaces — Canvas Base #F7F9FA
-     and Canvas Secondary #EEF2F5 — but per its own elevation spec ("white cells resting over
-     canvas secondary") the *visible* background under white cards is #EEF2F5; #F7F9FA is 97%
-     white and reads as plain white next to #FFFFFF cards. One token, so the v3 identity lives
-     in a single line and every HIG law (one accent, flat fills, no gradients) still holds.
-     v2 screens never read this token. */
-  --hig-canvas: #EEF2F5;
+  --hig-bg: #F2F2F2;
+  --hig-canvas: #F2F2F2;
   --hig-fill: #F2F2F7;
+  --hig-field: #F5F6F8;
+  /* Placeholder text: iOS tertiary (0.3) was nearly invisible on the grey fill. */
+  --hig-placeholder: rgba(60, 60, 67, 0.45);
   --hig-label: #000000;
   --hig-label-secondary: rgba(60, 60, 67, 0.6);
   --hig-label-tertiary: rgba(60, 60, 67, 0.3);
   --hig-dot-empty: rgba(0, 0, 0, 0.25);
   --hig-error: #FF3B30;
-  /* Stitch "Canvas Secondary" (#EEF2F5) — the grouped background the design sits cards on.
-     Was stock iOS #F2F2F7, which read as plain white next to white cards; the blue-grey cast
-     is what makes Stitch's light mode feel like Stitch. Dark keeps #000000 (cards still read
-     as raised on near-black). */
-  --hig-grouped: #EEF2F5;
+  --hig-grouped: #F2F2F2;
   --hig-card: #FFFFFF;
   --hig-separator: rgba(60, 60, 67, 0.29);
-  /* Stitch's hairline (outline-variant #BEC7D2 at ~50%) — the cool-grey edge that
-     separates white cards from the canvas without a full border. */
   --hig-ring: rgba(190, 199, 210, 0.5);
   /* Stitch's whisper shadow: 0 2px 8px rgba(36,28,24,0.03), nudged to 0.05 so it
      survives PNG compression and cheap OLEDs. Works together with the ring. */
   --hig-card-shadow: 0 2px 8px rgba(36, 28, 24, 0.05);
   /* Stitch's segmented-control well (surface-container #EBEEF4): the recessed track
      the filter chips sit in — one step darker than the canvas, lighter than text. */
-  --hig-filter-well: #EBEEF4;
+  --hig-filter-well: #DCE3EA;
   --hig-grid: rgba(60, 60, 67, 0.12);
   --hig-bar: rgba(255, 255, 255, 0.78);
   --hig-bar-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
@@ -97,16 +88,18 @@ html.hig-light .hig {
 }
 
 html.hig-dark .hig {
-  --hig-accent: #0A84FF;
+  --hig-accent: #006199;
   --hig-accent-soft: rgba(10, 132, 255, 0.25);
   --hig-accent-tint: rgba(10, 132, 255, 0.14);
   --hig-accent-line: rgba(10, 132, 255, 0.35);
   --hig-bg: #000000;
   /* Dark canvas: the Stitch export shipped no dark palette, so this is the
-     light canvas inverted in spirit — same blue-grey cast, near-black instead
-     of pure black, which also lets --hig-card surfaces read as raised. */
-  --hig-canvas: #101418;
+     light canvas inverted in spirit — translucent near-black over the dark wash,
+     which lets --hig-card surfaces read as raised and lets sheets frost. */
+  --hig-canvas: rgba(16, 19, 24, 0.8);
   --hig-fill: #2C2C2E;
+  --hig-field: #23262B;
+  --hig-placeholder: rgba(235, 235, 245, 0.42);
   --hig-label: #FFFFFF;
   --hig-label-secondary: rgba(235, 235, 245, 0.6);
   --hig-label-tertiary: rgba(235, 235, 245, 0.3);
@@ -142,16 +135,42 @@ html.hig-dark .hig {
  */
 @utility stitch-card {
   /*
-   * The Stitch card recipe, as one utility: white surface + hairline cool-grey edge
-   * + whisper shadow. Contrast against the #EEF2F5 canvas comes from the ring (Stitch
-   * uses ring-outline-variant/40, not a border) — depth comes from the shadow being
-   * *barely* there. In dark mode the ring is the only visible half, which is correct:
-   * shadows don't exist on near-black.
+   * The card recipe, as one utility: opaque surface + whisper shadow, NO border. On the
+   * frosted canvas the card's opacity alone draws the edge (the tailor asked for exactly
+   * this); depth comes from the shadow being *barely* there. In dark mode the frost
+   * contrast does the same work a ring used to.
    */
   background: var(--hig-card);
-  box-shadow:
-    inset 0 0 0 1px var(--hig-ring),
-    var(--hig-card-shadow);
+  box-shadow: var(--hig-card-shadow);
+}
+
+@utility input-field {
+  /*
+   * The ONE input recipe, so a field looks the same on every screen and changing it is a
+   * one-line edit. Resting: recessed grey well with a cool hairline (same ring the cards
+   * use, inverted into the surface). Focus: the well brightens to card white, the hairline
+   * turns accent, and a soft accent halo appears — three signals, no border jump.
+   * Placeholder color lives in --hig-placeholder because tertiary label was too faint.
+   */
+  background: var(--hig-field);
+  box-shadow: inset 0 0 0 1px var(--hig-ring);
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+
+  &::placeholder {
+    color: var(--hig-placeholder);
+    font-weight: 350;
+  }
+
+  &:focus {
+    background: var(--hig-card);
+    box-shadow:
+      inset 0 0 0 1px var(--hig-accent-line),
+      0 0 0 3px var(--hig-accent-soft);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+  }
 }
 
 @utility safe-top {
@@ -197,6 +216,8 @@ html.hig-dark .hig {
   animation: shake 0.35s ease;
 }
 
+
+
 @layer base {
   html {
     font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -208,14 +229,15 @@ html.hig-dark .hig {
    * Letterbox insurance for standalone/PWA windows: the manifest's background_color is a fixed
    * light value, but the OS may paint it before (or instead of) our themed body — in dark mode
    * that flashes a white splash and, on desktop-style window hosts, it can show around the page
-   * forever. Painting body from the live theme token means any visible frame is always on-brand.
+   * forever. Painting html/body from the theme means any visible frame is always on-brand.
    */
+  html.hig-light,
   html.hig-light body {
-    background: var(--hig-canvas);
+    background: #F2F2F2;
   }
 
   html.hig-dark body {
-    background: var(--hig-canvas);
+    background: #0b0e12;
   }
 
   /*

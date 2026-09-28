@@ -7,8 +7,19 @@ import {
 import { listQuerySchema } from "../../common/validation/list-query.schema";
 import { JOB_STATUS_FILTERS } from "./job-status-filter";
 
+/**
+ * Mirrors the subjects module: a value is one dimension (8.5) or a pair entered as
+ * "length/width" ("8/8" → [8, 8]). Null marks a field left untaken.
+ */
+const measurementNumber = z.coerce.number().finite().nonnegative().max(500);
 const jobMeasurementsSchema = z
-  .record(z.string(), z.coerce.number().finite().nonnegative().nullable())
+  .record(
+    z.string(),
+    z.union([
+      measurementNumber.nullable(),
+      z.tuple([measurementNumber, measurementNumber]),
+    ]),
+  )
   .refine((entries) => Object.keys(entries).length > 0, {
     message: "Provide at least one measurement",
   });

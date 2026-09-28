@@ -14,6 +14,8 @@ import { addSubject, listSubjects } from "@/lib/api/subjects";
 import { getUploadSignature, uploadPhotoToCloudinary } from "@/lib/api/uploads";
 import { avatarColor, avatarTint, tintOf } from "@/lib/avatar-colors";
 import { MEASUREMENT_KEYS, measureLabel } from "@/lib/measurements";
+import { parseMeasurementInput, formatMeasurement, formatMeasurementInput } from "@/lib/measurement-input";
+import type { MeasurementValue } from "@/lib/measurement-input";
 import type { Customer } from "@/types/customer";
 import type { Job } from "@/types/job";
 import type { Measurement } from "@/types/measurement";
@@ -22,10 +24,36 @@ import type { Subject } from "@/types/subject";
 import { formatDay, initials, naira, todayISO } from "@/lib/format";
 
 /**
- * The wizard's fittings are sparse records: only fields actually measured are present. The
- * composer is the entry point — the tailor types what the tape said, and the API takes a sparse
- * record (the dossier's book renders "not taken" for any key it omits).
+ * The new-job sheet is ONE scrollable page — client, fitting, and job details stacked in the
+ * order the work happens, with a single Create button. The fittings stay sparse records: only
+ * fields actually measured are present. The composer is the entry point — the tailor types what
+ * the tape said, and the API takes a sparse record (the dossier's book renders "not taken" for
+ * any key it omits).
  */
+
+/**
+ * Draft storage is PER CLIENT: the key is derived from the intended client's name, so
+ * switching clients swaps contexts instead of mixing them — go back to client A and her
+ * half-typed fittings are still there; client B never sees a single one of A's numbers.
+ *
+ * With no steps to remember, a draft is just "the text fields + the measurements as she left
+ * them" — restoring it puts everything on screen at once, so there is no step to second-guess.
+ */
+const draftKeyFor = (clientName: string) =>
+  "hollyseams:job-wizard-draft:" + (clientName.trim().toLowerCase() || "_anon");
+
+interface WizardDraft {
+  query: string;
+  phone: string;
+  desc: string;
+  price: string;
+  dueDate: string;
+  savedAt: number;
+  activeKey: string;
+  /** Subject chips must survive too, or their measurements restore as unreachable orphans. */
+  subjects: Array<{ key: string; subjectId?: string; relationship: string; name: string }>;
+  meas: Record<string, Record<string, MeasurementValue | null>>;
+}
 
 /** A measurement the composer invented ("Sleeve cap") still needs a stable record key. */
 function toKey(name: string): string {
@@ -36,8 +64,8 @@ function toKey(name: string): string {
 }
 
 function filledFitting(
-  meas: Record<string, number | null>,
-): Record<string, number | null> {
+  meas: Record<string, MeasurementValue | null>,
+): Record<string, MeasurementValue | null> {
   // The API contract is sparse: only the fields actually measured are sent (the schema wants
   // ≥1 entry; the dossier's book renders "not taken" for any key a record omits). The map over
   // MEASUREMENT_KEYS just guarantees a stable key per entry; the filter drops the absent ones.
@@ -71,25 +99,27 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
 const MAX_PHOTOS = 1;
 
+/** One recipe for every field — see the `input-field` utility in globals.css. */
 const inputClass =
-  "w-full rounded-xl border border-(--hig-separator) bg-(--hig-fill) px-4 py-3 text-[13px] text-(--hig-label) outline-none transition-[border-color,box-shadow] placeholder:font-light placeholder:text-(--hig-label-tertiary) focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]";
-
-const monoClass =
-  "flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold";
+  "input-field w-full rounded-xl px-4 py-3 text-[15px] text-(--hig-label) outline-none";
 
 const miniLabelClass =
-  "mt-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-(--hig-label-secondary)";
+  "mt-5 text-[11px] font-semibold uppercase tracking-[0.1em] text-(--hig-label-secondary)";
 
 /**
- * The three stations of the flow, in the order the work actually happens: whose money, whose
- * body, what garment. The rail renders from this array, so the rail and the gates can never
- * disagree about what the steps are or what order they come in.
+ * The value well: dimmed until a measurement field is armed, then the ring marks where
+ * the number goes.
  */
-const STEPS = [
-  { name: "Client", hint: "Whose commission" },
-  { name: "The fitting", hint: "Body & measurements" },
-  { name: "The job", hint: "Garment & price" },
-] as const;
+const wellClass = (armed: boolean) =>
+  `w-24 shrink-0 rounded-xl px-2 py-3 text-center text-[15px] font-semibold [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none placeholder:text-[11px] placeholder:font-medium ${
+    armed ? "input-field shadow-[0_0_0_1px_var(--hig-accent-line)]" : "input-field opacity-60"
+  }`;
+
+const sectionErrorClass =
+  "animate-shake rounded-xl bg-(--hig-danger-tint) px-4 py-3 text-[13px] leading-snug text-(--hig-danger)";
+
+type SectionErrors = { client: string | null; fitting: string | null; job: string | null };
+const emptyErrors: SectionErrors = { client: null, fitting: null, job: null };
 
 export default function NewJobModal({
   open,
@@ -100,7 +130,7 @@ export default function NewJobModal({
   open: boolean;
   onClose: () => void;
   /**
-   * Open the wizard already pointed at this client — the client file's "New job for {name}"
+   * Open the sheet already pointed at this client — the client file's "New job for {name}"
    * action. `pickClient` does the real work (loads their subjects, selects the first), so the
    * prefill only needs to hand over the record; the `?? undefined` keeps the prop optional
    * without leaking `null` into the effect's dependency array.
@@ -108,7 +138,7 @@ export default function NewJobModal({
   prefillCustomer?: Customer | null;
   /**
    * The dossier's switcher selection: "New job for Ike" must open on Ike, not on the client's
-   * first subject. Passed only when the tapped button named a subject; the wizard falls back
+   * first subject. Passed only when the tapped button named a subject; the sheet falls back
    * to its own first-subject default when absent or when that subject no longer exists.
    */
   prefillSubjectId?: string | null;
@@ -127,7 +157,14 @@ export default function NewJobModal({
 
   const [subjects, setSubjects] = useState<ModalSubject[]>([]);
   const [activeKey, setActiveKey] = useState("new");
-  const [meas, setMeas] = useState<Record<string, Record<string, number | null>>>({});
+  const [meas, setMeas] = useState<Record<string, Record<string, MeasurementValue | null>>>({});
+  /**
+   * Who the GENERIC measurement bucket ("new"/"new-*" subjects — not bound to any saved
+   * subject ID) belongs to. Client-bound buckets carry their subject IDs, so they can never
+   * submit under another client; the generic bucket is only as safe as its owner, so every
+   * edit stamps the owner and the draft writer strips generic values that changed hands.
+   */
+  const [genericMeasOwner, setGenericMeasOwner] = useState("");
   const [dirtyMeas, setDirtyMeas] = useState<Set<string>>(new Set());
   const [composer, setComposer] = useState("");
   const [pendingMeas, setPendingMeas] = useState<{ key: string; name: string } | null>(null);
@@ -141,12 +178,15 @@ export default function NewJobModal({
   const [dueDate, setDueDate] = useState("");
   const [photos, setPhotos] = useState<WizardPhoto[]>([]);
 
-  const [step, setStep] = useState<0 | 1 | 2>(0);
-  const [slideDir, setSlideDir] = useState<"fwd" | "back">("fwd");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** Bumped with every error set, so the shake animation replays (the node remounts). */
+  /**
+   * Validation is PER SECTION, set when Create is pressed and cleared the moment that
+   * section's inputs change again — the error lives next to the fields it is about.
+   */
+  const [errors, setErrors] = useState<SectionErrors>(emptyErrors);
+  /** Bumped with every validation pass, so the shake animation replays (the node remounts). */
   const [errorSeq, setErrorSeq] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Job | null>(null);
 
   const ddWrapRef = useRef<HTMLDivElement>(null);
@@ -156,9 +196,111 @@ export default function NewJobModal({
   const compWrapRef = useRef<HTMLDivElement>(null);
   const compRef = useRef<HTMLDivElement>(null);
   const compInputRef = useRef<HTMLInputElement>(null);
+  // Anchor = the composer's BOTTOM edge: the panel opens below the field (per the tailor's
+  // preference) — she scrolls the sheet itself when the keyboard hides it.
   const [compRect, setCompRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [sugOpen, setSugOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /** Scroll targets for "walk her to the first blocker" on a failed Create. */
+  const clientRef = useRef<HTMLElement>(null);
+  const fittingRef = useRef<HTMLElement>(null);
+  const jobRef = useRef<HTMLElement>(null);
+
+  /**
+   * The sheet's measurement draft lives in localStorage so a stray close or refresh never
+   * costs a live measuring session. Written on every touch (inside the setState updater, so
+   * the persisted snapshot can never lag the committed state), restored once on open, cleared
+   * the moment a job is actually created. Storage failures are swallowed by design: a missing
+   * draft degrades to today's behavior, it must never surface as an error.
+   */
+  /**
+   * ONE writer for the whole draft. It runs whenever any draft-relevant field changes while
+   * the sheet is open — measurements, price, description, due date, phone — so the snapshot
+   * can never lag behind what's on screen. The key is the intended client, so a half-typed
+   * job for A never bleeds into a job for B.
+   */
+  const intendedClient = (client?.name ?? query).trim();
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    // Generic-bucket values may only ride along under their owner, and subject-bound values
+    // only when the selected client still matches the intended name — a retype without
+    // re-picking must never smuggle another client's subjects into this draft.
+    const clientMatches = !client || client.name.trim() === intendedClient;
+    const safeMeas: typeof meas = {};
+    for (const [subjKey, values] of Object.entries(meas)) {
+      const isGeneric = subjKey === "new" || subjKey.startsWith("new-");
+      if (isGeneric) {
+        if (genericMeasOwner === intendedClient) safeMeas[subjKey] = values;
+      } else if (clientMatches) {
+        safeMeas[subjKey] = values;
+      }
+    }
+    const hasMeas = Object.values(safeMeas).some((m) => Object.keys(m ?? {}).length > 0);
+    const hasAnything = hasMeas || desc || price || dueDate || phone || query;
+    try {
+      if (!hasAnything) {
+        window.localStorage.removeItem(draftKeyFor(intendedClient));
+        return;
+      }
+      const draft: WizardDraft = {
+        query, phone, desc, price, dueDate, savedAt: Date.now(),
+        activeKey,
+        subjects: subjects.map((s) => ({
+          key: s.key,
+          ...(s.subjectId ? { subjectId: s.subjectId } : {}),
+          relationship: s.relationship,
+          name: s.name,
+        })),
+        meas: safeMeas,
+      };
+      window.localStorage.setItem(draftKeyFor(intendedClient), JSON.stringify(draft));
+    } catch {
+      /* private mode / quota — drafts are a convenience, not a contract */
+    }
+  }, [open, query, phone, desc, price, dueDate, meas, client?.name, intendedClient, genericMeasOwner, activeKey, subjects]);
+
+  /**
+   * Resume after a close/crash: restore the most recently saved draft (any client), text
+   * fields and measurements alike. Everything is on one page, so restoring IS arriving —
+   * no step to reconstruct, no position to second-guess.
+   */
+  function restoreLastDraft(): void {
+    if (typeof window === "undefined") return;
+    try {
+      let best: WizardDraft | null = null;
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (!key || !key.startsWith("hollyseams:job-wizard-draft:")) continue;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as WizardDraft;
+        if (!best || (parsed.savedAt ?? 0) > (best.savedAt ?? 0)) best = parsed;
+      }
+      if (!best) return;
+      if (best.query) setQuery(best.query);
+      if (best.phone) setPhone(best.phone);
+      if (best.desc) setDesc(best.desc);
+      if (best.price) setPrice(best.price);
+      if (best.dueDate) setDueDate(best.dueDate);
+      const hasMeas = Object.values(best.meas ?? {}).some((m) => Object.keys(m ?? {}).length > 0);
+      if (hasMeas) {
+        setMeas(best.meas);
+        setGenericMeasOwner(best.query?.trim() ?? "");
+        setDirtyMeas(new Set(Object.keys(best.meas)));
+      }
+      // Subjects (including ones she added mid-flow) come back exactly as they were, so their
+      // measurements render again instead of orphaning. latestMeasId is deliberately dropped:
+      // every restored key is marked dirty, so submit re-creates the fitting from these values.
+      if (best.subjects?.length) {
+        setSubjects(best.subjects.map((s) => ({ ...s, loaded: true })));
+        const stillThere = best.subjects.some((s) => s.key === best.activeKey);
+        setActiveKey(stillThere ? best.activeKey : (best.subjects[0]?.key ?? "new"));
+      }
+    } catch {
+      /* a corrupt draft is still just "no draft" */
+    }
+  }
   /** Every object URL this sheet has created, so unmount can revoke all of them. */
   const previewUrlsRef = useRef<string[]>([]);
   const activeSubject = subjects.find((s) => s.key === activeKey) ?? null;
@@ -183,10 +325,13 @@ export default function NewJobModal({
     setPrice("");
     setDueDate("");
     setPhotos([]);
-    setStep(0);
-    setSlideDir("fwd");
     setError(null);
+    setErrors(emptyErrors);
     setCreated(null);
+
+    // A saved draft (survived a close, refresh, or crash) beats the blank slate — but never
+    // in a seeded flow, which opens pointed at a specific client on purpose.
+    if (!prefillCustomer) restoreLastDraft();
 
     /**
      * The client list comes from the cache, not from a fresh request every time.
@@ -205,9 +350,9 @@ export default function NewJobModal({
       .then((res) => setCustomers(res.data ?? []))
       .catch(() => setCustomers([]));
 
-    // The client file's action opens the wizard mid-flow: client already chosen, subjects about
-    // to load. `pickClient` is the same path a manual pick takes, so the prefilled wizard is the
-    // ordinary wizard, one step ahead — no second code path to maintain.
+    // The client file's action opens the sheet mid-flow: client already chosen, subjects about
+    // to load. `pickClient` is the same path a manual pick takes, so the prefilled sheet is the
+    // ordinary sheet, one step ahead — no second code path to maintain.
     const seed = prefillCustomer ?? undefined;
     if (seed) void pickClient(seed, prefillSubjectId);
 
@@ -258,34 +403,35 @@ export default function NewJobModal({
   }, [customers, query]);
 
   /**
-   * Step gates — the questions each stage must answer before the flow slides on.
-   *
-   * Returning the step number to fix (instead of a bare boolean) lets the Next button walk the
-   * user to the first blocker: the error message and the slide-to-step share one decision.
+   * Section gates — the questions each part of the page must answer before Create goes
+   * through. Create runs all three and walks her to the first blocker, so nothing slipped
+   * through an edit after the fact.
    */
-  const gateFor = (s: 0 | 1 | 2): string | null => {
-    if (s === 0) {
-      const name = (client?.name ?? query).trim();
-      if (name.length < 2 || !NAME_RE.test(name)) {
-        return "Name must be at least 2 letters (letters, spaces, apostrophes, hyphens only).";
-      }
-      if (!client && phone.trim() && !PHONE_RE.test(phone.trim())) {
-        return "Phone must be 7–15 digits, optionally starting with +.";
-      }
-      return null;
+  const gateClient = (): string | null => {
+    const name = (client?.name ?? query).trim();
+    if (name.length < 2 || !NAME_RE.test(name)) {
+      return "Name must be at least 2 letters (letters, spaces, apostrophes, hyphens only).";
     }
-    if (s === 1) {
-      if (activeSubject && activeSubject.relationship !== "self" && activeSubject.name.trim().length < 2) {
-        return "Give the subject a name (at least 2 letters).";
-      }
-      if (client && activeSubject?.key.startsWith("new-")) {
-        return "Confirm the new subject (tap ✓) before continuing.";
-      }
-      if (Object.keys(filledFitting(meas[activeKey] ?? {})).length === 0) {
-        return "Add at least one measurement for the fitting.";
-      }
-      return null;
+    if (!client && phone.trim() && !PHONE_RE.test(phone.trim())) {
+      return "Phone must be 7–15 digits, optionally starting with +.";
     }
+    return null;
+  };
+
+  const gateFitting = (): string | null => {
+    if (activeSubject && activeSubject.relationship !== "self" && activeSubject.name.trim().length < 2) {
+      return "Give the subject a name (at least 2 letters).";
+    }
+    if (client && activeSubject?.key.startsWith("new-")) {
+      return "Confirm the new subject (tap ✓) before continuing.";
+    }
+    if (Object.keys(filledFitting(meas[activeKey] ?? {})).length === 0) {
+      return "Add at least one measurement for the fitting.";
+    }
+    return null;
+  };
+
+  const gateJob = (): string | null => {
     const priceNum = Number(price.replace(/[^\d.]/g, ""));
     if (!price.trim() || !Number.isFinite(priceNum) || priceNum <= 0) {
       return "Set an agreed price for the job.";
@@ -299,24 +445,6 @@ export default function NewJobModal({
     return null;
   };
 
-  /** Slide to a step, recording the direction so the panel knows which way to move. */
-  function goTo(next: 0 | 1 | 2) {
-    setSlideDir(next > step ? "fwd" : "back");
-    setStep(next);
-  }
-
-  /** Next = validate the current stage; only a pass lets the sheet slide forward. */
-  function tryAdvance() {
-    const problem = gateFor(step);
-    if (problem) {
-      setError(problem);
-      setErrorSeq((n) => n + 1);
-      return;
-    }
-    setError(null);
-    goTo((step + 1) as 0 | 1 | 2);
-  }
-
   function clearClient() {
     setClient(null);
     setQuery("");
@@ -326,8 +454,11 @@ export default function NewJobModal({
     setPhone("");
     setSubjects([{ key: "new", relationship: "self", name: "", loaded: true }]);
     setActiveKey("new");
-    setMeas({ new: {} });
-    setDirtyMeas(new Set());
+    setErrors((prev) => (prev.client === null ? prev : { ...prev, client: null }));
+    // DELIBERATELY not touching meas/dirtyMeas: measurements under the generic "new"
+    // subject are the tailor's in-progress work and follow her to the corrected flow.
+    // Anything tied to a specific client's subject IDs simply stops being reachable here —
+    // it can never leak into another client's record, and it lives on in that client's draft.
   }
 
   async function pickClient(c: Customer, preferSubjectId?: string | null) {
@@ -338,6 +469,7 @@ export default function NewJobModal({
     setSubjectError(null);
     setPhone("");
     setError(null);
+    setErrors(emptyErrors);
 
     // Same cache entry as the customer file's subject list: the tailor who just visited a client
     // should not pay for that list a second time when opening this sheet.
@@ -361,15 +493,12 @@ export default function NewJobModal({
       mapped.find((s) => s.subjectId && s.subjectId === preferSubjectId) ??
       mapped[0];
     setActiveKey(chosen?.key ?? "");
-    setMeas({});
+    // No wholesale meas reset: each subject's values arrive via selectSubject (cache →
+    // latest fitting), so switching clients swaps contexts. Stale entries from another
+    // client's subject IDs are unreachable under the new activeKey and never submit.
     setDirtyMeas(new Set());
 
     if (chosen) await selectSubject(chosen);
-
-    // Choosing the client IS the step: slide to the fitting as soon as her subjects are loaded
-    // and the first fitting (if any) is on the table. Back stays available via the rail.
-    setSlideDir("fwd");
-    setStep(1);
   }
 
   function startAddSubject() {
@@ -451,6 +580,7 @@ export default function NewJobModal({
     setActiveKey(subj.key);
     setPendingMeas(null);
     setEditingMeas(null);
+    setErrors((prev) => (prev.fitting === null ? prev : { ...prev, fitting: null }));
 
     if (!subj.subjectId || subj.loaded) {
       setMeas((prev) => (prev[subj.key] ? prev : { ...prev, [subj.key]: {} }));
@@ -488,24 +618,65 @@ export default function NewJobModal({
 
   const currentMeas = () => meas[activeKey] ?? {};
 
-  function touchMeas(next: Record<string, number | null>) {
+  function touchMeas(next: Record<string, MeasurementValue | null>) {
 
+    if (activeKey === "new" || activeKey.startsWith("new-")) {
+      setGenericMeasOwner((client?.name ?? query).trim());
+    }
     setMeas((prev) => ({ ...prev, [activeKey]: next }));
     setDirtyMeas((prev) => new Set(prev).add(activeKey));
+    setErrors((prev) => (prev.fitting === null ? prev : { ...prev, fitting: null }));
+  }
+
+  /** Rewrites dashes a paste may carry ("8-8" → "8/8"); typed input never has any. */
+  const toParserSafe = (raw: string) =>
+    raw.replace(/[-\u2012\u2013\u2014\u2212]/g, "/");
+
+  const pendingMeasRef = useRef(pendingMeas);
+  useEffect(() => {
+    pendingMeasRef.current = pendingMeas;
+  }, [pendingMeas]);
+
+  /**
+   * Commit-on-blur, deferred: an immediate commit would fire while she is merely moving
+   * between the name and value fields, so blur starts a short grace window that focus
+   * back inside the row cancels. The armed field comes from a ref, so a stale timer can
+   * never commit the wrong field.
+   */
+  const blurCommitTimer = useRef<number | null>(null);
+  function cancelBlurCommit() {
+    if (blurCommitTimer.current !== null) {
+      window.clearTimeout(blurCommitTimer.current);
+      blurCommitTimer.current = null;
+    }
+  }
+  function scheduleBlurCommit() {
+    cancelBlurCommit();
+    blurCommitTimer.current = window.setTimeout(() => {
+      blurCommitTimer.current = null;
+      if (compWrapRef.current?.contains(document.activeElement)) return;
+      commitPending();
+    }, 120);
   }
 
   function commitPending() {
-    const raw = (document.getElementById("pendVal") as HTMLInputElement | null)?.value ?? "";
-    const value = Number(raw.replace(/[^\d.]/g, ""));
-    if (pendingMeas && raw.trim() && !Number.isNaN(value)) {
-      touchMeas({ ...currentMeas(), [pendingMeas.key]: value });
+    const el = document.getElementById("pendVal") as HTMLInputElement | null;
+    const raw = toParserSafe(el?.value ?? "");
+    const value = parseMeasurementInput(raw);
+    const pending = pendingMeasRef.current;
+    if (pending && value !== null) {
+      touchMeas({ ...currentMeas(), [pending.key]: value });
     }
+    // The well is uncontrolled — clear by hand for the next entry.
+    if (el) el.value = "";
+    setComposer("");
     setPendingMeas(null);
   }
 
-  function commitEdit(key: string, raw: string) {
-    const value = Number(raw.replace(/[^\d.]/g, ""));
-    if (raw.trim() && !Number.isNaN(value)) {
+  function commitEdit(key: string, rawValue: string) {
+    const raw = toParserSafe(rawValue);
+    const value = parseMeasurementInput(raw);
+    if (raw.trim() && value !== null) {
       touchMeas({ ...currentMeas(), [key]: value });
     }
     setEditingMeas(null);
@@ -514,6 +685,7 @@ export default function NewJobModal({
   function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])];
     e.target.value = "";
+    setErrors((prev) => (prev.job === null ? prev : { ...prev, job: null }));
 
     const batch = files.slice(0, Math.max(0, MAX_PHOTOS - photos.length));
     if (batch.length === 0) return;
@@ -585,17 +757,27 @@ export default function NewJobModal({
 
     setError(null);
 
-    // A final gate pass over all three stations — the same rules the Next buttons enforce,
-    // re-run over the whole form, so nothing slipped through a back-navigation edit.
-    for (const s of [0, 1, 2] as const) {
-      const problem = gateFor(s);
-      if (problem) {
-        setError(problem);
-        setErrorSeq((n) => n + 1);
-        goTo(s);
-        return;
-      }
+    // One pass over every section — the same rules, re-run over the whole page, so nothing
+    // slipped through an edit after she moved on. Each error lands inline next to its own
+    // fields, and the page walks her to the first blocker.
+    const clientProblem = gateClient();
+    const fittingProblem = gateFitting();
+    const jobProblem = gateJob();
+    if (clientProblem || fittingProblem || jobProblem) {
+      setErrors({ client: clientProblem, fitting: fittingProblem, job: jobProblem });
+      setErrorSeq((n) => n + 1);
+      const target = clientProblem ? clientRef : fittingProblem ? fittingRef : jobRef;
+      // The error paragraphs mount in the same commit as this state change — scroll only
+      // after they exist, or the layout shift they cause cancels the smooth scroll
+      // that is on its way to them.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          target.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        ),
+      );
+      return;
     }
+    setErrors(emptyErrors);
 
     const name = (client?.name ?? query).trim();
     const measEntries = filledFitting(currentMeas());
@@ -650,6 +832,12 @@ export default function NewJobModal({
       setCreated(job);
 
       invalidateJobWrites();
+      // The draft's purpose is served: this job exists. Clear the intended client's snapshot.
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(draftKeyFor((client?.name ?? query).trim()));
+        } catch { /* best-effort */ }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the job. Try again.");
       setErrorSeq((n) => n + 1);
@@ -696,13 +884,6 @@ export default function NewJobModal({
 
   if (!open) return null;
 
-  /** The step rail's own truth: done stations carry their answer, the active one glows. */
-  const railSummaries = [
-    clientLabel === "no client yet" ? "New client" : clientLabel,
-    activeSubject ? subjectLabel(activeSubject) : "Who is it for?",
-    priceNum > 0 ? naira(priceNum) : "Set the price",
-  ];
-
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="New job">
       <button
@@ -712,7 +893,7 @@ export default function NewJobModal({
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
 
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full sm:max-w-107.5 animate-sheet-in flex-col overflow-hidden rounded-t-[26px] border border-b-0 border-(--hig-separator) bg-(--hig-card) shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full sm:max-w-107.5 animate-sheet-in flex-col overflow-hidden rounded-t-[26px] bg-(--hig-canvas) backdrop-blur-xl shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
         <div className="mx-auto mt-3 h-1 w-9.5 shrink-0 rounded-full bg-(--hig-separator)" aria-hidden="true" />
 
         <div className="flex shrink-0 items-center justify-between border-b border-(--hig-separator) px-5 pb-3 pt-2">
@@ -731,64 +912,15 @@ export default function NewJobModal({
             </span>
           </button>
         </div>
-        <div className="shrink-0 px-4 pb-3 pt-3">
-          <div className="flex items-center gap-1.5 rounded-[14px] border border-(--hig-separator) bg-(--hig-fill) p-1.5">
-            {STEPS.map((s, i) => {
-              const done = i < step;
-              const active = i === step;
-              return (
-                <button
-                  key={s.name}
-                  type="button"
-                  onClick={() => i <= step && goTo(i as 0 | 1 | 2)}
-                  disabled={i > step}
-                  aria-current={active ? "step" : undefined}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-[10px] border px-2 py-1.5 text-left transition-colors ${
-                    active
-                      ? "border-(--hig-accent-line) bg-(--hig-accent-tint)"
-                      : done
-                        ? "border-(--hig-success)/30 bg-(--hig-success-tint)"
-                        : "border-transparent"
-                  }`}
-                >
-                  <span
-                    className={`flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors ${
-                      active
-                        ? "bg-(--hig-accent) text-white"
-                        : done
-                          ? "bg-(--hig-success) text-white"
-                          : "border border-(--hig-separator) bg-(--hig-card) text-(--hig-label-tertiary)"
-                    }`}
-                  >
-                    {done ? "✓" : i + 1}
-                  </span>
-                  <span className="min-w-0">
-                    <span
-                      className={`block truncate text-[11px] font-semibold leading-tight ${
-                        active ? "text-(--hig-accent)" : done ? "text-(--hig-label)" : "text-(--hig-label-tertiary)"
-                      }`}
-                    >
-                      {s.name}
-                    </span>
-                    <span className="block truncate text-[9.5px] leading-tight text-(--hig-label-tertiary)">
-                      {done || active ? railSummaries[i] : s.hint}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
         <div
-          className="flex-1 space-y-3 overflow-y-auto px-4 py-3 scrollbar-none [&::-webkit-scrollbar]:hidden"
+          className="flex-1 space-y-3 overflow-y-auto px-4 py-3 pb-8 scrollbar-none [&::-webkit-scrollbar]:hidden"
           onScroll={() => {
             setDdOpen(false);
             setSugOpen(false);
           }}
         >
-          <div key={step} className={slideDir === "fwd" ? "animate-slide-fwd" : "animate-slide-back"}>
-            {step === 0 && (
-        <section className="space-y-3">
+          <section ref={clientRef} className="scroll-mt-3 space-y-3">
+            <SectionHead n="1" title="Client" />
             <div ref={ddWrapRef} className="relative">
               <input
                 ref={nameInputRef}
@@ -799,6 +931,7 @@ export default function NewJobModal({
                 onChange={(e) => {
                   setQuery(e.target.value);
                   if (client && e.target.value !== client.name) clearClient();
+                  setErrors((prev) => (prev.client === null ? prev : { ...prev, client: null }));
                   if (e.target.value.trim()) {
                     const r = nameInputRef.current?.getBoundingClientRect();
                     if (r) setDdRect({ top: r.bottom, left: r.left, width: r.width });
@@ -819,19 +952,15 @@ export default function NewJobModal({
                 </button>
               )}
 
-              {ddOpen && ddRect && createPortal(
+              {ddOpen && ddRect && filteredCustomers.length > 0 && createPortal(
                 <div
                   ref={ddRef}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="hig fixed z-70 max-h-52 animate-fade-in overflow-y-auto rounded-2xl border border-(--hig-separator) bg-(--hig-card) p-1 shadow-(--hig-bar-shadow)"
+                  className="hig fixed z-70 max-h-52 animate-fade-in overflow-y-auto rounded-2xl bg-(--hig-card) p-1 shadow-(--hig-bar-shadow)"
                   style={{ top: ddRect.top + 6, left: ddRect.left, width: ddRect.width }}
                 >
                   {customers === null ? (
                     <div className="px-4 py-3 text-[11px] text-(--hig-label-tertiary)">Loading clients…</div>
-                  ) : filteredCustomers.length === 0 ? (
-                    <div className="px-4 py-3 text-[11px] text-(--hig-label-tertiary)">
-                      No match — this will be a new client.
-                    </div>
                   ) : (
                     <>
                       <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-(--hig-label-tertiary)">
@@ -877,7 +1006,10 @@ export default function NewJobModal({
                 value={phone}
                 autoComplete="off"
                 inputMode="tel"
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setErrors((prev) => (prev.client === null ? prev : { ...prev, client: null }));
+                }}
               />
             )}
             {client?.phoneNumber && (
@@ -886,11 +1018,11 @@ export default function NewJobModal({
                 Phone on file · <b className="font-medium tracking-[0.04em] text-(--hig-label)">{client.phoneNumber}</b>
               </div>
             )}
-        </section>
-            )}
-          {step === 1 && (
-        <section className="space-y-3">
-            <div className={miniLabelClass}>For whom</div>
+            {errors.client && <p key={`client-${errorSeq}`} className={sectionErrorClass}>{errors.client}</p>}
+          </section>
+
+          <section ref={fittingRef} className="scroll-mt-3 space-y-3">
+            <SectionHead n="2" title="For whom" hint={activeSubject ? subjectLabel(activeSubject) : undefined} />
             <div className="grid grid-cols-2 gap-2">
               {subjects.map((s) => {
                 const hue = subjectHue(s);
@@ -900,36 +1032,37 @@ export default function NewJobModal({
                     key={s.key}
                     type="button"
                     onClick={() => selectSubject(s)}
-                    className={`relative flex flex-col justify-between rounded-2xl border-2 p-3 text-left transition-all active:scale-[0.98] ${
+                    className={`flex items-center gap-3 rounded-2xl p-3 text-left transition-all active:scale-[0.98] ${
                       active
-                        ? "border-(--hig-accent) bg-(--hig-accent-tint)"
-                        : "border-(--hig-separator) bg-(--hig-card)"
+                        ? "bg-(--hig-accent-tint)"
+                        : "stitch-card"
                     }`}
                   >
-                    <span className="flex items-center justify-between">
-                      <span
-                        className={monoClass}
-                        style={{
-                          backgroundColor: tintOf(hue),
-                          color: hue,
-                          borderColor: hue + "4D",
-                        }}
-                      >
-                        {initials(subjectLabel(s))}
+                    <span
+                      className="flex h-9.5 w-9.5 flex-shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold"
+                      style={{
+                        backgroundColor: tintOf(hue),
+                        color: hue,
+                        borderColor: hue + "4D",
+                      }}
+                    >
+                      {initials(subjectLabel(s))}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold text-(--hig-label)">
+                        {subjectLabel(s)}
                       </span>
-                      {active && (
-                        <span className="flex h-4.5 w-4.5 items-center justify-center rounded-full bg-(--hig-accent) text-white">
-                          <CheckIcon />
+                      {s.relationship !== "self" && (
+                        <span className="mt-0.5 block truncate text-[11px] text-(--hig-label-secondary)">
+                          {s.relationship}
                         </span>
                       )}
                     </span>
-                    <span className="mt-2 block truncate text-[13px] font-semibold text-(--hig-label)">
-                      {subjectLabel(s)}
-                    </span>
-                    <span className="block truncate text-[10.5px] text-(--hig-label-secondary)">
-                      {s.relationship !== "self" ? `(${s.relationship})` : "Self"}
-                      {s.loaded && s.latestMeasId ? " · fitted" : ""}
-                    </span>
+                    {active && (
+                      <span className="flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded-full bg-(--hig-accent) text-white">
+                        <CheckIcon />
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -937,12 +1070,15 @@ export default function NewJobModal({
                 <button
                   type="button"
                   onClick={startAddSubject}
-                  className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-(--hig-accent-line) bg-(--hig-fill) text-(--hig-accent) transition-all active:scale-[0.98]"
+                  className="stitch-card flex items-center justify-center gap-2.5 rounded-2xl p-3 text-(--hig-accent) transition-all active:scale-[0.98]"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-(--hig-accent-tint)">
+                  <span className="flex h-9.5 w-9.5 flex-shrink-0 items-center justify-center rounded-full bg-(--hig-accent) text-[17px] leading-none text-white shadow-(--hig-bar-shadow)">
                     +
                   </span>
-                  <span className="text-[12px] font-semibold">Add subject</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-semibold">Add subject</span>
+                    <span className="block truncate text-[11px] text-(--hig-label-secondary)">child, spouse, parent…</span>
+                  </span>
                 </button>
               )}
             </div>
@@ -950,7 +1086,7 @@ export default function NewJobModal({
               <div className="animate-fade-in">
                 <div className="flex items-center gap-2">
                   <select
-                    className="shrink-0 rounded-[10px] border border-(--hig-separator) bg-(--hig-fill) px-2 py-2 text-[11px] text-(--hig-label) outline-none"
+                    className="input-field shrink-0 rounded-[10px] px-2 py-2 text-[12px] text-(--hig-label) outline-none"
                     value={activeSubject.relationship}
                     onChange={(e) =>
                       setSubjects((prev) =>
@@ -1006,13 +1142,8 @@ export default function NewJobModal({
             )}
 
             <div className={miniLabelClass}>
-              Measurements <span className="font-normal normal-case tracking-[0.04em] text-stone">· inches</span>
+              Measurements <span className="font-normal normal-case tracking-[0.02em] text-(--hig-label-tertiary)">· inches</span>
             </div>
-            {Object.keys(filledFitting(currentMeas())).length === 0 && (
-              <p className="rounded-xl border border-dashed border-(--hig-separator) bg-(--hig-fill) px-4 py-3 text-[12.5px] leading-snug text-(--hig-label-secondary)">
-                Nothing measured yet — type below to add the first measurement.
-              </p>
-            )}
             <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-3">
               {Object.entries(currentMeas())
                 .filter(([, value]) => value !== null)
@@ -1028,10 +1159,16 @@ export default function NewJobModal({
                       id="editVal"
                       className="w-14 rounded-lg border border-(--hig-separator) bg-(--hig-card) py-1.5 text-center text-[13px] font-semibold text-(--hig-label) outline-none"
                       inputMode="decimal"
-                      defaultValue={String(value ?? "")}
+                      defaultValue={formatMeasurementInput(value)}
                       autoFocus
+                      enterKeyHint="done"
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") commitEdit(key, (e.target as HTMLInputElement).value);
+                        if (e.key === "Enter") {
+                          // Submit the edit; preventDefault stops the browser advancing
+                          // focus into the next field instead.
+                          e.preventDefault();
+                          commitEdit(key, (e.target as HTMLInputElement).value);
+                        }
                       }}
                       onBlur={(e) => commitEdit(key, e.target.value)}
                     />
@@ -1056,7 +1193,7 @@ export default function NewJobModal({
                   >
                     <span className="text-[12px] font-medium text-(--hig-label-secondary)">{measureLabel(key)}</span>
                     <span className="text-[15px] font-semibold text-(--hig-label) [font-variant-numeric:tabular-nums]">
-                      {value}
+                      {formatMeasurement(value)}
                       <span className="ml-0.5 text-[10px] font-normal text-(--hig-label-tertiary)">″</span>
                     </span>
                     <span
@@ -1075,11 +1212,13 @@ export default function NewJobModal({
                 );
               })}
             </div>
-            <div ref={compWrapRef} className="relative mt-4">
+            {/* Name and value side by side; the value takes the full keyboard so "8/8"
+                can be typed as written. Enter commits; tapping away commits too. */}
+            <div ref={compWrapRef} className="relative mt-4 flex items-center gap-1.5">
               <input
                 ref={compInputRef}
-                className={inputClass}
-                placeholder="Type a measurement — e.g. bust, sleeve, length…"
+                className={`${inputClass} min-w-0 flex-1`}
+                placeholder="Type a measurement — e.g. bust, sleeve…"
                 value={composer}
                 onChange={(e) => {
                   setComposer(e.target.value);
@@ -1087,19 +1226,44 @@ export default function NewJobModal({
 
                   if (e.target.value.trim()) {
                     const r = compInputRef.current?.getBoundingClientRect();
-                    if (r) setCompRect({ top: r.bottom, left: r.left, width: r.width });
+                    if (r) {
+                      setCompRect({ top: r.bottom, left: r.left, width: r.width });
+                    }
                     setSugOpen(true);
                   } else {
                     setSugOpen(false);
                   }
                 }}
               />
+              <input
+                id="pendVal"
+                className={wellClass(Boolean(pendingMeas))}
+                autoComplete="off"
+                enterKeyHint="done"
+                placeholder={pendingMeas ? pendingMeas.name : "value"}
+                aria-label="Measurement value — type 8.5, or 8/8 for a pair"
+                onBlur={scheduleBlurCommit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    // Submit the measurement; preventDefault stops the browser advancing
+                    // focus into the next field (the job description) instead.
+                    e.preventDefault();
+                    cancelBlurCommit();
+                    commitPending();
+                  }
+                }}
+              />
+              <span className="shrink-0 text-[11px] text-(--hig-label-tertiary)">″</span>
                   {sugOpen && composer.trim() && compRect && createPortal(
                     <div
                       ref={compRef}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="hig fixed z-70 max-h-43 animate-fade-in overflow-y-auto rounded-2xl border border-(--hig-separator) bg-(--hig-card) p-1 shadow-(--hig-bar-shadow)"
-                      style={{ top: compRect.top + 6, left: compRect.left, width: compRect.width }}
+                      className="hig fixed z-70 max-h-58 animate-fade-in overflow-y-auto rounded-2xl bg-(--hig-card) p-1.5 shadow-(--hig-bar-shadow)"
+                      style={{
+                        top: compRect.top + 6,
+                        left: compRect.left,
+                        width: compRect.width,
+                      }}
                     >
                       {suggestions.map((s) => (
                         <button
@@ -1111,12 +1275,19 @@ export default function NewJobModal({
                             if (currentMeas()[s.key] != null) {
                               setEditingMeas(s.key);
                             } else {
+                              // The name IS the suggestion; the value field arms beside it.
                               setPendingMeas({ key: s.key, name: s.name });
+                              setComposer(s.name);
+                              const el = document.getElementById("pendVal") as HTMLInputElement | null;
+                              if (el) el.value = "";
+                              setSugOpen(false);
+                              requestAnimationFrame(() => el?.focus());
+                              return;
                             }
                             setComposer("");
                             setSugOpen(false);
                           }}
-                          className={`flex w-full items-center justify-between rounded-[9px] px-3 py-2.5 text-left text-[12.5px] transition-colors hover:bg-(--hig-accent-tint) hover:text-(--hig-label) ${
+                          className={`flex w-full items-center justify-between px-3.5 py-3.5 text-left text-[14px] transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-dotted [&:not(:last-child)]:border-(--hig-separator) hover:bg-(--hig-accent-tint) ${
                             s.custom ? "text-(--hig-accent)" : "text-(--hig-label)"
                           }`}
                         >
@@ -1128,34 +1299,19 @@ export default function NewJobModal({
                     document.body,
                   )}
             </div>
-            {pendingMeas && (
-              <div className="mt-2 flex animate-fade-in items-center gap-2 rounded-xl border border-(--hig-accent-line) bg-(--hig-accent-tint) p-2">
-                <span className="shrink-0 text-[12px] font-semibold text-(--hig-accent)">{pendingMeas.name}</span>
-                <input
-                  id="pendVal"
-                  className="min-w-0 flex-1 rounded-[9px] border border-(--hig-separator) bg-(--hig-card) px-3 py-2 text-[14px] font-semibold text-(--hig-label) outline-none"
-                  inputMode="decimal"
-                  placeholder="0"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitPending();
-                  }}
-                />
-                <span className="text-[11px] text-(--hig-label-tertiary)">″</span>
-                <button type="button" aria-label="Add value" onClick={commitPending} className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] bg-(--hig-success) text-white after:absolute after:-inset-3 after:content-['']">
-                  <CheckIcon />
-                </button>
-              </div>
-            )}
-        </section>
-          )}
-          {step === 2 && (
-        <section className="space-y-3">
+            {errors.fitting && <p key={`fitting-${errorSeq}`} className={sectionErrorClass}>{errors.fitting}</p>}
+          </section>
+
+          <section ref={jobRef} className="scroll-mt-3 space-y-3">
+            <SectionHead n="3" title="The job" hint={priceNum > 0 ? naira(priceNum) : undefined} />
             <input
               className={inputClass}
               placeholder="e.g. Gown — purple lace, puff sleeves"
               value={desc}
-              onChange={(e) => setDesc(e.target.value)}
+              onChange={(e) => {
+                setDesc(e.target.value);
+                setErrors((prev) => (prev.job === null ? prev : { ...prev, job: null }));
+              }}
             />
             <div className={miniLabelClass}>Agreed price</div>
             <div className="relative">
@@ -1165,7 +1321,10 @@ export default function NewJobModal({
                 placeholder="0"
                 inputMode="numeric"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => {
+                  setPrice(e.target.value);
+                  setErrors((prev) => (prev.job === null ? prev : { ...prev, job: null }));
+                }}
               />
             </div>
             <div className={miniLabelClass}>Due date</div>
@@ -1178,10 +1337,20 @@ export default function NewJobModal({
                 className={inputClass + " pl-9!"}
                 value={dueDate}
                 min={todayISO()}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  setErrors((prev) => (prev.job === null ? prev : { ...prev, job: null }));
+                }}
               />
             </div>
-            <div className={miniLabelClass}>Style reference</div>
+            <div className="mt-5 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-(--hig-label-secondary)">Style reference</span>
+              {photos.length > 0 && (
+                <span className="text-[11px] font-medium text-(--hig-label-secondary)">
+                  {photos.length}/{MAX_PHOTOS}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2 pt-1">
               {photos.map((p, i) => (
                 <div
@@ -1236,7 +1405,7 @@ export default function NewJobModal({
                   type="button"
                   aria-label="Add photo"
                   onClick={() => fileRef.current?.click()}
-                  className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border-[1.5px] border-dashed border-(--hig-accent-line) bg-(--hig-fill) text-(--hig-accent) transition-transform active:scale-95"
+                  className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border-[1.5px] border-dashed border-(--hig-accent-line) bg-(--hig-card) text-(--hig-accent) transition-transform active:scale-95"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-6 w-6">
                     <path d="M12 5v14" /><path d="M5 12h14" />
@@ -1244,19 +1413,16 @@ export default function NewJobModal({
                 </button>
               )}
             </div>
-            <div className="mt-2 text-[12px] leading-snug text-(--hig-label-tertiary)">
+            <p className="mt-2 text-[12px] leading-snug text-(--hig-label-tertiary)">
               {photos.some((p) => p.status === "uploading")
-                ? "Uploading…"
+                ? "Uploading — keep this sheet open for a moment."
                 : photos.some((p) => p.status === "error")
-                  ? "Tap a failed photo to retry."
-                  : photos.length > 0
-                    ? "Uploaded — ready to create."
-                    : "Add a style-reference photo."}
-            </div>
+                  ? "Tap the failed photo to retry the upload."
+                  : "Jpg or png, up to 10 MB — shows on the job card."}
+            </p>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFiles} />
-        </section>
-          )}
-          </div>
+            {errors.job && <p key={`job-${errorSeq}`} className={sectionErrorClass}>{errors.job}</p>}
+          </section>
         </div>
         {error && (
           <div className="shrink-0 px-4 pb-2">
@@ -1264,29 +1430,13 @@ export default function NewJobModal({
           </div>
         )}
         <div className="flex shrink-0 items-center gap-3 border-t border-(--hig-separator) bg-(--hig-card) px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
-          {step > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                goTo((step - 1) as 0 | 1 | 2);
-              }}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-(--hig-separator) bg-(--hig-fill) text-(--hig-label-secondary) transition-all active:scale-95"
-              aria-label="Back"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-11 shrink-0 items-center rounded-2xl px-3 text-[14px] font-medium text-(--hig-label-secondary) transition-colors hover:text-(--hig-label)"
-            >
-              Cancel
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-11 shrink-0 items-center rounded-2xl px-1 text-[14px] font-medium text-(--hig-label-secondary) transition-colors hover:text-(--hig-label)"
+          >
+            Cancel
+          </button>
           <div className="min-w-0 flex-1">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-(--hig-label-tertiary)">Ticket</div>
             <div className="whitespace-nowrap text-[20px] font-medium leading-none tracking-[-0.02em] text-(--hig-label) [font-variant-numeric:tabular-nums]">
@@ -1306,22 +1456,18 @@ export default function NewJobModal({
           </div>
           <button
             type="button"
-            onClick={step < 2 ? tryAdvance : handleCreate}
+            onClick={handleCreate}
             disabled={submitting}
             className="flex shrink-0 items-center gap-2 rounded-2xl bg-(--hig-accent) px-5 py-3 text-[14px] font-semibold text-white shadow-(--hig-bar-shadow) transition-all active:scale-95 disabled:opacity-60"
           >
             {submitting ? (
               <span className="h-3.75 w-3.75 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-            ) : step < 2 ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.75 w-3.75">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
             ) : (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="h-3.75 w-3.75">
                 <path d="M12 5v14" /><path d="M5 12h14" />
               </svg>
             )}
-            {step < 2 ? "Next" : submitting ? "Creating…" : "Create job"}
+            {submitting ? "Creating…" : "Create job"}
           </button>
         </div>
         {created && (
@@ -1371,5 +1517,27 @@ function CheckIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3">
       <path d="M5 12.5 10 17.5 19 6.5" />
     </svg>
+  );
+}
+
+/**
+ * Section headers on the single-page sheet: a numbered dot (label-on-card colors, so it
+ * adapts to theme), a title, and — when there is one — a live summary of the answer so far
+ * on the right. The numbers give the scroll order meaning: 1 whose money, 2 whose body,
+ * 3 what garment.
+ */
+function SectionHead({ n, title, hint }: { n: string; title: string; hint?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 pt-2">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-5.5 w-5.5 items-center justify-center rounded-full bg-(--hig-label) text-[10.5px] font-bold text-(--hig-card)">
+          {n}
+        </span>
+        <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-(--hig-label)">{title}</h3>
+      </div>
+      {hint && (
+        <span className="truncate text-[11.5px] font-medium text-(--hig-label-secondary)">{hint}</span>
+      )}
+    </div>
   );
 }

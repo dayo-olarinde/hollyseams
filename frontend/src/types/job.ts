@@ -1,4 +1,5 @@
 import type { PaginatedQuery } from "./api";
+import type { MeasurementValue } from "@/lib/measurement-input";
 
 export type JobStatus = "pending" | "completed" | "canceled";
 
@@ -29,7 +30,7 @@ export interface Job {
   measurementId: string;
   subjectName?: string;
   customerPhone?: string | null;
-  measurements?: Record<string, number | null>;
+  measurements?: Record<string, MeasurementValue | null>;
   styleRef?: JobImage[];
   finishedJob?: JobImage[];
   coverUrl?: string | null;
@@ -49,7 +50,7 @@ export interface CreateJobInput {
   subjects: Array<{
     relationship?: string;
     name?: string;
-    measurements: Record<string, number | null>;
+    measurements: Record<string, MeasurementValue | null>;
   }>;
   job: {
     styleRef?: JobImageInput[];

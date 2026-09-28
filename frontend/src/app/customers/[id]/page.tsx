@@ -20,6 +20,7 @@ import { useOutstandingPayments, useTopCustomers } from "@/hooks/use-reports";
 import { usePrefetchJob } from "@/hooks/use-jobs";
 import { useSubjectMeasurements } from "@/hooks/use-subjects";
 import { ApiError } from "@/lib/api/transport";
+import { formatMeasurement } from "@/lib/measurement-input";
 import { avatarColor, avatarTint } from "@/lib/avatar-colors";
 import { hasWhatsApp, waMe } from "@/lib/contact";
 import {
@@ -101,10 +102,15 @@ function MeasurementBook({
     );
   }
 
-  const entries = MEASUREMENT_KEYS.filter((k) => k in latest.measurements);
-  const extra = Object.keys(latest.measurements).filter(
-    (k) => !MEASUREMENT_KEYS.includes(k),
-  );
+  // Defense in depth: a record should be sparse (only taken fields), but anything that
+  // slipped through as a null/undefined — or a legacy coerced 0 — must not render as a row.
+  const entries = MEASUREMENT_KEYS.filter((k) => {
+    const v = latest.measurements[k];
+    return v !== null && v !== undefined && !(typeof v === "number" && v === 0);
+  });
+  const extra = Object.entries(latest.measurements)
+    .filter(([k, v]) => !MEASUREMENT_KEYS.includes(k) && v !== null && v !== undefined && !(typeof v === "number" && v === 0))
+    .map(([k]) => k);
   const rows = [...entries, ...extra];
 
   return (
@@ -129,19 +135,21 @@ function MeasurementBook({
             >
               <span className="text-[13.5px] text-(--hig-label)">{measureLabel(key)}</span>
               <span className="text-[15px] font-semibold [font-variant-numeric:tabular-nums]">
-                {v === null || v === undefined ? (
-                  <span className="text-[11px] font-light text-(--hig-label-tertiary)">
-                    not taken
-                  </span>
-                ) : (
-                  <>
-                    {v}
-                    <em className="ml-0.5 text-[12px] font-medium not-italic text-(--hig-label-secondary)">″</em>
+              {v === null || v === undefined ? (
+                <span className="text-[11px] font-light text-(--hig-label-tertiary)">
+                  not taken
+                </span>
+              ) : (
+                <>
+                  {formatMeasurement(v)}
+                  <em className="ml-0.5 text-[12px] font-medium not-italic text-(--hig-label-secondary)">″</em>
+                  {typeof v === "number" && (
                     <em className="ml-1.5 text-[9.5px] font-medium not-italic text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
                       ({cmOf(v)} cm)
                     </em>
-                  </>
-                )}
+                  )}
+                </>
+              )}
               </span>
             </div>
           );

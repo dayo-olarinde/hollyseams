@@ -52,7 +52,7 @@ const LETTER_HINTS: Record<string, string> = {
 export default function LoginPage() {
   // `isSigningIn`, not `isLoading`: the spinner and the disabled keypad belong
   // to *this* submit. (See lib/auth.tsx — the split outlives the redesign.)
-  const { login, error, clearError, isSigningIn } = useAuth();
+  const { login, error, clearError, isSigningIn, status } = useAuth();
   const [pin, setPin] = useState("");
   const [isShaking, setIsShaking] = useState(false);
 
@@ -114,6 +114,36 @@ export default function LoginPage() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleDigit, handleBackspace, handleClear]);
+
+  // Hold-screen while the session probe runs: a return visit is usually authenticated, and
+  // without this the keypad paints for the probe's whole duration before the redirect to
+  // the dashboard. `unknown` (offline) falls through to the keypad, where the error lands.
+  if (status === "checking") {
+    return (
+      <div className="hig flex min-h-dvh w-full max-w-[340px] select-none flex-col items-center justify-center text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-(--hig-separator) bg-(--hig-card)">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5 w-5 animate-pulse text-(--hig-accent)"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="6" cy="6" r="3" />
+            <circle cx="6" cy="18" r="3" />
+            <path d="M20 4 8.12 15.88" />
+            <path d="M14.47 14.48 20 20" />
+            <path d="M8.12 8.12 12 12" />
+          </svg>
+        </div>
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-widest text-(--hig-label-tertiary)">
+          Hollyseams · Tailor Studio
+        </p>
+      </div>
+    );
+  }
 
   return (
     // Always light: pinned by the auth layout; this class is the first-frame fallback.

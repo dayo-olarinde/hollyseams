@@ -3,24 +3,19 @@ import { NextResponse, type NextRequest } from "next/server";
 /**
  * The first half of the auth story: a cheap redirect before React exists.
  *
- * The session cookie is `httpOnly` (JavaScript cannot read it) but the *server* can, including this
- * middleware — so a request with no session cookie is answered with a redirect to `/login` before
- * any app JavaScript is downloaded, parsed or rendered. Without it, tapping a bookmark to `/jobs`
- * with no session painted the whole app shell, ran the session probe, and only then navigated: a
- * visible flash of a screen the user is not allowed to see, plus a wasted bundle and request.
+ * The session cookie is `httpOnly` (JavaScript cannot read it) but the server can, so a request
+ * with no cookie is answered with a redirect to `/login` before any app JavaScript runs. Must be
+ * `middleware.ts` exporting `middleware` — the Next 15 convention; under any other name the file
+ * is silently never loaded and return visits flash the login keypad.
  *
- * What this is **not**: authorisation. It checks that a cookie exists, not that the session behind
- * it is alive — the browser can hold a cookie for a session the server has already revoked or
- * expired. The API's own guard is what actually decides, on every request, and the client's
- * `SessionWatcher` handles the "cookie present but dead" case. Treating this as a security boundary
- * would be exactly the mistake the review is meant to prevent; it is a routing shortcut, and it
- * saves a round trip in the common "never signed in" case.
+ * This is NOT authorisation: it checks a cookie exists, not that the session is alive. The API's
+ * guard decides on every request; the client's `SessionWatcher` handles the dead-cookie case.
  */
 const SESSION_COOKIE = "sessionId";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/jobs", "/customers", "/reports"];
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSessionCookie = request.cookies.has(SESSION_COOKIE);
 

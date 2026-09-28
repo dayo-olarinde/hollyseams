@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { JobDetailSkeleton } from "@/components/ui/skeletons";
 import { useDeleteJob, useJob } from "@/hooks/use-jobs";
 import { ApiError } from "@/lib/api/transport";
+import { formatMeasurement } from "@/lib/measurement-input";
 import {
   cmOf,
   formatDay,
@@ -128,11 +129,13 @@ function Tape({ job }: { job: Job }) {
               </span>
             ) : (
               <>
-                {value}
+                {formatMeasurement(value)}
                 <em className="ml-0.5 text-[13px] font-medium not-italic text-(--hig-label-secondary)">″</em>
-                <em className="ml-1.5 text-[9.5px] font-medium not-italic text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
-                  ({cmOf(value)} cm)
-                </em>
+                {typeof value === "number" && (
+                  <em className="ml-1.5 text-[9.5px] font-medium not-italic text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
+                    ({cmOf(value)} cm)
+                  </em>
+                )}
               </>
             )}
           </p>

@@ -122,7 +122,7 @@ export function EditJobSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full sm:max-w-107.5 animate-sheet-in rounded-t-[26px] border border-b-0 border-(--hig-separator) bg-(--hig-card) px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full sm:max-w-107.5 animate-sheet-in rounded-t-[26px] bg-(--hig-canvas) backdrop-blur-xl px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
         <div
           className="mx-auto h-1 w-9.5 rounded-full bg-(--hig-separator)"
           aria-hidden="true"

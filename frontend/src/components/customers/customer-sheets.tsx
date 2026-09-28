@@ -8,6 +8,8 @@ import { updateCustomer } from "@/lib/api/customers";
 import { addSubject } from "@/lib/api/subjects";
 import { keys } from "@/lib/query/keys";
 import { measureLabel } from "@/lib/measurements";
+import { parseMeasurementInput, formatMeasurementInput } from "@/lib/measurement-input";
+import type { MeasurementValue } from "@/lib/measurement-input";
 import { todayISO } from "@/lib/format";
 import type { Customer } from "@/types/customer";
 
@@ -95,7 +97,7 @@ export function EditCustomerSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Edit client</h2>
@@ -116,7 +118,7 @@ export function EditCustomerSheet({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-xl bg-(--hig-fill) px-3.5 py-3 text-[14px] text-(--hig-label) outline-none focus:ring-2 focus:ring-(--hig-accent)/40"
+              className="input-field mt-1.5 w-full rounded-xl px-3.5 py-3 text-[14px] text-(--hig-label) outline-none"
               autoFocus
             />
           </label>
@@ -129,7 +131,7 @@ export function EditCustomerSheet({
               onChange={(e) => setPhone(e.target.value)}
               inputMode="tel"
               placeholder="e.g. 08012345678"
-              className="mt-1.5 w-full rounded-xl bg-(--hig-fill) px-3.5 py-3 text-[14px] text-(--hig-label) outline-none placeholder:text-(--hig-label-tertiary) focus:ring-2 focus:ring-(--hig-accent)/40"
+              className="input-field mt-1.5 w-full rounded-xl px-3.5 py-3 text-[14px] text-(--hig-label) outline-none"
             />
           </label>
           {error && <p className="text-[12.5px] text-(--hig-danger)">{error}</p>}
@@ -215,7 +217,7 @@ export function AddSubjectSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Add family member</h2>
@@ -237,7 +239,7 @@ export function AddSubjectSheet({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Who do you sew for?"
-              className="mt-1.5 w-full rounded-xl bg-(--hig-fill) px-3.5 py-3 text-[14px] text-(--hig-label) outline-none placeholder:text-(--hig-label-tertiary) focus:ring-2 focus:ring-(--hig-accent)/40"
+              className="input-field mt-1.5 w-full rounded-xl px-3.5 py-3 text-[14px] text-(--hig-label) outline-none"
               autoFocus
             />
           </label>
@@ -300,7 +302,7 @@ export function LogFittingSheet({
   /** The canonical field list, camelCased — the same keys the wizard and the book render. */
   keys: string[];
   /** The latest fitting's values, to carry forward so a re-fit only changes what moved. */
-  previous: Record<string, number | null> | undefined;
+  previous: Record<string, MeasurementValue | null> | undefined;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -309,8 +311,7 @@ export function LogFittingSheet({
   const [values, setValues] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     for (const k of measurementKeys) {
-      const v = previous?.[k];
-      seed[k] = v === null || v === undefined ? "" : String(v);
+      seed[k] = formatMeasurementInput(previous?.[k]);
     }
     return seed;
   });
@@ -321,19 +322,23 @@ export function LogFittingSheet({
 
   const save = () => {
     setError(null);
-    const filled: Record<string, number | null> = {};
+    // SPARSE on purpose: only fields actually taken are sent. Sending the full grid with
+    // nulls used to let backend coercion store 0s for "not taken" — which is how a 34-row
+    // book of zeros happened. A record carries what was measured, nothing else.
+    const filled: Record<string, MeasurementValue> = {};
     for (const k of measurementKeys) {
       const raw = values[k]?.trim() ?? "";
-      if (raw === "") {
-        filled[k] = null;
-        continue;
-      }
-      const n = Number(raw);
-      if (!Number.isFinite(n) || n <= 0 || n > 500) {
-        setError(`“${k}” doesn't look like a measurement.`);
+      if (raw === "") continue;
+      const parsed = parseMeasurementInput(raw);
+      if (
+        parsed === null ||
+        (typeof parsed === "number" && (parsed <= 0 || parsed > 500)) ||
+        (Array.isArray(parsed) && (parsed[0] > 500 || parsed[1] > 500))
+      ) {
+        setError(`“${k}” doesn't look like a measurement. Use "8.5" or a pair like "8/8".`);
         return;
       }
-      filled[k] = n;
+      filled[k] = parsed;
     }
     const anyValue = Object.values(filled).some((v) => v !== null);
     if (!anyValue) {
@@ -371,7 +376,7 @@ export function LogFittingSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">
@@ -396,9 +401,28 @@ export function LogFittingSheet({
                 value={values[k] ?? ""}
                 onChange={(e) => setValues((prev) => ({ ...prev, [k]: e.target.value }))}
                 inputMode="decimal"
-                placeholder="—"
-                className="w-full rounded-xl bg-(--hig-fill) px-3 py-2.5 text-right text-[13.5px] [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none placeholder:text-(--hig-label-tertiary) focus:ring-2 focus:ring-(--hig-accent)/40"
+                placeholder="8.5 · 8/8"
+                className="input-field w-full rounded-xl px-3 py-2.5 text-right text-[13.5px] [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none"
               />
+              {/* The numeric keypad has no "/", yet pairs ("8/8") are core notation — this
+                  key inserts it. preventDefault on mousedown keeps focus in the input so the
+                  tap never blurs mid-edit. */}
+              <button
+                type="button"
+                aria-label="Add pair separator — for two numbers like 8/8"
+                title="Two numbers, e.g. 8/8"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                  if (!input) return;
+                  const pos = input.selectionStart ?? input.value.length;
+                  const v = input.value;
+                  setValues((prev) => ({ ...prev, [k]: v.slice(0, pos) + "/" + v.slice(pos) }));
+                }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-(--hig-separator) bg-(--hig-fill) text-[14px] font-semibold text-(--hig-label-secondary)"
+              >
+                /
+              </button>
               <span className="w-6 shrink-0 text-[10.5px] text-(--hig-label-tertiary)">″</span>
             </label>
           ))}

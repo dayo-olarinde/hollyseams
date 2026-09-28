@@ -567,7 +567,7 @@ export function CustomersView() {
             ))}
           </div>
         ) : !failure && narrowed && visible.length === 0 ? (
-          <div className="stitch-card mt-3 rounded-[20px] px-6 py-10 text-center">
+          <div className="stitch-card mx-5 mt-3 rounded-[20px] px-6 py-10 text-center">
             <p className="text-[15px] font-semibold">Nothing matches.</p>
             <p className="mt-1.5 text-[13px] leading-5 text-(--hig-label-secondary)">
               {q
@@ -586,7 +586,7 @@ export function CustomersView() {
             </button>
           </div>
         ) : customers.length === 0 && !failure ? (
-          <div className="stitch-card mt-3 rounded-[20px] px-6 py-10 text-center">
+          <div className="stitch-card mx-5 mt-3 rounded-[20px] px-6 py-10 text-center">
             <p className="text-[15px] font-semibold">No clients yet.</p>
             <p className="mt-1.5 text-[13px] leading-5 text-(--hig-label-secondary)">
               New clients land here, A→Z, the moment a job is created.

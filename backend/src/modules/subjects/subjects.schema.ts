@@ -25,9 +25,15 @@ export const createSubjectSchema = z
     }
   });
 
+/**
+ * A measurement value is either a single dimension (8.5 inches) or a PAIR of dimensions
+ * recorded as "length/width" — tailors enter "8/8" for an 8-by-8 sleeve, so the API
+ * accepts [8, 8]. Stored as-is in the JSONB column.
+ */
+const measurementNumber = z.coerce.number().finite().nonnegative().max(500);
 export const measurementDataSchema = z.record(
   z.string(),
-  z.coerce.number().finite().nonnegative(),
+  z.union([measurementNumber, z.tuple([measurementNumber, measurementNumber])]),
 );
 
 export const createMeasurementSchema = z.strictObject({

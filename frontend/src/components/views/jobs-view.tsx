@@ -187,6 +187,9 @@ function StatusPillGroup({ job }: { job: Job }) {
   const updateJob = useUpdateJob();
   const stage = jobStage(job);
   const busy = updateJob.isPending;
+  /** Set when "Delivered" is tapped: the card shows a date confirm instead of stamping now. */
+  const [askingDelivery, setAskingDelivery] = useState(false);
+  const todayStr = () => new Date().toLocaleDateString("en-CA");
 
   // The pill's value is the *intent* read back out of the row: `completed` without a stamp is
   // "ready", with one it's "delivered" — the exact mapping `jobStage` renders above.
@@ -198,13 +201,28 @@ function StatusPillGroup({ job }: { job: Job }) {
 
   const setStatus = (intent: StatusIntent) => {
     if (intent === currentPill || busy) return;
+    if (intent === "delivered") {
+      // Recording history is a first-class flow — tailors enter old jobs — so delivery date
+      // is always CONFIRMED, never silently stamped with today. Defaults to today; the
+      // date input takes any past day for a backdated entry.
+      setAskingDelivery(true);
+      return;
+    }
+    updateJob.mutate({
+      id: job.id,
+      input: { status: intent, deliveredAt: null },
+    });
+  };
+
+  const confirmDelivery = (dateStr: string) => {
     updateJob.mutate({
       id: job.id,
       input: {
-        status: intent === "delivered" ? "completed" : intent,
-        deliveredAt: intent === "delivered" ? new Date().toISOString() : null,
+        status: "completed",
+        deliveredAt: new Date(`${dateStr}T12:00:00`).toISOString(),
       },
     });
+    setAskingDelivery(false);
   };
 
   return (
@@ -247,6 +265,43 @@ function StatusPillGroup({ job }: { job: Job }) {
           );
         })}
       </div>
+      {askingDelivery && (
+        <div className="mt-2 rounded-xl border border-(--hig-separator) bg-(--hig-card) p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.05em] text-(--hig-label-tertiary)">
+              Delivered on
+            </span>
+            <input
+              type="date"
+              defaultValue={todayStr()}
+              max={todayStr()}
+              aria-label="Delivery date"
+              className="min-w-0 flex-1 rounded-lg border border-(--hig-separator) bg-(--hig-fill) px-2 py-1.5 text-[13px] [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none"
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={(e) => {
+                const input = e.currentTarget.parentElement?.querySelector<HTMLInputElement>("input[type=date]");
+                confirmDelivery(input?.value || todayStr());
+              }}
+              className="shrink-0 rounded-lg bg-(--hig-success) px-3 py-1.5 text-[12px] font-semibold text-white active:scale-[0.97] disabled:opacity-60"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setAskingDelivery(false)}
+              className="shrink-0 text-[12px] font-medium text-(--hig-label-tertiary) hover:text-(--hig-label)"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="mt-1.5 text-[10.5px] text-(--hig-label-tertiary)">
+            Delivering an older job? Pick the day it actually left the shop.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -637,7 +692,7 @@ export function JobsView() {
           </div>
         ) : jobs.length === 0 && !failure ? (
           <div
-            className="hig-rise mx-5 mt-4 rounded-[20px] bg-(--hig-card) px-6 py-10 text-center shadow-(--hig-card-shadow)"
+            className="stitch-card hig-rise mx-5 mt-4 rounded-[20px] px-6 py-10 text-center"
             style={{ animationDelay: "120ms" }}
           >
             <p className="text-[15px] font-semibold">{empty.big}</p>
