@@ -55,10 +55,12 @@ html.hig-light .hig {
   --hig-accent-soft: rgba(0, 122, 255, 0.25);
   --hig-accent-tint: rgba(0, 122, 255, 0.12);
   --hig-accent-line: rgba(0, 122, 255, 0.35);
-  --hig-bg: #F2F2F2;
-  --hig-canvas: #F2F2F2;
-  --hig-fill: #F2F2F7;
-  --hig-field: #F5F6F8;
+  --hig-bg: #FFFFFF;
+  /* The page itself is transparent — the gradient painted on <html> (base layer below)
+     IS the background. Recessed greys form one cool family, each a clear step darker than
+     the card: fill (chips, buttons) → field (inputs) → filter well (segmented controls). */
+  --hig-fill: #F2F3F7;
+  --hig-field: #EDEFF4;
   /* Placeholder text: iOS tertiary (0.3) was nearly invisible on the grey fill. */
   --hig-placeholder: rgba(60, 60, 67, 0.45);
   --hig-label: #000000;
@@ -66,16 +68,19 @@ html.hig-light .hig {
   --hig-label-tertiary: rgba(60, 60, 67, 0.3);
   --hig-dot-empty: rgba(0, 0, 0, 0.25);
   --hig-error: #FF3B30;
-  --hig-grouped: #F2F2F2;
   --hig-card: #FFFFFF;
   --hig-separator: rgba(60, 60, 67, 0.29);
-  --hig-ring: rgba(190, 199, 210, 0.5);
-  /* Stitch's whisper shadow: 0 2px 8px rgba(36,28,24,0.03), nudged to 0.05 so it
-     survives PNG compression and cheap OLEDs. Works together with the ring. */
-  --hig-card-shadow: 0 2px 8px rgba(36, 28, 24, 0.05);
-  /* Stitch's segmented-control well (surface-container #EBEEF4): the recessed track
-     the filter chips sit in — one step darker than the canvas, lighter than text. */
-  --hig-filter-well: #DCE3EA;
+  --hig-ring: rgba(60, 60, 67, 0.14);
+  /* Every card gets the same hairline edge so a white surface pops against the light
+     page, then the two-layer lift: a tight contact shadow plus a wide soft one. That
+     combination is what reads as "premium" — one flat blur just reads as grey smudge. */
+  --hig-card-border: rgba(60, 60, 67, 0.10);
+  --hig-card-shadow:
+    inset 0 0 0 1px var(--hig-card-border),
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 10px 28px -10px rgba(16, 24, 40, 0.16);
+  /* Stitch's segmented-control well: one step darker than the canvas, lighter than text. */
+  --hig-filter-well: #E7E9F0;
   --hig-grid: rgba(60, 60, 67, 0.12);
   --hig-bar: rgba(255, 255, 255, 0.78);
   --hig-bar-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
@@ -93,10 +98,6 @@ html.hig-dark .hig {
   --hig-accent-tint: rgba(10, 132, 255, 0.14);
   --hig-accent-line: rgba(10, 132, 255, 0.35);
   --hig-bg: #000000;
-  /* Dark canvas: the Stitch export shipped no dark palette, so this is the
-     light canvas inverted in spirit — translucent near-black over the dark wash,
-     which lets --hig-card surfaces read as raised and lets sheets frost. */
-  --hig-canvas: rgba(16, 19, 24, 0.8);
   --hig-fill: #2C2C2E;
   --hig-field: #23262B;
   --hig-placeholder: rgba(235, 235, 245, 0.42);
@@ -105,12 +106,13 @@ html.hig-dark .hig {
   --hig-label-tertiary: rgba(235, 235, 245, 0.3);
   --hig-dot-empty: rgba(255, 255, 255, 0.3);
   --hig-error: #FF453A;
-  --hig-grouped: #000000;
   --hig-card: #1C1C1E;
   --hig-separator: rgba(84, 84, 88, 0.6);
   --hig-ring: rgba(84, 84, 88, 0.6);
-  /* Shadows are invisible on dark surfaces — the ring does the separating. */
-  --hig-card-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  /* Shadows are invisible on dark surfaces — a hairline edge does the separating.
+     Same recipe as light: the edge rides inside --hig-card-shadow as an inset ring. */
+  --hig-card-border: rgba(235, 235, 245, 0.10);
+  --hig-card-shadow: inset 0 0 0 1px var(--hig-card-border);
   --hig-filter-well: #2C2C2E;
   --hig-grid: rgba(84, 84, 88, 0.28);
   --hig-bar: rgba(24, 24, 28, 0.78);
@@ -135,10 +137,9 @@ html.hig-dark .hig {
  */
 @utility stitch-card {
   /*
-   * The card recipe, as one utility: opaque surface + whisper shadow, NO border. On the
-   * frosted canvas the card's opacity alone draws the edge (the tailor asked for exactly
-   * this); depth comes from the shadow being *barely* there. In dark mode the frost
-   * contrast does the same work a ring used to.
+   * The card recipe, as one utility: opaque surface, hairline edge, two-layer lift.
+   * The hairline (baked into --hig-card-shadow as an inset ring) is what makes a white
+   * card pop against the light page; the shadow stack supplies the depth.
    */
   background: var(--hig-card);
   box-shadow: var(--hig-card-shadow);
@@ -147,9 +148,10 @@ html.hig-dark .hig {
 @utility input-field {
   /*
    * The ONE input recipe, so a field looks the same on every screen and changing it is a
-   * one-line edit. Resting: recessed grey well with a cool hairline (same ring the cards
-   * use, inverted into the surface). Focus: the well brightens to card white, the hairline
-   * turns accent, and a soft accent halo appears — three signals, no border jump.
+   * one-line edit. Resting: recessed grey well (--hig-field) with a cool hairline — the
+   * same edge family the cards wear, inverted into the surface. Focus: the well brightens
+   * to card white, the hairline turns accent, and a soft accent halo appears — three
+   * signals, no border jump.
    * Placeholder color lives in --hig-placeholder because tertiary label was too faint.
    */
   background: var(--hig-field);
@@ -226,18 +228,28 @@ html.hig-dark .hig {
   }
 
   /*
-   * Letterbox insurance for standalone/PWA windows: the manifest's background_color is a fixed
-   * light value, but the OS may paint it before (or instead of) our themed body — in dark mode
-   * that flashes a white splash and, on desktop-style window hosts, it can show around the page
-   * forever. Painting html/body from the theme means any visible frame is always on-brand.
+   * The base layer everything translucent sits on: a luminous, neutral gradient — bright
+   * behind the header, grounding towards the floor. This is the depth the flat #F2F2F2
+   * lacked; cards, sheets and wells are translucent or opaque above it. Also letterbox
+   * insurance for PWA windows, as before.
    */
   html.hig-light,
   html.hig-light body {
-    background: #F2F2F2;
+    /* The premium base: a cool porcelain floor with a soft glow pooled at the crown, so
+       the page reads as lit rather than flat. Cards, sheets and wells are opaque or
+       tinted against this — it is the one thing every screen shares. */
+    background:
+      radial-gradient(110% 65% at 50% -8%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 62%),
+      linear-gradient(180deg, #f5f7fa 0%, #eceff4 45%, #e5e8f0 100%);
+    background-attachment: fixed;
   }
 
   html.hig-dark body {
-    background: #0b0e12;
+    /* Same lit-from-above depth in dark: a blue-black floor with a graphite glow at the
+       crown, so the dark theme is not a dead flat slab. */
+    background:
+      radial-gradient(110% 65% at 50% -8%, rgba(52, 62, 80, 0.45) 0%, rgba(52, 62, 80, 0) 62%),
+      linear-gradient(180deg, #12161d 0%, #0d1117 48%, #0a0d12 100%);
   }
 
   /*

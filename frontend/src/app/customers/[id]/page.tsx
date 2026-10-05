@@ -70,7 +70,7 @@ function MeasurementBook({
   if (fittingQ.isPending) {
     return (
       <section className="mt-6">
-        <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12px] text-(--hig-label-tertiary)">
+        <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12px] text-(--hig-label-tertiary) shadow-(--hig-card-shadow)">
           Opening the measurement book…
         </div>
       </section>
@@ -85,7 +85,7 @@ function MeasurementBook({
             Measurement book
           </h3>
         </div>
-        <div className="rounded-[20px] bg-(--hig-card) px-4 py-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+        <div className="rounded-[20px] bg-(--hig-card) px-4 py-8 text-center shadow-(--hig-card-shadow)">
           <p className="text-[14px] font-semibold">No fittings on file.</p>
           <p className="mx-auto mt-1 max-w-[240px] text-[12.5px] leading-5 text-(--hig-label-secondary)">
             {subjectName} hasn&apos;t been measured yet — the first fitting starts the book.
@@ -123,7 +123,7 @@ function MeasurementBook({
           Fitted {formatDay(String(latest.date))}
         </span>
       </div>
-      <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+      <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-(--hig-card-shadow)">
         {rows.map((key, i) => {
           const v = latest.measurements[key];
           return (
@@ -201,7 +201,7 @@ function SubjectSwitcher({
               aria-pressed={active}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[12.5px] transition-all duration-150 active:scale-[0.97] ${
                 active
-                  ? "bg-(--hig-card) font-semibold text-(--hig-label) shadow-[0_1px_3px_rgba(0,0,0,0.10)]"
+                  ? "bg-(--hig-card) font-semibold text-(--hig-label) shadow-(--hig-card-shadow)"
                   : "text-(--hig-label-secondary)"
               }`}
             >
@@ -248,7 +248,7 @@ function FittingsTray({ subjectId }: { subjectId: string }) {
       </p>
       <div className="space-y-1.5">
         {fittings.map((f) => (
-          <div key={f.id} className="overflow-hidden rounded-2xl bg-(--hig-card) shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+          <div key={f.id} className="overflow-hidden rounded-2xl bg-(--hig-card) shadow-(--hig-card-shadow)">
             <button
               type="button"
               onClick={() => setOpenFitting(openFitting === f.id ? null : f.id)}
@@ -323,7 +323,7 @@ function SubjectJobs({
         </span>
       </div>
       {jobs.length === 0 ? (
-        <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12.5px] text-(--hig-label-tertiary)">
+        <div className="rounded-[20px] bg-(--hig-card) px-4 py-6 text-center text-[12.5px] text-(--hig-label-tertiary) shadow-(--hig-card-shadow)">
           Nothing commissioned for {subjectName} yet.
         </div>
       ) : (
@@ -336,7 +336,7 @@ function SubjectJobs({
                 key={j.id}
                 href={`/jobs/${j.id}`}
                 onPointerDown={() => prefetchJob(j.id)}
-                className="flex w-full items-center gap-2.5 rounded-[16px] bg-(--hig-card) px-3.5 py-3 text-left shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-transform duration-200 active:scale-[0.98]"
+                className="flex w-full items-center gap-2.5 rounded-[16px] bg-(--hig-card) px-3.5 py-3 text-left shadow-(--hig-card-shadow) transition-transform duration-200 active:scale-[0.98]"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-medium">
@@ -435,7 +435,7 @@ export default function CustomerFilePage() {
   ];
 
   return (
-    <main className="hig min-h-dvh bg-(--hig-grouped) pb-[calc(4rem+env(safe-area-inset-bottom))] text-(--hig-label) transition-colors duration-300">
+    <main className="hig min-h-dvh bg-transparent pb-[calc(4rem+env(safe-area-inset-bottom))] text-(--hig-label) transition-colors duration-300">
       <DetailHeader
         title={customer?.name ?? "Client dossier"}
         fallbackHref="/dashboard?tab=customers"
@@ -481,7 +481,7 @@ export default function CustomerFilePage() {
         <>
           <div className="mx-auto w-full sm:max-w-107.5 px-4 pt-5">
             {/* Hero profile card — Stitch's dossier header */}
-            <section className="rounded-[22px] bg-(--hig-card) p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+            <section className="rounded-[22px] bg-(--hig-card) p-4.5 shadow-(--hig-card-shadow)">
               <div className="flex items-start gap-3.5">
                 <span
                   className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-[17px] font-semibold"
@@ -548,7 +548,7 @@ export default function CustomerFilePage() {
             {/* The ledger counters */}
             <div className="mt-4 grid grid-cols-3 gap-2.5">
               {heroStats.map((s) => (
-                <div key={s.label} className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                <div key={s.label} className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-(--hig-card-shadow)">
                   <p className={`text-[15px] font-medium leading-tight [font-variant-numeric:tabular-nums] ${s.tone}`}>
                     {s.value}
                   </p>
@@ -562,7 +562,7 @@ export default function CustomerFilePage() {
 
           {subjects.length === 0 ? (
             <div className="mx-auto mt-6 w-full sm:max-w-107.5 px-4">
-              <div className="rounded-[20px] bg-(--hig-card) px-5 py-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+              <div className="rounded-[20px] bg-(--hig-card) px-5 py-8 text-center shadow-(--hig-card-shadow)">
                 <p className="text-[14.5px] font-semibold">No family members on file.</p>
                 <p className="mx-auto mt-1 max-w-[260px] text-[12.5px] leading-5 text-(--hig-label-secondary)">
                   Add the people you sew for — each keeps their own measurement book and
@@ -612,7 +612,7 @@ export default function CustomerFilePage() {
                 type="button"
                 onClick={() => setFittingOpen(true)}
                 disabled={!activeSubject}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-[14px] bg-(--hig-card) text-[13.5px] font-semibold text-(--hig-label) shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-transform duration-200 active:scale-[0.98] disabled:opacity-40"
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-[14px] bg-(--hig-card) text-[13.5px] font-semibold text-(--hig-label) shadow-(--hig-card-shadow) transition-transform duration-200 active:scale-[0.98] disabled:opacity-40"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5 text-(--hig-label-secondary)" aria-hidden="true">
                   <path d="M3 17l6-6 4 4 8-8" />

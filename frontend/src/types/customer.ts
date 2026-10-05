@@ -7,11 +7,6 @@ export interface Customer {
   updatedAt: string;
 }
 
-export interface CreateCustomerInput {
-  name: string;
-  phoneNumber?: string;
-}
-
 export interface UpdateCustomerInput {
   name?: string;
   phoneNumber?: string;

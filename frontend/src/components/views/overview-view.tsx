@@ -233,21 +233,25 @@ export function OverviewView() {
   });
 
   // Single-word labels (Stitch's style) — anything longer wraps at 390px.
-  const floorTabs: Array<{ key: FloorFilter; label: string; count: number }> = [
-    { key: "all", label: "All", count: counts.all },
-    { key: "pending", label: "Sewing", count: counts.pending },
-    { key: "completed", label: "Ready", count: counts.ready },
-    { key: "delivered", label: "Done", count: counts.delivered },
+  const floorTabs: Array<{
+    key: FloorFilter;
+    label: string;
+    countKey: "all" | "pending" | "ready" | "delivered";
+  }> = [
+    { key: "all", label: "All", countKey: "all" },
+    { key: "pending", label: "Sewing", countKey: "pending" },
+    { key: "completed", label: "Ready", countKey: "ready" },
+    { key: "delivered", label: "Done", countKey: "delivered" },
   ];
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-canvas) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       {/* ——— 1. Fixed top bar (Stitch's: monogram + name, trailing actions) ——— */}
-      <header className="fixed inset-x-0 top-0 z-30 bg-(--hig-canvas)/85 px-3 pb-1.5 pt-2 backdrop-blur-[20px] backdrop-saturate-150">
+      <header className="fixed inset-x-0 top-0 z-30 bg-(--hig-bar)/80 px-3 pb-1.5 pt-2 backdrop-blur-[20px] backdrop-saturate-150">
         <div className="mx-auto flex h-12 w-full items-center justify-between">
-          {/* The v2 wordmark, at title weight — the brand line of the screen. */}
-          <p className="text-[26px] font-semibold tracking-[-0.02em]">
-            Holly<span className="text-(--hig-accent)">seams</span>
+          {/* The wordmark at the shared header size — same 20px/medium as every other tab. */}
+          <p className="text-[20px] font-medium tracking-[-0.02em]">
+            Holly<span className="text-(--hig-accent)">Seams</span>
           </p>
           <ThemeToggle />
         </div>
@@ -435,18 +439,24 @@ export function OverviewView() {
           </div>
 
           {/* HIG segmented control, Stitch's placement. */}
-          <div className="mb-3 flex items-center gap-1 rounded-lg bg-(--hig-filter-well) p-1">
+          <div className="mb-3 flex items-center gap-1 rounded-lg border border-(--hig-separator) bg-(--hig-filter-well) p-1">
             {floorTabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setFloor(t.key)}
                 className={`flex-1 rounded-md px-2 py-1.5 text-center text-[12px] transition-all duration-150 ${
                   floor === t.key
-                    ? "bg-(--hig-card) font-semibold text-(--hig-label) shadow-sm"
+                    ? "bg-(--hig-card) font-semibold text-(--hig-label) shadow-(--hig-card-shadow)"
                     : "text-(--hig-label-secondary) active:text-(--hig-label)"
                 }`}
               >
-                {t.label} ({t.count})
+                {/* "…" until the counts answer, "—" when they failed: loading is not zero. */}
+                {t.label}{" "}
+                {countsQ.isPending
+                  ? "(…)"
+                  : countsQ.isError
+                    ? "(—)"
+                    : `(${counts[t.countKey]})`}
               </button>
             ))}
           </div>

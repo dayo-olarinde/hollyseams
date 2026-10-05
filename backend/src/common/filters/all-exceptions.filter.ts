@@ -88,7 +88,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
-    // Handle errors created by Nest itself, such as NotFoundException or UnauthorizedException.
     if (exception instanceof HttpException) {
       const statusCode = exception.getStatus();
 
@@ -108,7 +107,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message?: string;
     } | null;
 
-    // Use the supplied statusCode when it is actually a number; otherwise treat the error as a server error.
     const statusCode =
       typeof candidate?.statusCode === "number" ? candidate.statusCode : 500;
 
@@ -123,7 +121,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private httpExceptionMessage(exception: HttpException): string {
-    const response = exception.getResponse(); // Get the response payload stored inside Nest's HttpException.
+    const response = exception.getResponse();
 
     if (typeof response === "string") return response;
 

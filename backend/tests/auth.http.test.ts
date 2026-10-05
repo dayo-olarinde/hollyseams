@@ -248,8 +248,11 @@ describe("auth endpoints (HTTP)", () => {
     expect(sessionId).toBeDefined();
     expect(redis.store.has(`session:${sessionId}`)).toBe(true);
 
-    // A successful login clears the counter, so earlier typos cannot lock out the owner.
+    // A successful login clears the counter, so earlier typos cannot lock out the owner —
+    // and it wipes the failure streak feeding the lockout (steps 5d/6 of the flow).
     expect(redis.store.has("ratelimit:login")).toBe(false);
+    expect(redis.store.has("ratelimit:login:fail")).toBe(false);
+    expect(redis.store.has("ratelimit:login:lock")).toBe(false);
   });
 
   it("returns 401 with the preserved message for a wrong PIN", async () => {
@@ -346,5 +349,39 @@ describe("auth endpoints (HTTP)", () => {
       "Too many login attempts. Wait 15 minutes.",
     );
     expect(response.headers["retry-after"]).toBeDefined();
+  });
+
+  it("locks login with exponential backoff after the threshold and clears on success", async () => {
+    // Window 1: three typos are free; the fourth (the threshold) arms the first lock.
+    for (let attempt = 0; attempt < 4; attempt++) await login({ pin: "0000" });
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(30);
+
+    // Still inside window 1: even the CORRECT PIN is refused — step 3 answers before
+    // the PIN is ever checked, so a locked account leaks nothing to the attacker.
+    const locked = await login({ pin: SEED_PIN });
+    expect(locked.statusCode).toBe(429);
+    expect(locked.json().message).toBe(
+      "Too many incorrect PINs. Login is temporarily locked.",
+    );
+    expect(locked.headers["retry-after"]).toBeDefined();
+
+    // Time passes: the attempt window and the 30 s lock lapse, but the 60-minute
+    // failure streak survives — so the next wrong PIN escalates the lock to 60 s.
+    await redis.del("ratelimit:login");
+    await redis.del("ratelimit:login:lock");
+    await login({ pin: "0000" });
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(60);
+
+    // The doubled lock answers again while the fresh window still has budget.
+    expect((await login({ pin: SEED_PIN })).statusCode).toBe(429);
+
+    // Once the lock expires the owner gets in, and success wipes the whole trail.
+    await redis.del("ratelimit:login:lock");
+    const success = await login({ pin: SEED_PIN });
+
+    expect(success.statusCode).toBe(200);
+    expect(redis.store.has("ratelimit:login")).toBe(false);
+    expect(redis.store.has("ratelimit:login:fail")).toBe(false);
+    expect(redis.store.has("ratelimit:login:lock")).toBe(false);
   });
 });

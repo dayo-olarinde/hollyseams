@@ -128,8 +128,8 @@ describe("reports authentication", () => {
 describe("GET /api/v1/reports/monthly-revenue", () => {
   it("returns the running total and formats each month", async () => {
     const rows = [
-      monthlyRow(2026, 0, "12000", "12000"), // January
-      monthlyRow(2026, 1, "8000.50", "20000.50"), // February
+      monthlyRow(2026, 0, "12000", "12000"),
+      monthlyRow(2026, 1, "8000.50", "20000.50"),
     ];
     await buildApp({ onQuery: () => rows });
 

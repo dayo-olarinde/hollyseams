@@ -45,7 +45,6 @@ export const configureApp = async (
 
   const fastify = app.getHttpAdapter().getInstance() as FastifyInstance;
 
-  // Register a Fastify lifecycle hook that runs after a response has been sent.
   fastify.addHook("onResponse", (request, reply, done) => {
     if (request.url.split("?")[0] !== HEALTH_PATH) logRequest(request, reply);
     done();

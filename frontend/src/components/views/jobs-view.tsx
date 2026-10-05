@@ -255,7 +255,7 @@ function StatusPillGroup({ job }: { job: Job }) {
               onClick={() => setStatus(pill.status)}
               className={`flex min-h-11 items-center justify-center gap-1 rounded-lg border px-1 text-[12px] font-semibold transition-all duration-200 active:scale-[0.97] disabled:opacity-60 ${
                 active
-                  ? `${stage.pillActive} bg-(--hig-card) shadow-sm`
+                  ? `${stage.pillActive} bg-(--hig-card) shadow-(--hig-card-shadow)`
                   : "border-transparent text-(--hig-label-secondary)"
               }`}
             >
@@ -276,7 +276,7 @@ function StatusPillGroup({ job }: { job: Job }) {
               defaultValue={todayStr()}
               max={todayStr()}
               aria-label="Delivery date"
-              className="min-w-0 flex-1 rounded-lg border border-(--hig-separator) bg-(--hig-fill) px-2 py-1.5 text-[13px] [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none"
+              className="input-field min-w-0 flex-1 rounded-lg px-2 py-1.5 text-[13px] [font-variant-numeric:tabular-nums] text-(--hig-label) outline-none"
             />
             <button
               type="button"
@@ -513,7 +513,7 @@ export function JobsView() {
   const activeIndex = FILTERS.findIndex((f) => f.key === filter);
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full sm:max-w-107.5">
         <header
           className="hig-rise safe-top sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 pb-2.5 backdrop-blur-[20px] backdrop-saturate-150"
@@ -577,7 +577,17 @@ export function JobsView() {
                 {countsQ.isPending ? "…" : `${counts.ready}`}
               </div>
               <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-(--hig-label-secondary)">
-                {overdueCount > 0 ? (
+                {countsQ.isPending ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-(--hig-separator)" />
+                    checking the queue
+                  </>
+                ) : countsQ.isError ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-(--hig-separator)" />
+                    queue unavailable
+                  </>
+                ) : overdueCount > 0 ? (
                   <>
                     <span className="h-1.5 w-1.5 rounded-full bg-(--hig-danger)" />
                     {overdueCount} overdue — needs chasing
@@ -600,7 +610,7 @@ export function JobsView() {
         >
           <span
             aria-hidden="true"
-            className="absolute bottom-0.75 left-0.75 top-0.75 w-[calc((100%-6px)/4)] rounded-[11px] bg-(--hig-card) shadow-sm transition-transform duration-300 ease-out"
+            className="absolute bottom-0.75 left-0.75 top-0.75 w-[calc((100%-6px)/4)] rounded-[11px] bg-(--hig-card) shadow-(--hig-card-shadow) transition-transform duration-300 ease-out"
             style={{ transform: `translateX(${activeIndex * 100}%)` }}
           />
           {FILTERS.map((f) => (

@@ -81,7 +81,7 @@ const TAB_CHROME: Record<TabKey, { title?: ReactNode; subtitle?: ReactNode }> = 
 function JobsBody() {
   return (
     <>
-      <div className="mt-6 flex rounded-[14px] bg-(--hig-card) p-0.75 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="mt-6 flex rounded-[14px] bg-(--hig-card) p-0.75 shadow-(--hig-card-shadow)">
         {["All", "Pending", "Completed", "Delivered"].map((label) => (
           <div
             key={label}
@@ -171,7 +171,7 @@ function ReportsBody() {
 
   return (
     <>
-      <div className="mt-5 rounded-3xl bg-(--hig-card) px-5 pb-3 pt-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+      <div className="mt-5 rounded-3xl bg-(--hig-card) px-5 pb-3 pt-4 shadow-(--hig-card-shadow)">
         <StatementSummarySkeleton />
       </div>
 
@@ -179,7 +179,7 @@ function ReportsBody() {
         {section(
           "Statement · collected",
           "monthly revenue",
-          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-(--hig-card-shadow)">
             <div className="flex gap-2.5 px-4 pb-2 pt-3.5 text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
               <span className="flex-1">Month</span>
               <span className="w-21.5 shrink-0 text-right">Revenue</span>
@@ -201,7 +201,7 @@ function ReportsBody() {
         {section(
           "Statement · outstanding",
           "biggest balances first",
-          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-(--hig-card-shadow)">
             <div className="border-t border-dashed border-(--hig-separator)">
               <OutstandingRowsSkeleton />
             </div>
@@ -213,7 +213,7 @@ function ReportsBody() {
         {section(
           "Statement · best clients",
           "by amount paid",
-          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="overflow-hidden rounded-[20px] bg-(--hig-card) shadow-(--hig-card-shadow)">
             <div className="flex gap-2.5 px-4 pb-2 pt-3.5 text-[9.5px] font-semibold uppercase tracking-[0.07em] text-(--hig-label-tertiary)">
               <span className="flex-1">Client</span>
               <span className="w-21.5 shrink-0 text-right">Jobs</span>
@@ -252,7 +252,7 @@ function DashboardBody() {
         </div>
       </div>
 
-      <section className="mb-3 rounded-[20px] bg-(--hig-card) px-4 pb-4 pt-4">
+      <section className="mb-3 rounded-[20px] bg-(--hig-card) px-4 pb-4 pt-4 shadow-(--hig-card-shadow)">
         <div className="flex items-center justify-between">
           <span className="text-[17px] font-medium leading-5.5">Revenue</span>
         </div>
@@ -265,7 +265,7 @@ function DashboardBody() {
 
       <section className="mb-3 grid grid-cols-2 gap-3">
         {["To collect", "On the bench"].map((label) => (
-          <div key={label} className="rounded-[20px] bg-(--hig-card) px-4 py-3">
+          <div key={label} className="rounded-[20px] bg-(--hig-card) px-4 py-3 shadow-(--hig-card-shadow)">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[13px] font-medium text-(--hig-label-secondary)">
                 {label}
@@ -325,7 +325,7 @@ export default function PageSkeleton({
       // Not decoration: a screen reader is told the view is still loading, and it is what the
       // navigation test asserts on to prove the shell painted before the page could.
       aria-busy="true"
-      className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300"
+      className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300"
     >
       <div className="relative mx-auto w-full sm:max-w-107.5">
         {/* Same header geometry as the pages it stands in for, insets included. */}

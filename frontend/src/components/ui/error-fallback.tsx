@@ -38,7 +38,7 @@ export function ErrorFallback({
   }, []);
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label)">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label)">
       <div className="mx-auto w-full sm:max-w-107.5 px-4">
         <div className="mt-24 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-(--hig-danger-tint) text-(--hig-danger)">

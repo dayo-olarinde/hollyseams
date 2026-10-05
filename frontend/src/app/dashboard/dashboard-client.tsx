@@ -50,6 +50,16 @@ function DashboardTabs() {
     isTabKey(requested) ? requested : "overview",
   );
 
+  // …except when the URL is changed by a real navigation while already mounted ("View All",
+  // a detail page's fallback link, the logo): the state initializer never re-runs, so the
+  // search param is followed here. In-app switches use replaceState, which the router never
+  // hears about, so this effect cannot fight them.
+  useEffect(() => {
+    const next: TabKey = isTabKey(requested) ? requested : "overview";
+    setTab((current) => (current === next ? current : next));
+    window.scrollTo({ top: 0 });
+  }, [requested]);
+
   const selectTab = useCallback((next: TabKey) => {
     setTab(next);
     // A new screen starts at its top — never inherit the previous tab's scroll.

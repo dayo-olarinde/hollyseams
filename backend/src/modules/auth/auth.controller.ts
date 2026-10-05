@@ -35,6 +35,24 @@ export class AuthController {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
+  /**
+   * POST /auth/login — the full numbered flow for one login attempt:
+   *
+   *  1. ApiRateLimitGuard (global): per-IP traffic ceiling on every route (~120 req/min
+   *     in production) — coarse noise control, not PIN protection.
+   *  2. LoginRateLimitGuard · fixed window: at most 5 attempts per 15 min across the
+   *     whole app (one global key — single-user app), else 429 + Retry-After.
+   *  3. LoginRateLimitGuard · lockout: while `ratelimit:login:lock` exists (armed by
+   *     step 5c), 429 + Retry-After — the PIN is never checked during a lock.
+   *  4. Zod pipe: malformed bodies die here (400), before any hashing.
+   *  5. AuthService.login: verify the PIN against the argon2 hash —
+   *     wrong → record the failure; the 4th consecutive one arms an exponentially
+   *     longer lock (30s → 60s → 120s … capped at 1h — step 5c);
+   *     right → clear the failure streak and lock, then issue the session id (5d).
+   *  6. On success: wipe the fixed-window counter here so the owner's earlier typos
+   *     can't hold the window open — only the lockout remembers sustained abuse.
+   *  7. Set the httpOnly session cookie and answer 200.
+   */
   @Post("login")
   @HttpCode(200)
   @UseGuards(LoginRateLimitGuard)

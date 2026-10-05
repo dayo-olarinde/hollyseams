@@ -46,6 +46,10 @@ export class FakeRedis {
     // Record mode and TTL so tests can prove sessions are written with an expiry.
     this.calls.push(`set:${key}:${mode ?? ""}:${ttl ?? ""}`);
     this.store.set(key, value);
+    // Mirror real Redis: `SET key val EX <seconds>` stores the TTL with the value.
+    // The login lockout writes its key this way (atomic value+TTL), and a fake that
+    // dropped the TTL would silently make every lock look expired.
+    if (mode === "EX" && ttl !== undefined) this.expiries.set(key, ttl);
     return "OK";
   }
 
@@ -152,9 +156,7 @@ export interface FakeDbOptions {
   failWith?: unknown;
   /** Rows every `select(...)` resolves with. Empty means "no row found". */
   selectRows?: Rows;
-  /** Rows every `insert(...).values(...).returning()` resolves with. */
   insertRows?: Rows;
-  /** Rows every `update(...).set(...)...returning()` resolves with. */
   updateRows?: Rows;
   /**
    * Rows per table name, for flows that span tables — `{ jobs: [jobRow], payments: [] }`.
@@ -185,7 +187,6 @@ export interface FakeDbHandle {
   calls: string[];
   /** Objects handed to `.values(...)`, so column-level behavior can be asserted. */
   inserted: Record<string, unknown>[];
-  /** Objects handed to `.set(...)`. */
   updated: Record<string, unknown>[];
 }
 

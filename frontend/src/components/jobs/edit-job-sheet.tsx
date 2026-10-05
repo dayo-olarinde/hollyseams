@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useDismiss } from "@/components/customers/customer-sheets";
+import { useDismiss } from "@/lib/use-dismiss";
 import { PhotoPicker, type PickedPhoto } from "@/components/jobs/photo-picker";
 import { useToast } from "@/components/ui/toast";
 import { useUpdateJob } from "@/hooks/use-jobs";
@@ -122,7 +122,7 @@ export function EditJobSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full sm:max-w-107.5 animate-sheet-in rounded-t-[26px] bg-(--hig-canvas) backdrop-blur-xl px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto w-full sm:max-w-107.5 animate-sheet-in rounded-t-[26px] bg-(--hig-card) px-5 pb-[calc(20px+env(safe-area-inset-bottom))] pt-2 shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
         <div
           className="mx-auto h-1 w-9.5 rounded-full bg-(--hig-separator)"
           aria-hidden="true"
@@ -156,7 +156,7 @@ export function EditJobSheet({
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="mt-1.5 w-full resize-none rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) px-4 py-3 text-[14px] text-(--hig-label) outline-none transition-[border-color,box-shadow] focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]"
+          className="input-field mt-1.5 w-full resize-none rounded-[13px] px-4 py-3 text-[14px] text-(--hig-label) outline-none"
           placeholder="Blouse & Skirt — neatly crocheted"
         />
 
@@ -174,7 +174,7 @@ export function EditJobSheet({
                 inputMode="numeric"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) py-3 pl-9 pr-3 text-[15px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)] [font-variant-numeric:tabular-nums]"
+                className="input-field w-full rounded-[13px] py-3 pl-9 pr-3 text-[15px] font-medium text-(--hig-label) outline-none [font-variant-numeric:tabular-nums]"
                 placeholder="0"
               />
             </div>
@@ -187,7 +187,7 @@ export function EditJobSheet({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="mt-1.5 w-full rounded-[13px] border border-(--hig-separator) bg-(--hig-fill) px-3 py-3 text-[13px] font-medium text-(--hig-label) outline-none transition-[border-color,box-shadow] focus:border-(--hig-accent) focus:shadow-[0_0_0_3px_var(--hig-accent-soft)]"
+              className="input-field mt-1.5 w-full rounded-[13px] px-3 py-3 text-[13px] font-medium text-(--hig-label) outline-none"
             />
           </div>
         </div>

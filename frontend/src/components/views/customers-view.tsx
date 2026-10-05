@@ -357,7 +357,7 @@ export function CustomersView() {
   };
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full sm:max-w-107.5">
         <header className="hig-rise safe-top sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 pb-2.5 backdrop-blur-[20px] backdrop-saturate-150" style={{ animationDelay: "0ms" }}>
           <p className="text-[20px] font-medium tracking-[-0.02em]">
@@ -380,7 +380,7 @@ export function CustomersView() {
 
         {/* The three counters: real money from the statement, real headcount from the list meta */}
         <div className="hig-rise mt-5 grid grid-cols-3 gap-2.5 px-5" style={{ animationDelay: "80ms" }}>
-          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-(--hig-card-shadow)">
             <p className="text-[17px] font-medium leading-tight text-(--hig-warning) [font-variant-numeric:tabular-nums]">
               {naira(totals.due)}
             </p>
@@ -388,7 +388,7 @@ export function CustomersView() {
               To collect
             </p>
           </div>
-          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-(--hig-card-shadow)">
             <p className="text-[17px] font-medium leading-tight text-(--hig-danger) [font-variant-numeric:tabular-nums]">
               {naira(totals.over)}
             </p>
@@ -396,12 +396,12 @@ export function CustomersView() {
               Overdue
             </p>
           </div>
-          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <div className="rounded-[18px] bg-(--hig-card) py-3 text-center shadow-(--hig-card-shadow)">
             <p className="text-[17px] font-medium leading-tight [font-variant-numeric:tabular-nums]">
               {listQ.isPending ? "…" : households}
             </p>
             <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.06em] text-(--hig-label-tertiary)">
-              Households
+              {households === 1 ? "Household" : "Households"}
             </p>
           </div>
         </div>
@@ -427,7 +427,7 @@ export function CustomersView() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name or phone…"
               aria-label="Search clients by name or phone"
-              className="w-full rounded-xl bg-(--hig-fill) py-2.5 pl-9.5 pr-9 text-[14px] text-(--hig-label) outline-none placeholder:text-(--hig-label-tertiary) focus:bg-(--hig-card) focus:ring-2 focus:ring-(--hig-accent)/40"
+              className="input-field w-full rounded-xl py-2.5 pl-9.5 pr-9 text-[14px] text-(--hig-label) outline-none"
             />
             {query && (
               <button
@@ -492,7 +492,7 @@ export function CustomersView() {
             {(topQ.data ?? []).slice(0, 5).map((t, i) => (
               <div
                 key={t.id}
-                className="w-37.5 shrink-0 rounded-[18px] bg-(--hig-card) px-3.5 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                className="w-37.5 shrink-0 rounded-[18px] bg-(--hig-card) px-3.5 py-3 shadow-(--hig-card-shadow)"
               >
                 <p className="text-[9px] font-semibold tracking-[0.14em] text-(--hig-label-tertiary)">
                   #<b className="text-(--hig-accent)">{String(i + 1).padStart(2, "0")}</b>
@@ -542,17 +542,17 @@ export function CustomersView() {
         {!failure && (
           <div className="mt-5 flex items-baseline justify-between px-5 text-[12px] text-(--hig-label-tertiary) [font-variant-numeric:tabular-nums]">
             <span>
-              {narrowed ? (
+              {listQ.isPending ? (
+                "Loading the client list…"
+              ) : narrowed ? (
                 <>
                   <b className="font-medium text-(--hig-label-secondary)">{visible.length}</b>{" "}
                   shown
                 </>
               ) : (
                 <>
-                  <b className="font-medium text-(--hig-label-secondary)">
-                    {listQ.isPending ? customers.length : households}
-                  </b>{" "}
-                  clients · A→Z
+                  <b className="font-medium text-(--hig-label-secondary)">{households}</b>{" "}
+                  {households === 1 ? "client" : "clients"} · A→Z
                 </>
               )}
             </span>

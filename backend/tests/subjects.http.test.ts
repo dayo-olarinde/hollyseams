@@ -66,7 +66,6 @@ const measurementRow = (
 
 let app: NestFastifyApplication | undefined;
 
-/** Build the application around a canned database and one seeded session. */
 const buildApp = async (
   options: FakeDbOptions = {},
 ): Promise<{ db: FakeDbHandle }> => {

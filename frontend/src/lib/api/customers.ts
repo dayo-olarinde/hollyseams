@@ -1,10 +1,6 @@
 import { request } from "./transport";
 import type { PaginationMeta, PaginatedQuery } from "@/types/api";
-import type {
-  CreateCustomerInput,
-  Customer,
-  UpdateCustomerInput,
-} from "@/types/customer";
+import type { Customer, UpdateCustomerInput } from "@/types/customer";
 
 /**
  * `meta.totalCount` is the exact size of the whole table, counts included.
@@ -22,10 +18,6 @@ export async function listCustomers(
     params,
     signal,
   });
-}
-
-export async function createCustomer(input: CreateCustomerInput) {
-  return request<Customer>({ url: "/customers", method: "POST", data: input });
 }
 
 export async function getCustomer(id: string, signal?: AbortSignal) {

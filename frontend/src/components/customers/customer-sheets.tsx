@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/toast";
 import { createMeasurement } from "@/lib/api/measurements";
@@ -11,26 +11,8 @@ import { measureLabel } from "@/lib/measurements";
 import { parseMeasurementInput, formatMeasurementInput } from "@/lib/measurement-input";
 import type { MeasurementValue } from "@/lib/measurement-input";
 import { todayISO } from "@/lib/format";
+import { useDismiss } from "@/lib/use-dismiss";
 import type { Customer } from "@/types/customer";
-
-/**
- * The three sheets' shared mount behavior: lock body scroll behind the modal and let Escape
- * dismiss it. One hook, not three diverging copies — the escape hatch a keyboard user expects
- * from any dialog, and the lock that stops the page behind a sheet from scrolling on touch.
- */
-export function useDismiss(onClose: () => void) {
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-}
 
 /**
  * The client dossier's edit sheet — one surface for "change the client record".
@@ -97,7 +79,7 @@ export function EditCustomerSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-card) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Edit client</h2>
@@ -217,7 +199,7 @@ export function AddSubjectSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-card) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Add family member</h2>
@@ -376,7 +358,7 @@ export function LogFittingSheet({
         onClick={onClose}
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
-      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-grouped) backdrop-blur-xl pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
+      <div className="animate-rise absolute inset-x-0 bottom-0 mx-auto w-full max-w-[430px] rounded-t-[28px] bg-(--hig-card) pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_40px_rgba(0,0,0,0.25)]">
         <div className="mx-auto mt-3 h-1 w-9 rounded-full bg-(--hig-separator)" />
         <div className="flex items-center justify-between px-5 pt-3">
           <h2 className="text-[17px] font-semibold tracking-[-0.01em]">

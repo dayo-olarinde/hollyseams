@@ -35,7 +35,6 @@ const jobListSelect = {
   subjectId: jobsTable.subjectId,
   subjectName: subjectsTable.name,
   measurementId: jobsTable.measurementId,
-  // Calculate which image URL should be used as the job's cover image.
   coverUrl: sql<string | null>`
     case
       when jsonb_array_length(${jobsTable.finishedJob}) > 0 
@@ -44,7 +43,6 @@ const jobListSelect = {
         then nullif(${jobsTable.styleRef}[0] ->> 'url', '')
       else null
     end`,
-  // Count all images/items in both JSONB arrays.
   photoCount: sql<number>`
     jsonb_array_length(${jobsTable.finishedJob})
     + jsonb_array_length(${jobsTable.styleRef})`,
@@ -246,15 +244,11 @@ export class JobsService {
         .select({
           id: jobsTable.id,
 
-          // Customer information joined from the customers table.
           customerId: customersTable.id,
           customerPhone: customersTable.phoneNumber,
 
-          // Subject information joined from the subjects table.
           subjectId: subjectsTable.id,
 
-          // If the subject is the customer themselves, use the customer's name;
-          // otherwise use the subject's own name.
           subjectName: sql<string>`
           case
             when ${subjectsTable.relationship} = 'self'
@@ -262,11 +256,9 @@ export class JobsService {
             else ${subjectsTable.name}
           end`,
 
-          // Measurement information joined from the measurements table.
           measurementsId: measurementsTable.id,
           measurements: measurementsTable.measurements,
 
-          // Job-specific data.
           styleRef: jobsTable.styleRef,
           finishedJob: jobsTable.finishedJob,
           description: jobsTable.description,

@@ -32,9 +32,13 @@ Themes are **class-driven**, not OS-driven:
 | `--hig-accent-soft` | `rgba(0,122,255,.25)` | `rgba(10,132,255,.25)` | spinners |
 | `--hig-accent-tint` | `rgba(0,122,255,.12)` | `rgba(10,132,255,.14)` | soft blue fills (chips, avatars, active tab) |
 | `--hig-bg` | `#FFFFFF` | `#000000` | auth screen background |
-| `--hig-fill` | `#F2F2F7` | `#2C2C2E` | keypad keys |
-| `--hig-grouped` | `#F2F2F7` | `#000000` | dashboard screen background |
+| `--hig-fill` | `#F2F3F7` | `#2C2C2E` | chips, buttons, keypad keys |
+| `--hig-field` | `#EDEFF4` | `#23262B` | input wells — the `input-field` recipe |
+| `--hig-ring` | `rgba(60,60,67,.14)` | `rgba(84,84,88,.6)` | input hairline |
+| `--hig-filter-well` | `#E7E9F0` | `#2C2C2E` | segmented controls / filter rows (always with a separator border) |
 | `--hig-card` | `#FFFFFF` | `#1C1C1E` | card surface |
+| `--hig-card-border` | `rgba(60,60,67,.10)` | `rgba(235,235,245,.10)` | card hairline — inset ring baked into `--hig-card-shadow` |
+| `--hig-card-shadow` | hairline + contact/wide lift | hairline only | every card's edge + lift, via `shadow-(--hig-card-shadow)` |
 | `--hig-label` | `#000000` | `#FFFFFF` | primary text |
 | `--hig-label-secondary` | `rgba(60,60,67,.6)` | `rgba(235,235,245,.6)` | secondary text |
 | `--hig-label-tertiary` | `rgba(60,60,67,.3)` | `rgba(235,235,245,.3)` | tertiary text, inactive tabs |
@@ -49,8 +53,12 @@ Themes are **class-driven**, not OS-driven:
 | `--hig-danger` (+`-tint`) | `#FF3B30` | `#FF453A` | overdue/errors |
 
 Rules: **one accent** (Blue) for actions/selection; green/orange/red are
-semantic status only. **No gradients anywhere** — flat fills; depth comes from
-surface layering and the translucent material, not borders or heavy shadows.
+semantic status only. **The only gradient is the `<html>` page floor** (two
+layers — crown glow + cool porcelain ramp in light, blue-black + graphite glow
+in dark; `html.hig-light body` in `globals.css`) and every `<main>` is
+transparent over it. Components stay flat fills. Depth comes from the card
+hairline (`--hig-card-border`, inset into `--hig-card-shadow`) plus that
+token's two-layer lift — not heavier shadows.
 The only glow allowed is the 10px soft shadow on status dots.
 
 ## Typography

@@ -71,7 +71,6 @@ describe("status filter composes with cursor pagination", () => {
         )!,
       );
 
-      // The status filter is applied…
       if (status === "pending") {
         expect(combined).toContain("pending");
         expect(text).not.toContain("delivered_at");
@@ -82,7 +81,6 @@ describe("status filter composes with cursor pagination", () => {
         );
       }
 
-      // …and the keyset cursor still walks (created_at, id) DESC within it.
       expect(text).toContain("created_at");
       expect(text).toContain("<");
       expect(text).toContain("::timestamptz");

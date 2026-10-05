@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../src/common/http/api-response";
 import { AuthService } from "../src/modules/auth/auth.service";
+import { LoginAttemptsService } from "../src/modules/auth/login-attempts.service";
 import { SessionStore } from "../src/modules/auth/session.store";
 import type { PinHasherService } from "../src/modules/auth/pin-hasher.service";
 import type { Env } from "../src/config/env.schema";
@@ -104,6 +105,7 @@ describe("AuthService.login", () => {
       fakeDatabase([{ id: USER_ID, pinHash: PIN_HASH }]),
       fakeHasher("1234"),
       new SessionStore(redis.asClient(), testEnv),
+      new LoginAttemptsService(redis.asClient()),
     );
 
     const sessionId = await service.login("1234");
@@ -112,38 +114,89 @@ describe("AuthService.login", () => {
   });
 
   it("throws 401 with the same message for a wrong PIN", async () => {
+    const redis = new FakeRedis();
     const service = new AuthService(
       fakeDatabase([{ id: USER_ID, pinHash: PIN_HASH }]),
       fakeHasher("1234"),
-      new SessionStore(new FakeRedis().asClient(), testEnv),
+      new SessionStore(redis.asClient(), testEnv),
+      new LoginAttemptsService(redis.asClient()),
     );
 
     await expect(service.login("9999")).rejects.toMatchObject({
       statusCode: 401,
       message: "Incorrect PIN. Try again.",
     });
+    // A wrong PIN must leave a trace: the failure streak feeds the lockout.
+    expect(redis.store.get("ratelimit:login:fail")).toBe("1");
   });
 
   it("throws the SAME 401 when no user row exists (no account enumeration)", async () => {
+    const redis = new FakeRedis();
     const service = new AuthService(
       fakeDatabase([]),
       fakeHasher("1234"),
-      new SessionStore(new FakeRedis().asClient(), testEnv),
+      new SessionStore(redis.asClient(), testEnv),
+      new LoginAttemptsService(redis.asClient()),
     );
 
     await expect(service.login("1234")).rejects.toMatchObject({
       statusCode: 401,
       message: "Incorrect PIN. Try again.",
     });
+    // Even the no-user path counts as a failure — same message, same consequences.
+    expect(redis.store.get("ratelimit:login:fail")).toBe("1");
   });
 
   it("throws ApiError instances (so the global filter can render them)", async () => {
+    const redis = new FakeRedis();
     const service = new AuthService(
       fakeDatabase([]),
       fakeHasher("1234"),
-      new SessionStore(new FakeRedis().asClient(), testEnv),
+      new SessionStore(redis.asClient(), testEnv),
+      new LoginAttemptsService(redis.asClient()),
     );
 
     await expect(service.login("1234")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("LoginAttemptsService.recordFailure", () => {
+  it("arms an exponentially longer lock from the threshold, caps it, and resets", async () => {
+    const redis = new FakeRedis();
+    const service = new LoginAttemptsService(redis.asClient());
+
+    // Failures 1–3 stay below the threshold: no lock, typos cost nothing.
+    await service.recordFailure();
+    await service.recordFailure();
+    await service.recordFailure();
+    expect(await service.currentLock()).toEqual({
+      locked: false,
+      retryAfterSeconds: 0,
+    });
+
+    // Failure 4 (the threshold): first lock = base 30 s.
+    await service.recordFailure();
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(30);
+    expect((await service.currentLock()).locked).toBe(true);
+
+    // Each further failure doubles the delay.
+    await service.recordFailure();
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(60);
+    await service.recordFailure();
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(120);
+
+    // Run the streak up to the ceiling: 30 * 2^(fails - 4) would exceed 1 h at
+    // failure 11, so the cap pins it at 3600 no matter how far the attacker goes.
+    for (let fails = 7; fails <= 12; fails++) await service.recordFailure();
+    expect(redis.expiries.get("ratelimit:login:lock")).toBe(3600);
+
+    // A correct PIN wipes streak and lock: the owner is back in charge.
+    await service.reset();
+    expect(redis.store.has("ratelimit:login:fail")).toBe(false);
+    expect(redis.store.has("ratelimit:login:lock")).toBe(false);
+    expect(await service.currentLock()).toEqual({
+      locked: false,
+      retryAfterSeconds: 0,
+    });
   });
 });

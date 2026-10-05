@@ -281,7 +281,6 @@ describe("GET /api/v1/jobs/signature", () => {
     expect(data.cloudName).toBe("test-cloud");
     expect(data.apiKey).toBe("test-key");
     expect(data.resourceType).toBe("image");
-    // The client is told the window is 15 minutes.
     expect(data.expiresAt - data.timestamp).toBe(15 * 60);
   });
 });

@@ -42,7 +42,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
    * pill anchored to the bottom), so a centring wrapper here would fight it.
    */
   return (
-    <main className="hig flex min-h-dvh flex-col items-center bg-(--hig-canvas) text-(--hig-label) transition-colors duration-200">
+    <main className="hig flex min-h-dvh flex-col items-center bg-transparent text-(--hig-label) transition-colors duration-200">
       <script dangerouslySetInnerHTML={{ __html: paintLight }} />
       {children}
     </main>

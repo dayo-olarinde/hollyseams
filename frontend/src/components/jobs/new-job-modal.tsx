@@ -22,6 +22,7 @@ import type { Measurement } from "@/types/measurement";
 import type { Subject } from "@/types/subject";
 
 import { formatDay, initials, naira, todayISO } from "@/lib/format";
+import { useDismiss } from "@/lib/use-dismiss";
 
 /**
  * The new-job sheet is ONE scrollable page — client, fitting, and job details stacked in the
@@ -305,6 +306,8 @@ export default function NewJobModal({
   const previewUrlsRef = useRef<string[]>([]);
   const activeSubject = subjects.find((s) => s.key === activeKey) ?? null;
 
+  useDismiss(onClose, open);
+
   useEffect(() => {
     if (!open) return;
 
@@ -355,11 +358,6 @@ export default function NewJobModal({
     // ordinary sheet, one step ahead — no second code path to maintain.
     const seed = prefillCustomer ?? undefined;
     if (seed) void pickClient(seed, prefillSubjectId);
-
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
   }, [open, queryClient, prefillCustomer, prefillSubjectId]);
 
   /**
@@ -379,23 +377,19 @@ export default function NewJobModal({
     };
   }, []);
 
+  /** Outside taps close the two suggestion popovers; Escape is `useDismiss`'s now. */
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!(ddWrapRef.current?.contains(t) || ddRef.current?.contains(t))) setDdOpen(false);
       if (!(compWrapRef.current?.contains(t) || compRef.current?.contains(t))) setSugOpen(false);
     };
-    document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onDown);
     return () => {
-      document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onDown);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   const filteredCustomers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -481,13 +475,26 @@ export default function NewJobModal({
     const rows = (res.data ?? []).slice().sort((a, b) =>
       a.relationship === "self" ? -1 : b.relationship === "self" ? 1 : 0,
     );
-    const mapped: ModalSubject[] = rows.map((s: Subject) => ({
-      key: s.id,
-      subjectId: s.id,
-      relationship: s.relationship ?? "self",
-      name: s.name,
-      loaded: false,
-    }));
+    /**
+     * The customer themself is always a choice, even when the API holds no self subject row —
+     * the normal case for a client whose first job was created for a relative, because
+     * subjects are only written when someone is actually measured. Without this chip the
+     * Self option silently disappears for exactly those clients. It carries no subjectId;
+     * submit creates the row lazily, on the first Self job.
+     */
+    const hasSelf = rows.some((s) => (s.relationship ?? "self") === "self");
+    const mapped: ModalSubject[] = [
+      ...(hasSelf
+        ? []
+        : [{ key: "self", relationship: "self", name: "", loaded: true } satisfies ModalSubject]),
+      ...rows.map((s: Subject) => ({
+        key: s.id,
+        subjectId: s.id,
+        relationship: s.relationship ?? "self",
+        name: s.name,
+        loaded: false,
+      })),
+    ];
     setSubjects(mapped);
     const chosen =
       mapped.find((s) => s.subjectId && s.subjectId === preferSubjectId) ??
@@ -814,17 +821,29 @@ export default function NewJobModal({
           job: jobPayload,
         })).data!;
       } else {
-
+        let subjectId = activeSubject?.subjectId;
+        if (!subjectId && activeSubject?.relationship === "self") {
+          // Jobs bind to a subject, and this client has no self row yet (their first job
+          // went to a relative, and subjects are only written when someone is measured).
+          // Create it here, on the first Self job, so "for the client themself" never dead-ends.
+          const selfRes = await addSubject(client.id, {
+            name: client.name,
+            relationship: "self",
+          });
+          subjectId = selfRes.data!.id;
+          setSubjects((prev) =>
+            prev.map((x) => (x.key === activeKey ? { ...x, subjectId } : x)),
+          );
+        }
         let measurementId = activeSubject?.latestMeasId;
         if (!measurementId || dirtyMeas.has(activeKey)) {
-
-          const res = await createMeasurement(activeSubject!.subjectId!, {
+          const res = await createMeasurement(subjectId!, {
             measurements: measEntries,
             date: todayISO(),
           });
           measurementId = res.data!.id;
         }
-        job = (await createJobForSubject(activeSubject!.subjectId!, {
+        job = (await createJobForSubject(subjectId!, {
           measurementId,
           job: jobPayload,
         })).data!;
@@ -893,7 +912,7 @@ export default function NewJobModal({
         className="absolute inset-0 w-full animate-fade-in bg-black/50"
       />
 
-      <div className="hig absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full sm:max-w-107.5 animate-sheet-in flex-col overflow-hidden rounded-t-[26px] bg-(--hig-canvas) backdrop-blur-xl shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
+      <div className="hig absolute inset-x-0 bottom-0 mx-auto flex h-[92dvh] w-full sm:max-w-107.5 animate-sheet-in flex-col overflow-hidden rounded-t-[26px] bg-(--hig-card) shadow-[0_-30px_80px_-20px_rgba(0,0,0,0.5)]">
         <div className="mx-auto mt-3 h-1 w-9.5 shrink-0 rounded-full bg-(--hig-separator)" aria-hidden="true" />
 
         <div className="flex shrink-0 items-center justify-between border-b border-(--hig-separator) px-5 pb-3 pt-2">
@@ -1471,7 +1490,7 @@ export default function NewJobModal({
           </button>
         </div>
         {created && (
-          <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center rounded-t-[26px] bg-(--hig-card) px-8 text-center">
+          <div className="absolute inset-0 z-40 flex animate-fade-in flex-col items-center justify-center rounded-t-[26px] bg-(--hig-card) px-8 text-center shadow-(--hig-card-shadow)">
             <div className="mb-4 flex h-15.5 w-15.5 items-center justify-center rounded-full border border-(--hig-success) bg-(--hig-success-tint) shadow-[0_0_30px_-8px_rgba(48,209,88,0.45)]">
               <svg viewBox="0 0 24 24" fill="none" stroke="var(--hig-success)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-6.5 w-6.5">
                 <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />

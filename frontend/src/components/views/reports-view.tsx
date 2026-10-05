@@ -230,7 +230,7 @@ export function ReportsView() {
       : 0;
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       <div className="relative mx-auto w-full sm:max-w-107.5">
         <header
           className="hig-rise safe-top sticky top-0 z-20 flex items-center justify-between bg-(--hig-bar)/80 px-5 pb-2.5 backdrop-blur-[20px] backdrop-saturate-150"

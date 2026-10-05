@@ -12,7 +12,7 @@ import { JobDetailSkeleton } from "@/components/ui/skeletons";
  */
 export default function JobDetailLoading() {
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       <DetailHeader title="Inspection" fallbackHref="/dashboard?tab=jobs" />
       <JobDetailSkeleton />
     </main>

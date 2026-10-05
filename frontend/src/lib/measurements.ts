@@ -46,8 +46,6 @@ const MEASUREMENT_FIELDS = [
   { key: "length", name: "Length" },
 ] as const;
 
-export type MeasurementField = (typeof MEASUREMENT_FIELDS)[number];
-
 export const MEASUREMENT_KEYS: string[] = MEASUREMENT_FIELDS.map((f) => f.key);
 
 /**

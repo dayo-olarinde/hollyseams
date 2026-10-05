@@ -24,7 +24,3 @@ export async function addSubject(
     data: input,
   });
 }
-
-export async function getSubject(id: string, signal?: AbortSignal) {
-  return request<Subject>({ url: `/subjects/${id}`, signal });
-}

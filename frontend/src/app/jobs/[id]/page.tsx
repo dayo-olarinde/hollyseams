@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { EditJobSheet } from "@/components/jobs/edit-job-sheet";
 import { PaymentSheet } from "@/components/jobs/payment-sheet";
@@ -20,6 +20,7 @@ import {
 // The list card and this file render the same state from one source of truth.
 import { dueCountdown, jobStage } from "@/lib/job-stage";
 import { waMe } from "@/lib/contact";
+import { useDismiss } from "@/lib/use-dismiss";
 import type { Job } from "@/types/job";
 
 interface Milestone {
@@ -471,28 +472,11 @@ export default function JobDetailPage() {
     });
   }
 
-  useEffect(() => {
-    if (!lightbox) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightbox(null);
-    };
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [lightbox]);
+  // The photo lightbox is a modal surface: Escape closes it, the page behind it stays locked.
+  useDismiss(() => setLightbox(null), lightbox !== null);
 
   // The delete confirm is a modal alertdialog: Escape means "keep it", like every other sheet.
-  useEffect(() => {
-    if (!confirmDelete) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirmDelete(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [confirmDelete]);
+  useDismiss(() => setConfirmDelete(false), confirmDelete);
 
   const ref = job?.styleRef?.[0];
   const fin = job?.finishedJob?.[0];
@@ -504,7 +488,7 @@ export default function JobDetailPage() {
   const countdown = job ? dueCountdown(job) : null;
 
   return (
-    <main className="hig content-safe min-h-dvh bg-(--hig-grouped) text-(--hig-label) transition-colors duration-300">
+    <main className="hig content-safe min-h-dvh bg-transparent text-(--hig-label) transition-colors duration-300">
       <DetailHeader
         title="Order file"
         fallbackHref="/dashboard?tab=jobs"
