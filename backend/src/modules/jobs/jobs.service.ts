@@ -406,39 +406,47 @@ export class JobsService {
   async update(id: string, input: UpdateJobDto): Promise<Job> {
     const { styleRef, finishedJob, ...scalars } = input;
 
-    const next = {
-      styleRef: styleRef?.length ? styleRef : undefined,
-      finishedJob: finishedJob?.length ? finishedJob : undefined,
-    };
+    /**
+     * A key the patch omits leaves that slot alone; a key it sends — even as `[]` — states the
+     * slot's complete desired contents.
+     *
+     * The distinction is the whole point: the edit sheet sends both slots on every save, so
+     * removing the last photo has to arrive as an instruction rather than as the absence of one.
+     * Treating `[]` as "nothing to say" is what made a mistake impossible to undo without
+     * deleting the job.
+     */
+    const next = { styleRef, finishedJob };
 
-    if (!next.styleRef && !next.finishedJob) {
+    if (next.styleRef === undefined && next.finishedJob === undefined) {
       return this.write(id, scalars);
     }
 
     const current = await this.get(id);
 
     const [resolvedStyleRef, resolvedFinishedJob] = await Promise.all([
-      next.styleRef
-        ? this.cloudinary.verifyAndResolve(next.styleRef)
-        : undefined,
-      next.finishedJob
-        ? this.cloudinary.verifyAndResolve(next.finishedJob)
-        : undefined,
+      next.styleRef === undefined
+        ? undefined
+        : this.cloudinary.verifyAndResolve(next.styleRef),
+      next.finishedJob === undefined
+        ? undefined
+        : this.cloudinary.verifyAndResolve(next.finishedJob),
     ]);
 
     const job = await this.write(id, {
       ...scalars,
-      ...(resolvedStyleRef && { styleRef: resolvedStyleRef }),
-      ...(resolvedFinishedJob && { finishedJob: resolvedFinishedJob }),
+      ...(resolvedStyleRef !== undefined && { styleRef: resolvedStyleRef }),
+      ...(resolvedFinishedJob !== undefined && { finishedJob: resolvedFinishedJob }),
     });
 
     const removed: string[] = [];
 
     for (const [incoming, previous] of [
-      [next.styleRef, current.styleRef],
-      [next.finishedJob, current.finishedJob],
+      [resolvedStyleRef, current.styleRef],
+      [resolvedFinishedJob, current.finishedJob],
     ] as const) {
-      if (!incoming) continue;
+      // An empty list skips the loop below on its own: nothing is kept, so every photo the job
+      // held is released.
+      if (incoming === undefined) continue;
       const kept = new Set(incoming.map((photo) => photo.publicId));
 
       for (const photo of previous ?? []) {

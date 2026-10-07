@@ -478,7 +478,9 @@ export default function JobDetailPage() {
   // The delete confirm is a modal alertdialog: Escape means "keep it", like every other sheet.
   useDismiss(() => setConfirmDelete(false), confirmDelete);
 
-  const ref = job?.styleRef?.[0];
+  // Every reference the job carries, not just the first: the slot holds up to two, and a
+  // reference the studio bothered to attach should be on the file.
+  const refs = job?.styleRef ?? [];
   const fin = job?.finishedJob?.[0];
 
   const shots = (job?.styleRef ?? []).length + (job?.finishedJob ?? []).length;
@@ -685,18 +687,34 @@ export default function JobDetailPage() {
                   Reference
                 </p>
                 <div className="relative aspect-3/4 overflow-hidden rounded-[20px] bg-(--hig-fill) shadow-(--hig-card-shadow)">
-                  {ref?.url ? (
-                    <LoadablePhoto
-                      src={ref.url}
-                      alt={ref.alt || "Style reference"}
-                      eager
-                      onOpen={() =>
-                        setLightbox({
-                          src: ref.url!,
-                          alt: ref.alt || "Style reference",
-                        })
-                      }
-                    />
+                  {refs.length > 0 ? (
+                    // Two references share the frame as two rows with a hairline between them —
+                    // the client's two angles, without the column growing taller than the
+                    // finished shot beside it.
+                    <div
+                      className={`absolute inset-0 grid gap-px bg-(--hig-separator) ${
+                        refs.length > 1 ? "grid-rows-2" : "grid-rows-1"
+                      }`}
+                    >
+                      {refs.map((photo) => (
+                        <div
+                          key={photo.publicId ?? photo.url}
+                          className="relative overflow-hidden"
+                        >
+                          <LoadablePhoto
+                            src={photo.url}
+                            alt={photo.alt || "Style reference"}
+                            eager
+                            onOpen={() =>
+                              setLightbox({
+                                src: photo.url,
+                                alt: photo.alt || "Style reference",
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-(--hig-label-tertiary)">
                       <IconPhoto className="h-8 w-8" />
@@ -707,7 +725,9 @@ export default function JobDetailPage() {
                   )}
                 </div>
                 <p className="mt-1.5 truncate text-center text-[11px] text-(--hig-label-tertiary)">
-                  {ref?.alt ?? "—"}
+                  {refs.length > 0
+                    ? refs.map((photo) => photo.alt).join(" · ")
+                    : "—"}
                 </p>
               </div>
 

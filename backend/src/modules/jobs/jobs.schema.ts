@@ -43,16 +43,24 @@ const jobPriceSchema = z.coerce
   .nonnegative("Agreed price cannot be negative")
   .max(9999999999.99, "Agreed price must be at most 9999999999.99");
 
-const MAX_IMAGES_PER_ARRAY = 1;
+/**
+ * The two photo slots do not hold the same number of pictures.
+ *
+ * The style reference carries what the client sent — a garment seen from the front and from the
+ * back — so two. The finished piece is the one photograph of what was delivered.
+ */
+const photoSlotSchema = (max: number, slot: string) =>
+  z
+    .array(imageSchema)
+    .max(
+      max,
+      max === 1
+        ? `Only one ${slot} image is allowed`
+        : `At most ${max} ${slot} images are allowed`,
+    );
 
-const TOO_MANY_IMAGES =
-  MAX_IMAGES_PER_ARRAY === 1
-    ? "Only one image is allowed for this type"
-    : `At most ${MAX_IMAGES_PER_ARRAY} images are allowed for this type`;
-
-const imageListSchema = z
-  .array(imageSchema)
-  .max(MAX_IMAGES_PER_ARRAY, TOO_MANY_IMAGES);
+const styleRefSchema = photoSlotSchema(2, "style reference");
+const finishedJobSchema = photoSlotSchema(1, "finished");
 
 const jobStatusSchema = z.enum(["pending", "completed", "canceled"]);
 const jobDescriptionSchema = z
@@ -61,8 +69,8 @@ const jobDescriptionSchema = z
   .max(2000, "Description must be at most 2000 characters");
 
 export const jobDataSchema = z.strictObject({
-  styleRef: imageListSchema.default([]),
-  finishedJob: imageListSchema.default([]),
+  styleRef: styleRefSchema.default([]),
+  finishedJob: finishedJobSchema.default([]),
   description: jobDescriptionSchema.default(""),
   agreedPrice: jobPriceSchema,
   status: jobStatusSchema.default("pending"),
@@ -71,8 +79,8 @@ export const jobDataSchema = z.strictObject({
 
 export const updateJobSchema = z
   .strictObject({
-    styleRef: imageListSchema.optional(),
-    finishedJob: imageListSchema.optional(),
+    styleRef: styleRefSchema.optional(),
+    finishedJob: finishedJobSchema.optional(),
     description: jobDescriptionSchema.optional(),
     agreedPrice: jobPriceSchema.optional(),
     status: jobStatusSchema.optional(),

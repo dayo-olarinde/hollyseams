@@ -6,20 +6,22 @@ import { PhotoPicker, type PickedPhoto } from "@/components/jobs/photo-picker";
 import { useToast } from "@/components/ui/toast";
 import { useUpdateJob } from "@/hooks/use-jobs";
 import { formatDay, formatStampDay } from "@/lib/format";
-import type { Job, UpdateJobInput } from "@/types/job";
+import type { Job, JobImage, UpdateJobInput } from "@/types/job";
 
 /**
  * The order file's edit sheet — one surface for "change the order".
  *
  * Being smart about scope: the sheet edits exactly the fields the studio actually revises
- * mid-flight (description, price, due date) plus the one flow that *defines* this screen —
- * attaching the finished piece when it's ready. Status is deliberately absent: the one-tap
- * switcher on the jobs list owns state changes, and two owners for one field is how drift starts.
+ * mid-flight — description, price, due date, and both photo slots. Status is deliberately absent:
+ * the one-tap switcher on the jobs list owns state changes, and two owners for one field is how
+ * drift starts.
  *
  * Everything saves through `PATCH /jobs/:id`, which the backend treats atomically: photos are
  * verified against Cloudinary, swapped, and the removed ones are destroyed server-side. The
- * client's only duty is to send the *complete desired state* of `finishedJob` — which is why the
- * PhotoPicker reports the full set, not a delta.
+ * client's only duty is to send the *complete desired state* of each slot — which is why the
+ * PhotoPicker reports the full set, not a delta, and why an emptied slot is sent as `[]` rather
+ * than left out. Both are how a mistake gets undone: the studio removes the photo it should not
+ * have attached, and the slot it belonged to really does empty.
  */
 export function EditJobSheet({
   job,
@@ -45,22 +47,31 @@ export function EditJobSheet({
   );
   const [error, setError] = useState<string | null>(null);
 
-  // The complete desired state of finishedJob: whatever the job already has, plus/minus what the
+  // The complete desired state of each slot: whatever the job already has, plus/minus what its
   // picker reports. Sending only a delta would delete everything the studio wants to keep.
-  const existingPhotos: PickedPhoto[] = (job.finishedJob ?? []).map((p) => ({
-    publicId: p.publicId ?? "",
-    url: p.url,
-    alt: p.alt,
-  }));
+  const toPicked = (photos: JobImage[] | undefined): PickedPhoto[] =>
+    (photos ?? []).map((p) => ({
+      publicId: p.publicId ?? "",
+      url: p.url,
+      alt: p.alt,
+    }));
+
+  const existingStyleRefs = toPicked(job.styleRef);
+  const existingPhotos = toPicked(job.finishedJob);
+
+  const [styleRefs, setStyleRefs] = useState<PickedPhoto[]>(existingStyleRefs);
   const [finished, setFinished] = useState<PickedPhoto[]>(existingPhotos);
 
   useDismiss(onClose);
 
   // Dirty check: an untouched sheet shouldn't pretend it has work to save.
   const priceNum = Number(price.replace(/[^\d.]/g, ""));
-  const photoSetChanged = (): boolean => {
-    const a = new Set(finished.map((p) => p.publicId));
-    const b = new Set(existingPhotos.map((p) => p.publicId));
+  const photoSetChanged = (
+    next: PickedPhoto[],
+    initial: PickedPhoto[],
+  ): boolean => {
+    const a = new Set(next.map((p) => p.publicId));
+    const b = new Set(initial.map((p) => p.publicId));
     if (a.size !== b.size) return true;
     for (const id of a) if (!b.has(id)) return true;
     return false;
@@ -69,7 +80,8 @@ export function EditJobSheet({
     description !== job.description ||
     priceNum !== job.agreedPrice ||
     dueDate.slice(0, 10) !== (job.dueDate?.slice(0, 10) ?? "") ||
-    photoSetChanged();
+    photoSetChanged(styleRefs, existingStyleRefs) ||
+    photoSetChanged(finished, existingPhotos);
 
   const save = () => {
     setError(null);
@@ -87,6 +99,9 @@ export function EditJobSheet({
       description: description.trim(),
       agreedPrice: priceNum,
       dueDate: dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : null,
+      // Both slots, always, as their complete contents: an empty array is the server's cue to
+      // release every photo the slot held.
+      styleRef: styleRefs.map((p) => ({ publicId: p.publicId, alt: p.alt })),
       finishedJob: finished.map((p) => ({ publicId: p.publicId, alt: p.alt })),
     };
 
@@ -192,20 +207,33 @@ export function EditJobSheet({
           </div>
         </div>
 
+        {/* The client's reference — up to two, and removable after the fact */}
+        <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
+          Style reference
+        </label>
+        <p className="mt-1 text-[11.5px] leading-4 text-(--hig-label-tertiary)">
+          Up to two photos of what the client asked for. Remove one here and
+          it leaves the job for good.
+        </p>
+        <div className="mt-2">
+          <PhotoPicker
+            max={2}
+            altLabel="Style reference"
+            initial={existingStyleRefs}
+            onChange={setStyleRefs}
+          />
+        </div>
+
         {/* The finished piece — the flow that defines this screen */}
         <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.08em] text-(--hig-label-tertiary)">
           Finished piece
         </label>
         <p className="mt-1 text-[11.5px] leading-4 text-(--hig-label-tertiary)">
-          Attach photos when the garment is ready. Existing photos stay unless
-          you remove them here.
+          One photo, once the garment is ready. Remove it and add another to
+          replace a shot that should not be there.
         </p>
         <div className="mt-2">
-          <PhotoPicker
-            max={4}
-            initial={existingPhotos}
-            onChange={setFinished}
-          />
+          <PhotoPicker max={1} initial={existingPhotos} onChange={setFinished} />
         </div>
 
         {error && (

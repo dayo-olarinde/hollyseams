@@ -498,6 +498,73 @@ describe("POST /api/v1/jobs/:id (job for an existing subject)", () => {
     ]);
   });
 
+  it("accepts the two style references a client sends, and refuses a third", async () => {
+    const SECOND_PUBLIC_ID = "hollyseams/photos/style-2";
+    const { db, cloud } = await buildApp({
+      db: {
+        rowsByTable: {
+          subjects: [{ id: SUBJECT_ID, customerId: CUSTOMER_ID }],
+          measurements: [{ id: MEASUREMENT_ID }],
+          jobs: [jobRow()],
+        },
+      },
+    });
+
+    const response = await send(
+      "POST",
+      `/api/v1/jobs/${SUBJECT_ID}`,
+      jobPayload({
+        styleRef: [
+          { publicId: PHOTO_PUBLIC_ID, alt: "Style reference — front" },
+          { publicId: SECOND_PUBLIC_ID, alt: "Style reference — back" },
+        ],
+      }),
+    );
+
+    expect(response.statusCode).toBe(201);
+    expect(cloud.verified).toEqual([PHOTO_PUBLIC_ID, SECOND_PUBLIC_ID]);
+    expect(db.inserted[0]!.styleRef).toHaveLength(2);
+
+    const overflow = await send(
+      "POST",
+      `/api/v1/jobs/${SUBJECT_ID}`,
+      jobPayload({
+        styleRef: [1, 2, 3].map((n) => ({
+          publicId: `hollyseams/photos/style-${n}`,
+          alt: `Style ${n}`,
+        })),
+      }),
+    );
+
+    expect(overflow.statusCode).toBe(400);
+    expect(overflow.json().errors).toEqual([
+      {
+        field: "job.styleRef",
+        message: "At most 2 style reference images are allowed",
+      },
+    ]);
+  });
+
+  it("keeps the finished piece to one photograph", async () => {
+    await buildApp();
+
+    const response = await send(
+      "POST",
+      `/api/v1/jobs/${SUBJECT_ID}`,
+      jobPayload({
+        finishedJob: [1, 2].map((n) => ({
+          publicId: `hollyseams/photos/finished-${n}`,
+          alt: `Finished ${n}`,
+        })),
+      }),
+    );
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().errors).toEqual([
+      { field: "job.finishedJob", message: "Only one finished image is allowed" },
+    ]);
+  });
+
   it("refuses a photo from outside the app's upload folder", async () => {
     const { db } = await buildApp({
       db: {
@@ -808,9 +875,19 @@ describe("PATCH /api/v1/jobs/:id", () => {
     expect(cloud.destroyed).toEqual([]);
   });
 
-  it("treats an empty photo list as 'leave the photos alone'", async () => {
-    const { db, cleanup } = await buildApp({
-      db: { rowsByTable: { jobs: [jobRow({ finishedJob: [] })] } },
+  it("clears a photo slot a client sends as an empty list", async () => {
+    const { db, cloud, cleanup } = await buildApp({
+      db: {
+        rowsByTable: {
+          jobs: [
+            jobDetailRow({
+              styleRef: [
+                { url: "https://old", publicId: OLD_PHOTO_PUBLIC_ID, alt: "Old" },
+              ],
+            }),
+          ],
+        },
+      },
     });
 
     await send("PATCH", `/api/v1/jobs/${JOB_ID}`, {
@@ -818,9 +895,36 @@ describe("PATCH /api/v1/jobs/:id", () => {
       description: "Adjusted",
     });
 
+    // `[]` is the client stating the slot's complete contents — the removal the edit sheet
+    // performs when a mistake has to be undone.
+    expect(db.updated).toEqual([{ description: "Adjusted", styleRef: [] }]);
+    expect(cloud.verified).toEqual([]);
+    // The photo the job used to hold is handed to the queue.
+    expect(cleanup.enqueued).toEqual([OLD_PHOTO_PUBLIC_ID]);
+  });
+
+  it("leaves a photo slot alone when the patch never mentions it", async () => {
+    const { db, cleanup } = await buildApp({
+      db: {
+        rowsByTable: {
+          jobs: [
+            jobDetailRow({
+              styleRef: [
+                { url: "https://old", publicId: OLD_PHOTO_PUBLIC_ID, alt: "Old" },
+              ],
+            }),
+          ],
+        },
+      },
+    });
+
+    await send("PATCH", `/api/v1/jobs/${JOB_ID}`, { description: "Adjusted" });
+
     expect(db.updated).toEqual([{ description: "Adjusted" }]);
-    // Nothing was released just because a client sent `[]`.
+    // A patch that says nothing about photos is not a request to delete them — the status pills
+    // send this shape on every tap.
     expect(cleanup.enqueued).toEqual([]);
+    expect(db.calls).not.toContain("select");
   });
 
   it("returns 400 for a patch with no fields", async () => {

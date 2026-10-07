@@ -7,12 +7,12 @@ import {
 } from "@/lib/api/uploads";
 
 /**
- * One photo-upload flow, two screens.
+ * One photo-upload flow, every photo slot.
  *
  * The new-job modal owned this machinery first: signed upload, per-photo status, preview
- * lifecycles, retry. The edit sheet needed the *same* flow pointed at `finishedJob`, and a second
- * hand-rolled copy would have been the same failure as five `naira()` implementations — drift.
- * So the machinery lives here, and both screens compose it.
+ * lifecycles, retry. The edit sheet needed the *same* flow pointed at `finishedJob` and at the
+ * style references, and a second hand-rolled copy would have been the same failure as five
+ * `naira()` implementations — drift. So the machinery lives here, and both screens compose it.
  *
  * The picker is deliberately dumb about jobs: it only knows photos. What happens with the
  * publicIds (create a job, or PATCH one) is the host's business.
@@ -47,11 +47,14 @@ const thumbBar =
 
 export function PhotoPicker({
   max = 4,
+  altLabel = "Finished piece",
   initial,
   onChange,
 }: {
   /** How many photos this slot allows. */
   max?: number;
+  /** What a freshly picked photo is named, before anyone edits its alt text. */
+  altLabel?: string;
   /** Photos already on the server (an edit starts from what the job has). */
   initial?: PickedPhoto[];
   /** Fires on every add/remove/retry/complete with the current done set. */
@@ -140,7 +143,7 @@ export function PhotoPicker({
         key: `new-${Date.now()}-${i}-${file.name}`,
         file,
         previewUrl,
-        alt: `Finished piece${stem ? ` — ${stem}` : ""}`.slice(0, 200),
+        alt: `${altLabel}${stem ? ` — ${stem}` : ""}`.slice(0, 200),
         status: "uploading" as const,
       };
     });
