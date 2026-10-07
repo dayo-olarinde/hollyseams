@@ -98,7 +98,8 @@ interface WizardPhoto {
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
-const MAX_PHOTOS = 1;
+/** Two angles of the client's reference are what the API accepts for the style slot. */
+const MAX_PHOTOS = 2;
 
 /** One recipe for every field — see the `input-field` utility in globals.css. */
 const inputClass =
@@ -1269,6 +1270,14 @@ export default function NewJobModal({
                     e.preventDefault();
                     cancelBlurCommit();
                     commitPending();
+                    // A fitting is entered as a list, so the next keystroke is nearly always the
+                    // NEXT field's name rather than another value for the one just committed.
+                    // Handing focus back to the composer is also what reopens the suggestions;
+                    // left on the value well, the next name was typed into a box that could not
+                    // arm a field, so every measurement after the first was a manual tap away.
+                    // Only this path refocuses — the blur commit must let focus go where the
+                    // tailor sent it.
+                    compInputRef.current?.focus();
                   }
                 }}
               />

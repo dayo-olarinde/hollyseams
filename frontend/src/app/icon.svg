@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <!--
+    Hollyseams app icon — the source of truth for every raster the app ships.
+
+    The studio's mark (a needle-and-thread "H", from the supplied artwork in ~/Desktop/Logo) laid on a tile of the
+    brand blue. The disc is held at 78% of the canvas: inside the circle an iOS squircle inscribes
+    and inside the zone Android masks a maskable icon to, so one drawing ships as "any",
+    "maskable" and the home-screen tile — three files, no drift.
+
+    Rasterised to app/apple-icon.png (180) and public/icons/*.png with sharp; the tile is left
+    square and full-bleed because iOS and Android round it themselves — baking a radius in would
+    double the rounding and show the corners.
+  -->
+  <rect width="512" height="512" fill="#006199"/>
+
+  <!-- The atelier disc -->
+  <circle cx="256" cy="256" r="200" fill="#FFFFFF"/>
+
+  <g transform="translate(256 256) scale(0.84746) translate(-256 -256)">
+    <!-- Basting: the running stitch tacked around the disc -->
+    <circle
+      cx="256"
+      cy="256"
+      r="217"
+      stroke="#006199"
+      stroke-opacity="0.3"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-dasharray="6 9"
+    />
+
+    <!-- The thread: out of the needle's eye, across as the bar, on past the edge as a dashed tail -->
+    <g stroke="#006199" stroke-linecap="round" fill="none">
+      <path
+        d="M 174 188 C 130 194, 122 251, 174 251 C 228 258, 284 244, 338 251"
+        stroke-width="6.5"
+      />
+      <path
+        d="M 338 251 C 378 254, 396 276, 384 296 C 372 314, 342 318, 326 304"
+        stroke-width="4.5"
+        stroke-dasharray="4 7"
+      />
+    </g>
+    <circle cx="256" cy="251" r="5" fill="#006199" />
+
+    <!-- The two pillars -->
+    <g stroke="#1C1C1E" stroke-width="11" stroke-linecap="round">
+      <path d="M 174 165 L 174 335" />
+      <path d="M 338 165 L 338 335" />
+    </g>
+
+    <!-- The needle's eye, cut through so the disc shows through it -->
+    <ellipse cx="174" cy="184" rx="4" ry="12" fill="#FFFFFF" stroke="#1C1C1E" stroke-width="1.8" />
+  </g>
+</svg>
